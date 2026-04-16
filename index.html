@@ -1,0 +1,2042 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>자산관리 시스템 | 플로우교육</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&family=Noto+Sans+KR:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --bg:#faf8f4; --surface:#fff; --card:#fff; --card2:#f5f2ec;
+  --border:#e8e2d9; --border2:#d4ccbf;
+  --accent:#1a1a1a; --accent-g:#3a6a3a; --accent-y:#b8923a; --accent-r:#8a2a2a; --accent-p:#4a3a6a;
+  --text:#1a1a1a; --text2:#5a5248; --text3:#a09890;
+  --navy:#1a1a1a; --navy2:#2a2a2a; --gold:#c8a96e; --gold2:#d4bb88;
+  --cream:#faf8f4; --cream2:#f0ece4; --white:#fff;
+  --green:#2a5a2a; --red:#7a2020; --amber:#8a6a20; --teal:#1a4a4a;
+  --font:'Noto Sans KR',sans-serif;
+  --serif:'Noto Serif KR','Noto Sans KR',serif;
+  --mono:'JetBrains Mono',monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--text)}
+
+/* LOGIN */
+#loginScreen{position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#f5f0e8 0%,#faf8f4 50%,#f0ece0 100%)}
+#loginScreen::before{content:'';position:absolute;width:500px;height:500px;border-radius:50%;background:radial-gradient(circle,rgba(201,168,76,.12),transparent 70%);top:-120px;right:-60px}
+.lc{position:relative;z-index:1;background:#fff;border:1px solid var(--border);padding:52px 48px;width:420px;box-shadow:0 8px 40px rgba(180,160,120,.15);animation:up .5s ease}
+@keyframes up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.lc-ey{font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--gold);font-weight:600;margin-bottom:10px}
+.lc-h{font-family:var(--serif);font-size:24px;font-weight:700;color:var(--text);margin-bottom:4px}
+.lc-s{font-size:12px;color:var(--text3);margin-bottom:32px}
+.lc-lb{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);font-weight:700;margin-bottom:6px}
+.lc-in{width:100%;background:var(--cream2);border:1px solid var(--border);border-radius:0;padding:12px 14px;color:var(--text);font-size:13px;font-family:var(--font);outline:none;margin-bottom:12px;transition:border-color .2s}
+.lc-in::placeholder{color:var(--text3)}
+.lc-in:focus{border-color:var(--gold);background:#fff;outline:none}
+.lc-hint{font-size:10px;color:var(--text3);margin-bottom:22px;font-family:var(--mono)}
+.lc-hint b{color:var(--gold)}
+.lc-btn{width:100%;background:var(--text);border:none;padding:14px;color:#fff;font-size:12px;font-weight:600;font-family:var(--font);cursor:pointer;letter-spacing:2px;transition:background .2s}
+.lc-btn:hover{background:#333}
+#loginErr{font-size:11px;color:#f87171;margin-top:10px;display:none;text-align:center}
+
+/* APP */
+#app{display:none;height:100vh;flex-direction:column}
+
+/* TOPBAR */
+.topbar{background:#1a1a1a;height:52px;display:flex;align-items:center;padding:0 28px;gap:14px;flex-shrink:0;z-index:20}
+.tb-lm{width:28px;height:28px;background:var(--gold);display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:13px;font-weight:700;color:#1a1a1a}
+.tb-lt{font-family:var(--serif);font-size:14px;font-weight:700;color:#fff;letter-spacing:.3px}
+.tb-lt span{color:var(--gold)}
+.tb-rule{width:1px;height:18px;background:rgba(255,255,255,.15)}
+.tb-sec{font-size:10px;color:rgba(255,255,255,.4);letter-spacing:1.5px;text-transform:uppercase}
+.tb-sp{flex:1}
+.tb-back{display:flex;align-items:center;gap:5px;background:none;border:1px solid rgba(255,255,255,.15);padding:5px 12px;color:rgba(255,255,255,.5);font-size:11px;font-family:var(--font);cursor:pointer;transition:all .15s;letter-spacing:.3px}
+.tb-back:hover{border-color:var(--gold);color:var(--gold)}
+.tb-back.hidden{display:none}
+.tb-dt{font-family:var(--mono);font-size:10px;color:rgba(255,255,255,.3);letter-spacing:1px}
+.tb-bell{position:relative;width:32px;height:32px;border:1px solid rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer;transition:border-color .15s}
+.tb-bell:hover{border-color:var(--gold)}
+.tb-bdn{position:absolute;top:-5px;right:-5px;background:var(--gold);color:#1a1a1a;font-size:8px;font-weight:700;font-family:var(--mono);padding:1px 5px;border:1.5px solid #1a1a1a}
+.tb-usr{display:flex;align-items:center;gap:8px;border:1px solid rgba(255,255,255,.15);padding:5px 12px;font-size:11px;color:rgba(255,255,255,.7)}
+.tb-av{width:22px;height:22px;background:var(--gold);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#1a1a1a;font-family:var(--serif)}
+.tb-out{background:none;border:1px solid rgba(255,255,255,.15);padding:5px 12px;color:rgba(255,255,255,.4);font-size:10px;letter-spacing:1px;font-family:var(--font);cursor:pointer;transition:all .15s}
+.tb-out:hover{border-color:var(--gold);color:var(--gold)}
+
+/* BODY */
+.bwrap{display:flex;flex:1;overflow:hidden}
+
+/* SIDEBAR */
+.sidebar{width:220px;background:var(--cream2);border-right:1px solid var(--border);flex-shrink:0;overflow-y:auto;padding:20px 0}
+.nav-sec{padding:16px 20px 6px;font-size:8px;letter-spacing:3px;text-transform:uppercase;color:var(--text3);font-weight:700}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 20px;font-size:12px;cursor:pointer;color:var(--text2);border-left:2px solid transparent;margin-right:8px;transition:all .15s}
+.nav-item:hover{background:rgba(200,169,110,.07);color:var(--text)}
+.nav-item.active{background:rgba(200,169,110,.1);color:var(--text);border-left-color:var(--gold);font-weight:600}
+.nav-ico{width:18px;text-align:center;font-size:13px;flex-shrink:0}
+.nav-bd{margin-left:auto;font-size:9px;font-weight:700;font-family:var(--mono);padding:1px 6px;border:1px solid}
+.nb-r{color:var(--red);border-color:#d89898;background:#fdf0f0}
+.nb-g{color:var(--amber);border-color:#d8c080;background:#fdf8ec}
+.nb-n{color:var(--navy);border-color:#b8cce0;background:#eef4f9}
+.nb-new{font-size:8px;background:var(--gold);color:#1a1a1a;padding:1px 6px;font-family:var(--mono);font-weight:700;border:none;margin-left:auto}
+
+/* MAIN */
+.main{flex:1;overflow-y:auto;background:var(--bg);padding-bottom:40px}
+.main::-webkit-scrollbar{width:4px}
+.main::-webkit-scrollbar-thumb{background:var(--border2)}
+
+/* PAGES */
+.page{display:none;padding:32px 36px}
+.page.active{display:block;animation:up .2s ease}
+
+/* PAGE HEADER */
+.ph{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:24px}
+.ph-ey{font-size:8px;letter-spacing:3px;text-transform:uppercase;color:var(--gold);font-weight:700;margin-bottom:6px}
+.ph-t{font-family:var(--serif);font-size:22px;font-weight:700;color:var(--text);letter-spacing:-.3px}
+.ph-s{font-size:11px;color:var(--text3);margin-top:3px}
+.ph-rule{width:28px;height:1.5px;background:var(--gold);margin-top:12px}
+.ph-acts{display:flex;gap:8px;align-items:flex-end}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;font-size:12px;font-weight:600;font-family:var(--font);cursor:pointer;transition:all .15s;border:none;letter-spacing:.2px}
+.btn:active{transform:scale(.97)}
+.btn-navy{background:var(--text);color:#fff;letter-spacing:.5px}
+.btn-navy:hover{background:#333}
+.btn-gold{background:var(--gold);color:#1a1a1a;letter-spacing:.5px}
+.btn-gold:hover{background:var(--gold2)}
+.btn-out{background:#fff;color:var(--text);border:1px solid var(--border2)}
+.btn-out:hover{border-color:var(--text)}
+.btn-ghost{background:var(--cream);color:var(--text2);border:1px solid var(--border)}
+.btn-ghost:hover{background:var(--cream2)}
+.btn-danger{background:#fdf0f0;color:var(--red);border:1px solid #d89898}
+.btn-sm{padding:5px 12px;font-size:11px}
+
+/* ALERT BANNER */
+.ab{border-left:3px solid var(--gold);background:rgba(200,169,110,.08);padding:10px 16px;font-size:12px;color:var(--amber);display:flex;align-items:center;gap:10px;margin-bottom:20px}
+.ab-cnt{background:var(--gold);color:#1a1a1a;font-size:9px;font-weight:700;font-family:var(--mono);padding:1px 7px;flex-shrink:0}
+
+/* KPI */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);margin-bottom:20px}
+.kpi{background:#fff;padding:20px 24px;position:relative;transition:background .15s}
+.kpi:hover{background:var(--cream2)}
+.kpi::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--kc,var(--gold))}
+.kpi-lb{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);font-weight:700;margin-bottom:10px}
+.kpi-v{font-family:var(--serif);font-size:28px;font-weight:700;color:var(--text);line-height:1;margin-bottom:4px}
+.kpi-v.danger{color:#c0392b}
+.kpi-u{font-family:var(--font);font-size:13px;font-weight:400;color:var(--text3);margin-left:3px}
+.kpi-s{font-size:10px;color:var(--text3)}
+
+/* SECTION */
+.sec{background:#fff;border:1px solid var(--border);margin-bottom:16px;overflow:hidden}
+.sec-hd{padding:15px 22px;border-bottom:1px solid var(--cream2);display:flex;align-items:center;justify-content:space-between}
+.sec-t{font-family:var(--serif);font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:10px}
+.badge{font-family:var(--font);font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;padding:2px 8px;border:1px solid}
+.bd-gold{color:#92400e;border-color:#fcd34d;background:#fef3c7}
+.bd-navy{color:#1d4ed8;border-color:#bfdbfe;background:#dbeafe}
+.bd-red{color:#991b1b;border-color:#fca5a5;background:#fee2e2}
+.bd-green{color:#065f46;border-color:#a7f3d0;background:#d1fae5}
+
+/* TOOLBAR */
+.toolbar{display:flex;align-items:center;gap:8px;padding:12px 22px;border-bottom:1px solid var(--cream2)}
+.tb-s{background:var(--cream);border:1px solid var(--border);padding:7px 12px;font-size:12px;font-family:var(--font);color:var(--text);outline:none;width:220px;transition:border-color .2s}
+.tb-s:focus{border-color:var(--gold);background:#fff}
+.mla{margin-left:auto}
+
+/* TABLE */
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead tr{background:var(--cream2);border-bottom:2px solid var(--text)}
+th{padding:9px 18px;text-align:left;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);font-weight:700;white-space:nowrap}
+th.r,td.r{text-align:right}
+td{padding:11px 18px;border-bottom:1px solid var(--cream2);color:var(--text);vertical-align:middle}
+tbody tr:last-child td{border-bottom:none}
+tbody tr{transition:background .1s}
+tbody tr:hover{background:var(--cream)}
+.tr-critical td:first-child{border-left:3px solid #8a2a2a}
+.tr-warn td:first-child{border-left:3px solid var(--gold)}
+tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2px solid var(--text)}
+
+.code{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--text)}
+.num{font-family:var(--mono);font-size:12px}
+.dt{font-family:var(--mono);font-size:11px;color:var(--text2)}
+.mt{color:var(--text3);font-size:11px}
+
+.tag{display:inline-block;padding:1px 8px;font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;border:1px solid}
+.tg-lease{color:#1d4ed8;border-color:#bfdbfe;background:#dbeafe}
+.tg-tangible{color:#065f46;border-color:#a7f3d0;background:#d1fae5}
+.tg-intangible{color:#92400e;border-color:#fcd34d;background:#fef3c7}
+.tg-rental{color:#991b1b;border-color:#fca5a5;background:#fee2e2}
+.tg-insurance{color:#9d174d;border-color:#fbcfe8;background:#fce7f3}
+.tg-ok{color:#065f46;border-color:#a7f3d0;background:#d1fae5}
+.tg-warn{color:#92400e;border-color:#fcd34d;background:#fef3c7}
+.tg-danger{color:#991b1b;border-color:#fca5a5;background:#fee2e2}
+
+.d-tag{font-family:var(--mono);font-size:10px;font-weight:700;padding:2px 7px;border:1px solid}
+.d-crit{color:#991b1b;border-color:#fca5a5;background:#fee2e2}
+.d-warn{color:#92400e;border-color:#fcd34d;background:#fef3c7}
+.d-safe{color:#065f46;border-color:#a7f3d0;background:#d1fae5}
+
+.bar-cell{display:flex;align-items:center;gap:8px}
+.bar{flex:1;height:3px;background:var(--cream2)}
+.bar-fill{height:100%;background:var(--gold)}
+.pct{font-family:var(--mono);font-size:11px;color:var(--text2);min-width:34px;text-align:right}
+
+/* HISTORY ROWS */
+.hr{display:flex;border-bottom:1px solid var(--cream2);transition:background .1s}
+.hr:hover{background:var(--cream)}
+.hr:last-child{border-bottom:none}
+.hr-time{width:120px;padding:13px 18px;font-family:var(--mono);font-size:10px;color:var(--text3);flex-shrink:0;line-height:1.6}
+.hr-body{flex:1;padding:13px 18px 13px 0}
+.hr-title{font-weight:600;color:var(--navy);margin-bottom:5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.hr-detail{font-size:11px;color:var(--text2);display:flex;gap:14px;flex-wrap:wrap;margin-top:2px}
+.hr-chg{display:inline-flex;align-items:center;gap:5px;background:var(--cream);padding:2px 8px;font-size:10px;font-family:var(--mono)}
+.hr-arr{color:var(--gold);font-weight:700}
+.hr-src{font-size:9px;letter-spacing:1px;text-transform:uppercase;font-weight:700}
+.src-scan{color:var(--teal)}
+.src-dash{color:var(--amber)}
+.hr-photo{width:68px;padding:10px 18px 10px 0;display:flex;align-items:center;flex-shrink:0}
+.hr-img{width:48px;height:48px;object-fit:cover;border:1px solid var(--border);cursor:pointer;transition:opacity .15s}
+.hr-img:hover{opacity:.75}
+
+/* MODALS */
+.mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;align-items:center;justify-content:center}
+.mo.open{display:flex}
+.mo-box{background:#fff;border:1px solid var(--border);border-radius:14px;width:560px;max-width:95vw;max-height:90vh;overflow-y:auto;padding:32px;box-shadow:0 20px 60px rgba(0,0,0,.15);animation:up .2s ease}
+.mo-t{font-family:var(--serif);font-size:17px;font-weight:700;color:var(--text);margin-bottom:20px}
+.fg-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fg{display:flex;flex-direction:column;gap:4px}
+.fg.full{grid-column:1/-1}
+.fg label{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);font-weight:700}
+.fg input,.fg select,.fg textarea{background:var(--card2);border:1px solid var(--border);border-radius:7px;padding:9px 12px;color:var(--text);font-size:13px;font-family:var(--font);outline:none;transition:border-color .2s}
+.fg input:focus,.fg select:focus{border-color:var(--gold);background:#fff}
+.fg textarea{resize:vertical;min-height:60px}
+.mo-ft{display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--cream2)}
+
+/* NOTIF PANEL */
+.np{position:fixed;top:60px;right:16px;width:316px;background:#fff;border:1px solid var(--border);box-shadow:0 12px 40px rgba(100,80,40,.15);z-index:50;display:none}
+.np.open{display:block;animation:up .2s ease}
+.np-hd{padding:13px 18px;border-bottom:1px solid var(--cream2);display:flex;align-items:center;justify-content:space-between}
+.np-ht{font-family:var(--serif);font-size:13px;font-weight:700;color:var(--text)}
+.np-cl{background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px}
+.np-it{padding:10px 18px;border-bottom:1px solid var(--cream2);cursor:pointer;transition:background .1s}
+.np-it:hover{background:var(--cream)}
+.np-it:last-child{border-bottom:none}
+.np-n{font-size:12px;font-weight:600;color:var(--navy);margin-bottom:2px}
+.np-m{font-size:10px;color:var(--text3);display:flex;gap:8px;font-family:var(--mono)}
+
+/* LIGHTBOX */
+#lb{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:300;display:none;align-items:center;justify-content:center;cursor:zoom-out}
+#lb.open{display:flex}
+#lb img{max-width:90vw;max-height:90vh;box-shadow:0 24px 60px rgba(0,0,0,.5)}
+
+/* TOAST */
+#toast{position:fixed;bottom:20px;right:20px;z-index:200;background:var(--text);color:#fff;padding:11px 20px;font-size:11px;letter-spacing:.5px;box-shadow:0 8px 32px rgba(0,0,0,.2);display:none;animation:up .2s ease}
+
+/* RENTAL CATEGORY */
+.rcat-card{background:#fff;border:1px solid var(--border);padding:14px 16px;cursor:pointer;transition:all .15s;position:relative}
+.rcat-card:hover{background:var(--cream2);border-color:var(--border2)}
+.rcat-card.active{border-color:var(--gold);background:rgba(200,169,110,.06)}
+.rcat-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--rc,var(--gold))}
+.rcat-label{font-size:10px;color:var(--text3);letter-spacing:.5px;margin-bottom:5px}
+.rcat-count{font-family:var(--serif);font-size:22px;font-weight:700;color:var(--text);line-height:1;margin-bottom:3px}
+.rcat-amt{font-size:10px;color:var(--text2);font-family:var(--mono)}
+.rcat-filter-btn{padding:5px 14px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:#fff;color:var(--text2);font-family:var(--font);transition:all .15s;letter-spacing:.2px}
+.rcat-filter-btn:hover{border-color:var(--border2);color:var(--text)}
+.rcat-filter-btn.active{background:var(--text);color:#fff;border-color:var(--text)}
+.cat-group-hd{background:var(--cream2);padding:7px 18px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.cat-group-cnt{font-family:var(--mono);font-size:10px;color:var(--text2)}
+.cat-group-amt{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--gold)}
+
+/* EMPTY */
+.empty{text-align:center;padding:48px 20px}
+.ei{font-size:32px;margin-bottom:10px;opacity:.35}
+.et{font-size:12px;color:var(--text3);line-height:1.7}
+
+/* VISUAL CARDS */
+.vc{background:#fff;border:1px solid var(--border);padding:20px;cursor:pointer;transition:background .15s}
+.vc:hover{background:var(--cream2)}
+.vc-hd{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px}
+.vc-lb{font-family:var(--serif);font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px}
+.vc-sub{font-size:11px;color:var(--text3)}
+.vc-tag{font-size:9px;font-weight:700;letter-spacing:.8px;padding:2px 8px;border:1px solid transparent;white-space:nowrap}
+
+/* RING */
+.ring-wrap{position:relative;width:72px;height:72px;margin:0 auto 12px;flex-shrink:0}
+.ring-svg{width:72px;height:72px;transform:rotate(-90deg)}
+.ring-bg{fill:none;stroke:var(--cream2);stroke-width:6}
+.ring-fg{fill:none;stroke-width:6;stroke-linecap:round;stroke-dasharray:0 201;transition:stroke-dasharray 1s ease}
+.ring-center{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:15px;font-weight:700;color:var(--text)}
+
+/* PROGRESS BAR ROW */
+.vc-bar-row{display:flex;align-items:center;gap:8px;font-size:11px}
+.vc-bar-label{color:var(--text3);min-width:40px;font-size:10px}
+.vc-bar{flex:1;height:5px;background:var(--cream2);overflow:hidden}
+.vc-bar-fill{height:100%;transition:width 1s ease;width:0%}
+.vc-bar-val{font-family:var(--mono);font-size:11px;color:var(--text2);min-width:28px;text-align:right}
+
+/* ASSET BREAKDOWN */
+.ab-row{display:flex;align-items:center;gap:10px;padding:4px 0}
+.ab-dot{width:8px;height:8px;flex-shrink:0}
+.ab-name{font-size:12px;color:var(--text2);flex:1}
+.ab-bar{flex:2;height:4px;background:var(--cream2);overflow:hidden}
+.ab-bar-fill{height:100%;transition:width 1s ease}
+.ab-count{font-family:var(--mono);font-size:11px;font-weight:600;min-width:24px;text-align:right}
+.ab-pct{font-family:var(--mono);font-size:10px;color:var(--text3);min-width:30px;text-align:right}
+
+/* LABEL ROW */
+.label-row{display:flex;align-items:center;gap:10px}
+.lr-icon{width:32px;height:32px;background:var(--cream2);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;font-family:var(--mono);color:var(--text2);flex-shrink:0}
+.lr-info{flex:1}
+.lr-name{font-size:12px;color:var(--text2)}
+
+/* STATUS DIST */
+.sd-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--cream2)}
+.sd-row:last-child{border-bottom:none}
+.sd-name{font-size:12px;color:var(--text);flex:1}
+.sd-bar{flex:2;height:5px;background:var(--cream2);overflow:hidden}
+.sd-bar-fill{height:100%;transition:width 1s ease}
+.sd-count{font-family:var(--mono);font-size:12px;font-weight:600;min-width:28px;text-align:right}
+
+/* ALERT MINI */
+.am-item{display:flex;align-items:center;gap:6px;font-size:11px;padding:3px 0}
+.am-d{font-family:var(--mono);font-size:10px;font-weight:700;padding:1px 6px;flex-shrink:0}
+
+/* PRINT */
+@media print{body>*:not(#prt){display:none!important}#prt{display:block!important;padding:10px}.pg{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.pl{border:1px solid #ccc;padding:12px;text-align:center;page-break-inside:avoid;font-family:sans-serif}.pl-c{font-family:monospace;font-size:9px;color:#666;margin-bottom:3px}.pl-n{font-size:11px;font-weight:700;margin-bottom:6px}.pl-l{font-size:9px;color:#888;margin-top:5px}}
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div class="lc">
+    <div class="lc-ey">플로우교육 · 총무기획팀</div>
+    <div class="lc-h">자산관리 시스템</div>
+    <div class="lc-s">Asset Management Platform</div>
+    <div class="lc-lb">아이디</div>
+    <input class="lc-in" id="lid" type="text" placeholder="아이디 입력" autocomplete="off">
+    <div class="lc-lb">비밀번호</div>
+    <input class="lc-in" id="lpw" type="password" placeholder="비밀번호 입력">
+    <div class="lc-hint">Demo: <b>admin</b> / <b>admin1234</b></div>
+    <button class="lc-btn" onclick="doLogin()">로그인</button>
+    <div id="loginErr">아이디 또는 비밀번호를 확인해 주세요.</div>
+  </div>
+</div>
+
+<div id="app">
+  <div class="topbar">
+    <div class="tb-lm">F</div>
+    <div class="tb-lt">플로우<span>교육</span></div>
+    <div class="tb-rule"></div>
+    <button class="tb-back hidden" id="btnBack" onclick="goBack()">← 뒤로</button>
+    <div class="tb-sec" id="tb-sec-label">총무기획팀 · 자산관리</div>
+    <div class="tb-sp"></div>
+    <div class="tb-dt" id="topDate"></div>
+    <div class="tb-bell" onclick="toggleNotif()">🔔<div class="tb-bdn" id="bellBadge">6</div></div>
+    <div class="tb-usr"><div class="tb-av" id="uAv">이</div><span id="uNm">이슬기</span><span style="color:rgba(255,255,255,.2)">·</span><span style="color:rgba(255,255,255,.25);font-size:10px">팀장</span></div>
+    <button class="tb-out" onclick="doLogout()">로그아웃</button>
+  </div>
+
+  <div class="np" id="notifPanel">
+    <div class="np-hd"><div class="np-ht">만료 예정 알림</div><button class="np-cl" onclick="toggleNotif()">✕</button></div>
+    <div id="notifItems"></div>
+  </div>
+
+  <div class="bwrap">
+    <div class="sidebar">
+      <div class="nav-sec">개요</div>
+      <div class="nav-item active" data-p="dash" onclick="go('dash')"><span class="nav-ico">◈</span>전체 대시보드</div>
+      <div class="nav-sec" style="margin-top:10px">자산 분류</div>
+      <div class="nav-item" data-p="lease" onclick="go('lease')"><span class="nav-ico">▫</span>임대차계약</div>
+      <div class="nav-item" data-p="tangible" onclick="go('tangible')"><span class="nav-ico">▫</span>유형자산<span class="nav-bd nb-g" id="nb-tangible" style="display:none"></span></div>
+      <div class="nav-item" data-p="intangible" onclick="go('intangible')"><span class="nav-ico">▫</span>무형자산<span class="nav-bd nb-g" id="nb-intangible" style="display:none"></span></div>
+      <div class="nav-item" data-p="rental" onclick="go('rental')"><span class="nav-ico">▫</span>렌탈자산<span class="nav-bd nb-r" id="nb-rental" style="display:none"></span></div>
+      <div class="nav-item" data-p="insurance" onclick="go('insurance')"><span class="nav-ico">▫</span>보험<span class="nav-bd nb-r" id="nb-insurance" style="display:none"></span></div>
+      <div class="nav-sec" style="margin-top:10px">이력 관리</div>
+      <div class="nav-item" data-p="history" onclick="go('history')"><span class="nav-ico">▫</span>이동·변경 이력<span class="nav-bd nb-n" id="nb-history" style="display:none"></span></div>
+      <div class="nav-sec" style="margin-top:10px">비용 관리</div>
+      <div class="nav-item" data-p="cost" onclick="go('cost')"><span class="nav-ico">▫</span>비용 관별배분<span class="nb-new">NEW</span></div>
+      <div class="nav-sec" style="margin-top:10px">운영</div>
+      <div class="nav-item" data-p="qrscan" onclick="go('qrscan')"><span class="nav-ico">▫</span>QR 현장 스캔</div>
+      <div class="nav-item" onclick="showToast('알림 설정')"><span class="nav-ico">▫</span>알림 설정</div>
+    </div>
+
+    <div class="main">
+
+      <!-- DASHBOARD -->
+      <div class="page active" id="page-dash">
+        <div class="ph">
+          <div>
+            <div class="ph-ey">Asset Management · 총무기획팀</div>
+            <div class="ph-t">전체 자산 현황</div>
+            <div class="ph-s">임대차 · 유형자산 · 무형자산 · 렌탈 · 보험 통합 대시보드</div>
+            <div class="ph-rule"></div>
+          </div>
+          <div class="ph-acts"><div style="font-family:var(--mono);font-size:10px;color:var(--text3)" id="dashDate"></div></div>
+        </div>
+
+        <!-- 만료 알림 배너 -->
+        <div class="ab" id="alertBanner" style="display:none">
+          <span class="ab-cnt" id="alertCount"></span><span id="alertText"></span>
+        </div>
+
+        <!-- ── 월 비용 요약 ── -->
+        <div class="sec" style="margin-bottom:12px">
+          <div class="sec-hd" style="border-bottom:1px solid var(--cream2)">
+            <div class="sec-t">월 운영비용 현황 <span style="font-family:var(--mono);font-size:11px;font-weight:400;color:var(--text3)">카테고리별 전월 대비</span></div>
+            <button class="btn btn-ghost btn-sm" onclick="openCostEditModal()" style="font-size:10px">📝 전월 금액 입력</button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border)">
+
+            <!-- 총 월비용 -->
+            <div style="background:#fff;padding:18px 22px;position:relative">
+              <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);font-weight:700;margin-bottom:8px">이번 달 총 비용</div>
+              <div style="font-family:var(--serif);font-size:26px;font-weight:700;color:var(--text);line-height:1;margin-bottom:6px" id="cost-total-monthly">—</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">원 / 월</div>
+              <div id="cost-total-mom" style="font-size:11px;font-family:var(--mono);font-weight:700;min-height:16px"></div>
+              <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:#1a1a1a"></div>
+            </div>
+
+            <!-- 임대차 -->
+            <div style="background:#fff;padding:18px 22px;position:relative">
+              <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);font-weight:700;margin-bottom:8px">임대차 비용</div>
+              <div style="font-family:var(--serif);font-size:22px;font-weight:700;color:#1a1a1a;line-height:1;margin-bottom:4px" id="cost-lease-monthly">—</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">월임차료 합산 · <span id="cost-lease-cnt" style="font-weight:700;color:var(--text2)">—건</span></div>
+              <div id="cost-lease-mom" style="font-size:11px;font-family:var(--mono);font-weight:700;min-height:16px"></div>
+              <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:#3a6a3a"></div>
+            </div>
+
+            <!-- 렌탈 -->
+            <div style="background:#fff;padding:18px 22px;position:relative">
+              <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);font-weight:700;margin-bottom:8px">렌탈 비용</div>
+              <div style="font-family:var(--serif);font-size:22px;font-weight:700;color:#1a1a1a;line-height:1;margin-bottom:4px" id="cost-rental-monthly">—</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">월렌탈료 합산 · <span id="cost-rental-cnt" style="font-weight:700;color:var(--text2)">—건</span></div>
+              <div id="cost-rental-mom" style="font-size:11px;font-family:var(--mono);font-weight:700;min-height:16px"></div>
+              <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:#c8a96e"></div>
+            </div>
+
+            <!-- 보험 -->
+            <div style="background:#fff;padding:18px 22px;position:relative">
+              <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);font-weight:700;margin-bottom:8px">보험료 (월 환산)</div>
+              <div style="font-family:var(--serif);font-size:22px;font-weight:700;color:#1a1a1a;line-height:1;margin-bottom:4px" id="cost-insurance-monthly">—</div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">연보험료 ÷ 12 · <span id="cost-insurance-cnt" style="font-weight:700;color:var(--text2)">—건</span></div>
+              <div id="cost-insurance-mom" style="font-size:11px;font-family:var(--mono);font-weight:700;min-height:16px"></div>
+              <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:#2a6a6a"></div>
+            </div>
+          </div>
+
+          <!-- 비용 비율 바 -->
+          <div style="padding:14px 22px 16px;background:#fff;border-top:1px solid var(--cream2)">
+            <div style="display:flex;gap:0;height:8px;overflow:hidden;margin-bottom:8px;border-radius:2px" id="cost-ratio-bar"></div>
+            <div style="display:flex;gap:16px;flex-wrap:wrap" id="cost-ratio-legend"></div>
+          </div>
+        </div>
+
+        <!-- 전월 비용 입력 모달 -->
+        <div class="mo" id="moCostEdit" onclick="closeMoBg(event,'moCostEdit')">
+          <div class="mo-box" style="width:460px">
+            <div class="mo-t">전월 비용 입력</div>
+            <div style="background:var(--cream2);padding:12px 14px;font-size:12px;color:var(--text2);margin-bottom:18px">
+              💡 카테고리별 전월 실제 지출 금액을 입력하면 이번 달과 비교합니다.<br>
+              <span style="color:var(--text3);font-size:11px">입력값은 브라우저에 저장되며 앱스크립트 연동 후 스프레드시트에서도 관리 가능합니다.</span>
+            </div>
+            <div class="fg-grid">
+              <div class="fg">
+                <label>전월 임대차 비용 (원)</label>
+                <input type="number" id="prev-lease" placeholder="예: 56000000">
+                <div style="font-size:10px;color:var(--text3);margin-top:3px" id="prev-lease-hint"></div>
+              </div>
+              <div class="fg">
+                <label>전월 렌탈 비용 (원)</label>
+                <input type="number" id="prev-rental" placeholder="예: 1405000">
+                <div style="font-size:10px;color:var(--text3);margin-top:3px" id="prev-rental-hint"></div>
+              </div>
+              <div class="fg full">
+                <label>전월 보험료 월환산 (원)</label>
+                <input type="number" id="prev-insurance" placeholder="예: 879167">
+                <div style="font-size:10px;color:var(--text3);margin-top:3px" id="prev-insurance-hint"></div>
+              </div>
+            </div>
+            <div class="mo-ft">
+              <button class="btn btn-ghost" onclick="closeMo('moCostEdit')">취소</button>
+              <button class="btn btn-navy" onclick="savePrevCost()">저장 및 비교</button>
+            </div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px">
+
+          <!-- 실물자산 사용정보 -->
+          <div class="vc" onclick="go('tangible')">
+            <div class="vc-hd">
+              <div>
+                <div class="vc-lb">실물자산 사용정보</div>
+                <div class="vc-sub" id="vc-tangible-sub">—개 중 —개 사용중</div>
+              </div>
+              <span class="vc-tag" style="background:#f0f4e8;color:#3a6a3a">유형자산</span>
+            </div>
+            <div class="ring-wrap">
+              <svg class="ring-svg" viewBox="0 0 80 80">
+                <circle class="ring-bg" cx="40" cy="40" r="32"/>
+                <circle class="ring-fg" id="ring-tangible" cx="40" cy="40" r="32" style="stroke:#3a6a3a"/>
+              </svg>
+              <div class="ring-center" id="ring-tangible-pct">—</div>
+            </div>
+            <div class="vc-bar-row">
+              <div class="vc-bar-label">사용중</div>
+              <div class="vc-bar"><div class="vc-bar-fill" id="bar-tangible" style="background:#3a6a3a"></div></div>
+              <div class="vc-bar-val" id="barv-tangible">—</div>
+            </div>
+          </div>
+
+          <!-- 렌탈자산 사용정보 -->
+          <div class="vc" onclick="go('rental')">
+            <div class="vc-hd">
+              <div>
+                <div class="vc-lb">렌탈제품 사용정보</div>
+                <div class="vc-sub" id="vc-rental-sub">—개 중 —개 렌탈중</div>
+              </div>
+              <span class="vc-tag" style="background:#f8f0f0;color:#7a2020">렌탈자산</span>
+            </div>
+            <div class="ring-wrap">
+              <svg class="ring-svg" viewBox="0 0 80 80">
+                <circle class="ring-bg" cx="40" cy="40" r="32"/>
+                <circle class="ring-fg" id="ring-rental" cx="40" cy="40" r="32" style="stroke:#c8a96e"/>
+              </svg>
+              <div class="ring-center" id="ring-rental-pct">—</div>
+            </div>
+            <div class="vc-bar-row">
+              <div class="vc-bar-label">반납예정</div>
+              <div class="vc-bar"><div class="vc-bar-fill" id="bar-rental" style="background:#c8a96e"></div></div>
+              <div class="vc-bar-val" id="barv-rental">—</div>
+            </div>
+          </div>
+
+          <!-- 만료 예정 알림 -->
+          <div class="vc" style="background:linear-gradient(145deg,#fff,#fdf8f0)" onclick="go('history')">
+            <div class="vc-hd">
+              <div>
+                <div class="vc-lb">만료 예정 알림</div>
+                <div class="vc-sub">90일 이내 처리 필요</div>
+              </div>
+              <span class="vc-tag" style="background:#f8f0f0;color:#8a2a2a">긴급</span>
+            </div>
+            <div class="ring-wrap">
+              <svg class="ring-svg" viewBox="0 0 80 80">
+                <circle class="ring-bg" cx="40" cy="40" r="32"/>
+                <circle class="ring-fg" id="ring-alerts" cx="40" cy="40" r="32" style="stroke:#8a2a2a"/>
+              </svg>
+              <div class="ring-center" id="ring-alerts-pct" style="color:#8a2a2a">—</div>
+            </div>
+            <div id="alertMiniList" style="display:flex;flex-direction:column;gap:5px;margin-top:6px"></div>
+          </div>
+        </div>
+
+        <!-- ── ROW 2: 자산 분류별 현황 (프로그레스 바 카드) ── -->
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:12px">
+
+          <!-- 자산 분류 현황 -->
+          <div class="vc">
+            <div class="vc-hd" style="margin-bottom:14px">
+              <div class="vc-lb">자산 분류 현황</div>
+              <span style="font-family:var(--mono);font-size:11px;color:var(--text3)" id="total-assets-count">총 —건</span>
+            </div>
+            <div id="asset-breakdown" style="display:flex;flex-direction:column;gap:10px"></div>
+          </div>
+
+          <!-- 라벨 등록 현황 (QR/바코드) -->
+          <div class="vc">
+            <div class="vc-hd" style="margin-bottom:14px">
+              <div class="vc-lb">QR 라벨 등록 현황</div>
+              <span class="vc-tag" style="background:#f0f4e8;color:#3a6a3a">유형+렌탈</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div class="label-row">
+                <div class="lr-icon">QR</div>
+                <div class="lr-info">
+                  <div class="lr-name">QR코드 라벨</div>
+                  <div class="vc-bar" style="margin-top:4px"><div class="vc-bar-fill" style="width:72%;background:#3a6a3a"></div></div>
+                </div>
+                <div class="ring-wrap" style="width:44px;height:44px">
+                  <svg viewBox="0 0 44 44" style="width:44px;height:44px">
+                    <circle class="ring-bg" cx="22" cy="22" r="18" style="stroke-width:4"/>
+                    <circle class="ring-fg" cx="22" cy="22" r="18" style="stroke:#3a6a3a;stroke-width:4;stroke-dasharray:81.7 81.7;stroke-dashoffset:22.9;transform:rotate(-90deg);transform-origin:50% 50%"/>
+                  </svg>
+                  <div class="ring-center" style="font-size:9px">72%</div>
+                </div>
+              </div>
+              <div class="label-row">
+                <div class="lr-icon" style="background:#f5f2ec;color:#c8a96e">BC</div>
+                <div class="lr-info">
+                  <div class="lr-name">바코드 라벨</div>
+                  <div class="vc-bar" style="margin-top:4px"><div class="vc-bar-fill" style="width:50%;background:#c8a96e"></div></div>
+                </div>
+                <div class="ring-wrap" style="width:44px;height:44px">
+                  <svg viewBox="0 0 44 44" style="width:44px;height:44px">
+                    <circle class="ring-bg" cx="22" cy="22" r="18" style="stroke-width:4"/>
+                    <circle class="ring-fg" cx="22" cy="22" r="18" style="stroke:#c8a96e;stroke-width:4;stroke-dasharray:56.5 56.5;stroke-dashoffset:56.5;transform:rotate(-90deg);transform-origin:50% 50%"/>
+                  </svg>
+                  <div class="ring-center" style="font-size:9px">50%</div>
+                </div>
+              </div>
+              <div class="label-row">
+                <div class="lr-icon" style="background:#f8f0f0;color:#8a2a2a">미등</div>
+                <div class="lr-info">
+                  <div class="lr-name">미등록 자산</div>
+                  <div class="vc-bar" style="margin-top:4px"><div class="vc-bar-fill" style="width:22%;background:#8a2a2a"></div></div>
+                </div>
+                <div class="ring-wrap" style="width:44px;height:44px">
+                  <svg viewBox="0 0 44 44" style="width:44px;height:44px">
+                    <circle class="ring-bg" cx="22" cy="22" r="18" style="stroke-width:4"/>
+                    <circle class="ring-fg" cx="22" cy="22" r="18" style="stroke:#8a2a2a;stroke-width:4;stroke-dasharray:24.8 88.2;stroke-dashoffset:88.2;transform:rotate(-90deg);transform-origin:50% 50%"/>
+                  </svg>
+                  <div class="ring-center" style="font-size:9px;color:#8a2a2a">22%</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── ROW 3: 만료예정 테이블 + 이력 ── -->
+        <div style="display:grid;grid-template-columns:3fr 2fr;gap:12px;margin-bottom:12px">
+          <div class="sec" style="margin-bottom:0">
+            <div class="sec-hd"><div class="sec-t">만료 예정 항목 <span class="badge bd-red">주의</span></div><button class="btn btn-ghost btn-sm" onclick="go('history')">이동 이력 →</button></div>
+            <div class="tbl-wrap"><table><thead><tr><th>유형</th><th>자산·계약명</th><th>만료일</th><th>D-day</th><th>담당자</th></tr></thead><tbody id="dashAlertTbl"></tbody></table></div>
+          </div>
+
+          <!-- 자산 상태 분포 -->
+          <div class="vc" style="display:flex;flex-direction:column">
+            <div class="vc-hd" style="margin-bottom:14px">
+              <div class="vc-lb">자산 상태 분포</div>
+            </div>
+            <div id="statusDist" style="display:flex;flex-direction:column;gap:8px;flex:1"></div>
+          </div>
+        </div>
+
+        <!-- ── ROW 4: 이력 ── -->
+        <div class="sec">
+          <div class="sec-hd"><div class="sec-t">최근 이동·변경 이력 <span class="badge bd-navy">All Assets</span></div><button class="btn btn-out btn-sm" onclick="go('history')">전체 보기 →</button></div>
+          <div id="dashHistList"><div class="empty"><div class="ei">📋</div><div class="et">기록된 이력이 없습니다</div></div></div>
+        </div>
+      </div>
+
+      <!-- ASSET PAGE -->
+      <div class="page" id="page-asset">
+        <div class="ph">
+          <div><div class="ph-ey" id="aEy"></div><div class="ph-t" id="aT"></div><div class="ph-s" id="aS"></div><div class="ph-rule"></div></div>
+          <div class="ph-acts">
+            <button class="btn btn-ghost btn-sm" onclick="openBulk()">🏷️ QR 일괄출력</button>
+            <button class="btn btn-out btn-sm" onclick="refreshAsset()">↻</button>
+            <button class="btn btn-navy" onclick="openModal()">＋ 신규 등록</button>
+          </div>
+        </div>
+
+        <!-- 통계 카드 -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);margin-bottom:16px" id="aStats"></div>
+
+        <!-- 렌탈자산 전용: 카테고리 요약 카드 (렌탈일 때만 표시) -->
+        <div id="rentalCatSection" style="display:none;margin-bottom:14px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);font-weight:700">카테고리별 현황</div>
+            <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:4px 10px" onclick="openCatMgr()">⚙️ 카테고리 관리</button>
+          </div>
+          <div id="rentalCatCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:14px"></div>
+
+          <!-- 카테고리 필터 버튼 -->
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:2px">
+            <span style="font-size:10px;color:var(--text3);margin-right:4px">필터</span>
+            <div id="rentalCatFilters" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="toolbar">
+            <input class="tb-s" id="aSearch" placeholder="검색..." oninput="filterAsset()">
+            <div class="mla"></div>
+          </div>
+          <div class="tbl-wrap"><table><thead><tr id="aHead"></tr></thead><tbody id="aBody"></tbody></table></div>
+        </div>
+      </div>
+
+      <!-- HISTORY PAGE -->
+      <div class="page" id="page-history">
+        <div class="ph">
+          <div><div class="ph-ey">History · 전체 자산</div><div class="ph-t">이동·변경 이력</div><div class="ph-s">QR 스캔 + 대시보드 수정 시 자동 기록 · 전체 자산 유형 · 사진 첨부</div><div class="ph-rule"></div></div>
+          <div class="ph-acts">
+            <select id="hTF" style="border:1px solid var(--border);padding:7px 12px;font-size:11px;font-family:var(--font);background:var(--cream);outline:none" onchange="renderHPage()">
+              <option value="">전체 유형</option>
+              <option>임대차계약</option><option>유형자산</option><option>무형자산</option><option>렌탈자산</option><option>보험</option>
+            </select>
+            <select id="hSF" style="border:1px solid var(--border);padding:7px 12px;font-size:11px;font-family:var(--font);background:var(--cream);outline:none" onchange="renderHPage()">
+              <option value="">전체 경로</option><option value="QR스캔">QR 스캔</option><option value="대시보드">대시보드</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" onclick="clearHist()">초기화</button>
+          </div>
+        </div>
+        <div class="sec">
+          <div class="sec-hd"><div class="sec-t">전체 이력 <span class="badge bd-navy" id="histCnt">0건</span></div></div>
+          <div id="hPageList"><div class="empty"><div class="ei">📋</div><div class="et">아직 기록된 이력이 없습니다<br>자산 수정 또는 QR 스캔 시 자동 기록됩니다</div></div></div>
+        </div>
+      </div>
+
+      <!-- COST ALLOCATION PAGE -->
+      <div class="page" id="page-cost">
+        <div class="ph">
+          <div>
+            <div class="ph-ey">Cost Management · 총무기획팀</div>
+            <div class="ph-t">비용 관별손익 배분</div>
+            <div class="ph-s">임대차 + 렌탈 통합 · 거래명세서 자동 파싱 · 관 코드 배분</div>
+            <div class="ph-rule"></div>
+          </div>
+          <div class="ph-acts">
+            <select id="costPeriodType" style="border:1px solid var(--border);padding:7px 12px;font-size:11px;font-family:var(--font);background:var(--cream);outline:none" onchange="initCostPeriod()">
+              <option value="month">월별</option>
+              <option value="quarter">분기별</option>
+            </select>
+            <select id="costPeriod" style="border:1px solid var(--border);padding:7px 12px;font-size:11px;font-family:var(--font);background:var(--cream);outline:none;min-width:120px"></select>
+            <button class="btn btn-gold btn-sm" onclick="exportCostExcel()">⬇ 엑셀 다운로드</button>
+          </div>
+        </div>
+
+        <!-- 업로드 + 파일 목록 -->
+        <div style="display:grid;grid-template-columns:320px 1fr;gap:12px;margin-bottom:12px;align-items:start">
+          <div class="sec" style="margin-bottom:0">
+            <div class="sec-hd"><div class="sec-t">문서 업로드</div></div>
+            <div style="padding:16px">
+              <div id="costUpZone" style="border:1.5px dashed var(--border2);padding:24px 16px;text-align:center;cursor:pointer;background:var(--cream2);position:relative;transition:all .2s"
+                onclick="document.getElementById('costFileIn').click()"
+                ondragover="event.preventDefault();this.style.borderColor='var(--gold)'"
+                ondragleave="this.style.borderColor='var(--border2)'"
+                ondrop="handleCostDrop(event)">
+                <input type="file" id="costFileIn" accept=".xlsx,.xls,.csv" multiple style="display:none" onchange="handleCostFiles(this)">
+                <div style="font-size:24px;margin-bottom:8px">📄</div>
+                <div style="font-size:12px;font-weight:600;margin-bottom:4px">거래명세서 / 세금계산서</div>
+                <div style="font-size:10px;color:var(--text3)">Excel · CSV 드래그 또는 클릭</div>
+              </div>
+              <div id="costFileList" style="margin-top:10px;display:flex;flex-direction:column;gap:6px"></div>
+              <button class="btn btn-navy" style="width:100%;margin-top:12px;justify-content:center" onclick="runCostCalc()">📊 배분 계산 실행</button>
+              <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:6px;justify-content:center" onclick="loadCostSample()">샘플 데이터로 테스트</button>
+            </div>
+          </div>
+
+          <!-- KPI 카드 -->
+          <div>
+            <div class="kpi-grid" id="costKpiGrid" style="margin-bottom:12px">
+              <div class="kpi" style="--kc:#1a1a1a"><div class="kpi-lb">총 비용</div><div class="kpi-v" id="ck-total">—</div><div class="kpi-s">월 합산</div></div>
+              <div class="kpi" style="--kc:#3a6a3a"><div class="kpi-lb">임대차 합계</div><div class="kpi-v" id="ck-lease">—</div><div class="kpi-s">세금계산서</div></div>
+              <div class="kpi" style="--kc:#c8a96e"><div class="kpi-lb">렌탈 합계</div><div class="kpi-v" id="ck-rental">—</div><div class="kpi-s">거래명세서</div></div>
+              <div class="kpi" style="--kc:#6a5a8a"><div class="kpi-lb">배분 관 수</div><div class="kpi-v" id="ck-dept">—</div><div class="kpi-s">관 코드 기준</div></div>
+            </div>
+
+            <!-- 관별 배분 테이블 -->
+            <div class="sec" style="margin-bottom:0">
+              <div class="sec-hd">
+                <div class="sec-t">관별 비용 배분 <span class="badge bd-gold" id="costPeriodBadge"></span></div>
+                <button class="btn btn-ghost btn-sm" onclick="go('cost-mapping')">관 코드 설정</button>
+              </div>
+              <div class="tbl-wrap">
+                <table>
+                  <thead><tr><th>관 코드</th><th>관 명</th><th class="r">임대차</th><th class="r">렌탈</th><th class="r">합계</th><th>비율</th></tr></thead>
+                  <tbody id="costDeptBody">
+                    <tr><td colspan="6"><div class="empty"><div class="ei">📂</div><div class="et">파일을 업로드하고 배분 계산을 실행하세요</div></div></td></tr>
+                  </tbody>
+                  <tfoot><tr><td colspan="2">합계</td><td class="r num" id="cft-lease">—</td><td class="r num" id="cft-rental">—</td><td class="r num" id="cft-total" style="color:var(--gold)">—</td><td>100%</td></tr></tfoot>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 항목 상세 탭 -->
+        <div class="sec">
+          <div class="sec-hd">
+            <div class="sec-t">항목 상세 내역</div>
+            <div style="display:flex;gap:8px">
+              <select id="costDetailFilter" style="border:1px solid var(--border);padding:5px 10px;font-size:11px;font-family:var(--font);background:var(--cream);outline:none" onchange="renderCostDetail()">
+                <option value="">전체</option><option value="lease">임대차</option><option value="rental">렌탈</option>
+              </select>
+            </div>
+          </div>
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr><th>관 코드</th><th>유형</th><th>품목/계약명</th><th>위치</th><th class="r">금액</th><th>공급사/임대인</th><th>계정과목</th></tr></thead>
+              <tbody id="costDetailBody">
+                <tr><td colspan="7"><div class="empty" style="padding:24px"><div class="et">배분 계산 후 표시됩니다</div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- QR SCAN PAGE (내장) -->
+      <div class="page" id="page-qrscan">
+        <div class="ph">
+          <div>
+            <div class="ph-ey">Field Operation · 현장 관리</div>
+            <div class="ph-t">QR 현장 스캔</div>
+            <div class="ph-s">자산 코드 입력 또는 QR 스캔으로 위치·상태 즉시 업데이트</div>
+            <div class="ph-rule"></div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:800px">
+          <!-- 스캔 입력 -->
+          <div class="sec" style="margin-bottom:0">
+            <div class="sec-hd"><div class="sec-t">자산 코드 조회</div></div>
+            <div style="padding:20px">
+              <div style="font-size:11px;color:var(--text3);margin-bottom:8px">자산 분류코드 입력 (예: FA-PC-0001)</div>
+              <div style="display:flex;gap:8px;margin-bottom:16px">
+                <input id="qrCodeInput" style="flex:1;border:1px solid var(--border);padding:10px 12px;font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text);background:var(--cream2);outline:none;letter-spacing:1px;text-transform:uppercase" placeholder="FA-PC-0001" onkeydown="if(event.key==='Enter')lookupQrCode()">
+                <button class="btn btn-navy" onclick="lookupQrCode()">조회</button>
+              </div>
+              <div id="qrResult" style="display:none">
+                <div style="background:var(--cream2);border:1px solid var(--border);padding:14px;margin-bottom:14px">
+                  <div style="font-family:var(--mono);font-size:11px;color:var(--gold);font-weight:700;margin-bottom:4px" id="qr-code-disp"></div>
+                  <div style="font-size:14px;font-weight:600;margin-bottom:2px" id="qr-name-disp"></div>
+                  <div style="font-size:11px;color:var(--text3)">현재 위치: <span id="qr-loc-disp" style="color:var(--text2);font-weight:500"></span></div>
+                </div>
+                <div style="margin-bottom:10px">
+                  <div style="font-size:10px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">이동 후 위치</div>
+                  <input id="qr-new-loc" style="width:100%;border:1px solid var(--border);padding:9px 12px;font-size:13px;font-family:var(--font);background:var(--cream2);outline:none" placeholder="새 위치 입력">
+                </div>
+                <div style="margin-bottom:14px">
+                  <div style="font-size:10px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">상태 변경</div>
+                  <select id="qr-status" style="width:100%;border:1px solid var(--border);padding:9px 12px;font-size:13px;font-family:var(--font);background:var(--cream2);outline:none">
+                    <option>사용중</option><option>파손</option><option>교체예정</option><option>폐기</option>
+                  </select>
+                </div>
+                <div style="margin-bottom:14px">
+                  <div style="font-size:10px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">처리자</div>
+                  <input id="qr-worker" style="width:100%;border:1px solid var(--border);padding:9px 12px;font-size:13px;font-family:var(--font);background:var(--cream2);outline:none" placeholder="이름 입력">
+                </div>
+                <button class="btn btn-navy" style="width:100%;justify-content:center" onclick="saveQrUpdate()">✅ 저장 및 이력 등록</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 오늘 처리 내역 -->
+          <div class="sec" style="margin-bottom:0">
+            <div class="sec-hd"><div class="sec-t">오늘 처리 내역</div></div>
+            <div id="qrTodayList" style="padding:0">
+              <div class="empty"><div class="ei">📱</div><div class="et">처리한 내역이 없습니다</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- 등록/수정 모달 -->
+<div class="mo" id="moForm" onclick="closeMoBg(event,'moForm')">
+  <div class="mo-box">
+    <div class="mo-t" id="moT">신규 등록</div>
+    <div class="fg-grid" id="moF"></div>
+    <div class="mo-ft"><button class="btn btn-ghost" onclick="closeMo('moForm')">취소</button><button class="btn btn-navy" onclick="saveItem()">저장</button></div>
+  </div>
+</div>
+
+<!-- QR 모달 -->
+<div class="mo" id="moQr" onclick="closeMoBg(event,'moQr')">
+  <div class="mo-box" style="width:460px">
+    <div class="mo-t">QR · 바코드 라벨</div>
+    <div id="qrContent"></div>
+    <div class="mo-ft"><button class="btn btn-ghost" onclick="closeMo('moQr')">닫기</button><button class="btn btn-gold" onclick="printLabel()">🖨️ 인쇄</button></div>
+  </div>
+</div>
+
+<!-- 일괄 출력 -->
+<div class="mo" id="moBulk" onclick="closeMoBg(event,'moBulk')">
+  <div class="mo-box" style="width:680px">
+    <div class="mo-t">QR 라벨 일괄 출력</div>
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+      <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="selAll" onchange="togSelAll(this)">전체 선택</label>
+      <span style="font-size:11px;color:var(--text3)" id="selCnt">0개</span>
+      <div class="mla" style="display:flex;gap:8px"><button class="btn btn-ghost btn-sm" onclick="closeMo('moBulk')">닫기</button><button class="btn btn-gold btn-sm" onclick="printBulk()">🖨️ 인쇄</button></div>
+    </div>
+    <div id="bulkList" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-height:52vh;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- 카테고리 관리 모달 -->
+<div class="mo" id="moCatMgr" onclick="closeMoBg(event,'moCatMgr')">
+  <div class="mo-box" style="width:500px">
+    <div class="mo-t">렌탈자산 카테고리 관리</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:16px;background:var(--cream2);padding:10px 14px">
+      💡 카테고리를 추가·수정·삭제할 수 있습니다. 변경사항은 즉시 반영됩니다.
+    </div>
+
+    <!-- 기존 카테고리 목록 -->
+    <div id="catMgrList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:18px;max-height:320px;overflow-y:auto"></div>
+
+    <!-- 새 카테고리 추가 -->
+    <div style="border-top:1px solid var(--cream2);padding-top:16px">
+      <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--text3);font-weight:700;margin-bottom:10px">새 카테고리 추가</div>
+      <div style="display:grid;grid-template-columns:1fr 60px 100px auto;gap:8px;align-items:end">
+        <div class="fg">
+          <label>카테고리명</label>
+          <input type="text" id="newCatName" placeholder="예: 복합기/잉크젯" onkeydown="if(event.key==='Enter')addCat()">
+        </div>
+        <div class="fg">
+          <label>아이콘</label>
+          <input type="text" id="newCatIcon" placeholder="🖨️" style="text-align:center;font-size:18px">
+        </div>
+        <div class="fg">
+          <label>색상</label>
+          <select id="newCatColor" style="border:1px solid var(--border);padding:9px 10px;font-size:12px;font-family:var(--font);background:var(--cream2);outline:none;width:100%">
+            <option value="#1a1a1a">● 블랙</option>
+            <option value="#2a5a8a">● 블루</option>
+            <option value="#3a6a3a">● 그린</option>
+            <option value="#6a4a2a">● 브라운</option>
+            <option value="#4a3a6a">● 퍼플</option>
+            <option value="#2a6a6a">● 틸</option>
+            <option value="#8a2a2a">● 레드</option>
+            <option value="#8a6a20">● 골드</option>
+          </select>
+        </div>
+        <button class="btn btn-navy" onclick="addCat()" style="height:38px">추가</button>
+      </div>
+    </div>
+
+    <div class="mo-ft">
+      <button class="btn btn-ghost" onclick="resetCats()">기본값으로 초기화</button>
+      <button class="btn btn-navy" onclick="closeMo('moCatMgr');loadAsset('rental')">완료</button>
+    </div>
+  </div>
+</div>
+
+<div id="loadingOverlay" style="display:none;position:fixed;inset:0;background:rgba(250,248,244,.85);z-index:9000;align-items:center;justify-content:center;flex-direction:column;gap:12px">
+  <div style="width:32px;height:32px;border:2px solid #e8e2d9;border-top-color:#c8a96e;border-radius:50%;animation:spin .7s linear infinite"></div>
+  <div style="font-size:12px;color:#5a5248;font-family:'Noto Sans KR',sans-serif">데이터 불러오는 중...</div>
+</div>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+<div id="lb" onclick="this.classList.remove('open')"><img id="lbImg" src=""></div>
+<div id="prt" style="display:none"></div>
+<div id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+// ═══════════════════════ SUPABASE 설정 ═══════════════════════
+const SUPABASE_URL = 'https://gegrylivlqxwcobnuwie.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_PInNA4d_JkTn4_U1QeI1RQ_vCz2HFyV';
+const _supa = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Supabase API 함수
+async function sbSelect(table) {
+  const { data, error } = await _supa.from(table).select('*').order('id');
+  if (error) { console.error('조회 오류:', error); return []; }
+  return data || [];
+}
+async function sbInsert(table, row) {
+  const { error } = await _supa.from(table).insert([row]);
+  if (error) { console.error('등록 오류:', error); return false; }
+  return true;
+}
+async function sbUpdate(table, id, row) {
+  const { error } = await _supa.from(table).update(row).eq('id', id);
+  if (error) { console.error('수정 오류:', error); return false; }
+  return true;
+}
+async function sbDelete(table, id) {
+  const { error } = await _supa.from(table).delete().eq('id', id);
+  if (error) { console.error('삭제 오류:', error); return false; }
+  return true;
+}
+
+// ═══════════════════════ DATA ═══════════════════════
+const SAMPLE={
+  lease:{label:'임대차계약',tc:'tg-lease',icon:'🏢',color:'#0f2d5c',dbTable:'lease',
+    headers:['no','지역법인명','건물명','층수','계약시작일','계약종료일','보증금','전용평수','임차료','임대인','비고'],
+    rows:[]},
+  tangible:{label:'유형자산',tc:'tg-tangible',icon:'🖥️',color:'#1a6a3a',
+    headers:['자산명','분류','수량','취득일','취득금액','위치','시리얼','폐기예정일','담당자','상태'],
+    rows:[
+      {_id:1,'자산명':'맥북프로 M3','분류':'노트북','수량':'5','취득일':'2024-02-01','취득금액':'18,500,000','위치':'N타워 6층','시리얼':'MBP-2024-001','폐기예정일':'2029-02-01','담당자':'이슬기','상태':'사용중'},
+      {_id:2,'자산명':'Dell 모니터 27"','분류':'모니터','수량':'12','취득일':'2023-08-15','취득금액':'5,400,000','위치':'N타워 6층','시리얼':'DL-MON-023','폐기예정일':'2028-08-15','담당자':'김담당','상태':'사용중'},
+      {_id:3,'자산명':'복합기 Canon X800','분류':'복합기/잉크젯','수량':'3','취득일':'2022-03-01','취득금액':'8,700,000','위치':'다운타운 12층','시리얼':'CN-X800-01','폐기예정일':'2025-03-01','담당자':'박담당','상태':'교체예정'},
+      {_id:4,'자산명':'영상강의 촬영장비','분류':'AV장비','수량':'2','취득일':'2023-12-01','취득금액':'12,000,000','위치':'N타워 9층','시리얼':'AV-2023-SET','폐기예정일':'2028-12-01','담당자':'이슬기','상태':'사용중'},
+    ]},
+  intangible:{label:'무형자산',tc:'tg-intangible',icon:'💿',color:'#7a5a00',dbTable:'intangible',
+    headers:['no','분류','상품명','회선서비스번호','관리번호','월청구금액','계약시작일','만료일','약정개월수','지역법인명','관코드','캠퍼스명','위치','운용상태','비고','파일첨부'],
+    rows:[]},
+  rental:{label:'렌탈자산',tc:'tg-rental',icon:'📦',color:'#5a1a8a',
+    headers:['렌탈품목','분류','수량','렌탈사','월렌탈료','계약시작일','계약종료일','설치위치','담당자','상태'],
+    rows:[
+      {_id:1,'렌탈품목':'정수기 코웨이 스탠드형','분류':'정수기','수량':'8','렌탈사':'코웨이','월렌탈료':'240,000','계약시작일':'2022-07-01','계약종료일':'2025-04-10','설치위치':'각 층 탕비실','담당자':'이슬기','상태':'사용중'},
+      {_id:2,'렌탈품목':'복합기 리코 IM C3000','분류':'복합기/잉크젯','수량':'5','렌탈사':'리코코리아','월렌탈료':'625,000','계약시작일':'2023-01-01','계약종료일':'2025-12-31','설치위치':'사무실','담당자':'김담당','상태':'사용중'},
+      {_id:3,'렌탈품목':'공기청정기 LG','분류':'공기청정기','수량':'12','렌탈사':'LG전자','월렌탈료':'360,000','계약시작일':'2023-04-01','계약종료일':'2026-03-31','설치위치':'강의실','담당자':'박담당','상태':'사용중'},
+      {_id:4,'렌탈품목':'커피머신 네스프레소','분류':'캡스','수량':'6','렌탈사':'네스프레소','월렌탈료':'180,000','계약시작일':'2024-01-01','계약종료일':'2025-04-28','설치위치':'휴게실','담당자':'이슬기','상태':'반납예정'},
+    ]},
+  insurance:{label:'보험',tc:'tg-insurance',icon:'🛡️',color:'#0a4a5a',dbTable:'insurance',
+    headers:['no','보험사','종류','증권번호','mu_code','보험료','계약시작일','만기일','지역법인명','학원명','캠퍼스명','위치','운용상태','비고','파일첨부'],
+    rows:[]}
+};
+
+const ALERTS=[
+  {type:'렌탈자산',tc:'tg-rental',name:'정수기 코웨이 스탠드형',date:'2025-04-10',days:1},
+  {type:'무형자산',tc:'tg-intangible',name:'Adobe Creative Cloud',date:'2025-04-15',days:6},
+  {type:'임대차계약',tc:'tg-lease',name:'수내캠퍼스 임대차',date:'2025-04-20',days:11},
+  {type:'렌탈자산',tc:'tg-rental',name:'커피머신 네스프레소',date:'2025-04-28',days:19},
+  {type:'보험',tc:'tg-insurance',name:'사옥 화재보험',date:'2025-04-30',days:21},
+  {type:'임대차계약',tc:'tg-lease',name:'다운타운 12층',date:'2025-05-31',days:52},
+];
+
+// ═══════════════════════ STATE ═══════════════════════
+let curType=null, editId=null, editOld=null, curUser={name:'',role:'user'};
+let HIST=JSON.parse(localStorage.getItem('ah')||'[]');
+
+const TYPE_PFX={lease:'LC',tangible:'FA',intangible:'IA',rental:'RT',insurance:'IN'};
+const CAT_PFX={'노트북':'PC','모니터':'MN','복합기':'PR','AV장비':'AV','정수기':'WP','공기청정기':'AP','커피머신':'CF','화재보험':'FI','배상책임':'LI','단체보험':'GI','자동차보험':'CA'};
+
+function genCode(type,row){
+  const tp=TYPE_PFX[type]||'XX';
+  const cf={tangible:'분류',rental:'분류',insurance:'보험종류'}[type]||'';
+  const cat=cf?(CAT_PFX[row?.[cf]]||String(row?.[cf]||'').slice(0,2).toUpperCase()||'XX'):'XX';
+  return `${tp}-${cat}-${String(row?._id||0).padStart(4,'0')}`;
+}
+
+function addHist(e){
+  const entry = {id:Date.now(),ts:new Date().toISOString(),...e};
+  HIST.unshift(entry);
+  if(HIST.length>500) HIST=HIST.slice(0,500);
+  localStorage.setItem('ah',JSON.stringify(HIST));
+  refreshHBadge();
+  // Supabase 이동이력 저장
+  sbInsert('history', {
+    일시: entry.ts,
+    자산코드: entry.assetCode || '',
+    자산명: entry.assetName || '',
+    자산유형: entry.assetType || '',
+    이전관코드: '',
+    이후관코드: '',
+    이전위치: entry.fromLoc || '',
+    이후위치: entry.toLoc || '',
+    요청자: entry.worker || '',
+    이동사유: entry.memo || '',
+  });
+}
+
+function refreshHBadge(){
+  const el=document.getElementById('nb-history');
+  if(HIST.length){el.textContent=HIST.length;el.style.display='inline';}
+}
+
+function dCls(d){return d<=7?'d-crit':d<=30?'d-warn':'d-safe';}
+
+// ═══════════════════════ LOGIN ═══════════════════════
+const USERS = [
+  { id:'lee',  pw:'flow2025!', name:'이슬기', role:'admin' },
+  { id:'ahn',  pw:'flow2025!', name:'안희운', role:'user'  },
+  { id:'kim',  pw:'flow2025!', name:'김영진', role:'user'  },
+  { id:'park', pw:'flow2025!', name:'박윤규', role:'user'  },
+];
+
+function doLogin(){
+  const id = document.getElementById('lid').value.trim();
+  const pw = document.getElementById('lpw').value.trim();
+  if(!id || !pw){
+    document.getElementById('loginErr').style.display='block';
+    document.getElementById('loginErr').textContent='아이디와 비밀번호를 입력해 주세요.';
+    return;
+  }
+  const user = USERS.find(u => u.id===id && u.pw===pw);
+  if(user){
+    curUser = { name:user.name, role:user.role };
+    document.getElementById('uNm').textContent = user.name;
+    document.getElementById('uAv').textContent = user.name.charAt(0);
+    document.getElementById('loginScreen').style.display='none';
+    document.getElementById('app').style.display='flex';
+    initApp();
+  } else {
+    document.getElementById('loginErr').style.display='block';
+    document.getElementById('loginErr').textContent='아이디 또는 비밀번호를 확인해 주세요.';
+  }
+}
+document.getElementById('lpw').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+function doLogout(){document.getElementById('loginScreen').style.display='flex';document.getElementById('app').style.display='none';}
+
+// ═══════════════════════ INIT ═══════════════════════
+function initApp(){
+  const now=new Date();
+  document.getElementById('topDate').textContent=now.toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'short'});
+  document.getElementById('dashDate').textContent='기준일 '+now.toLocaleDateString('ko-KR');
+
+  // 알림 배너
+  if(ALERTS.length){
+    document.getElementById('alertBanner').style.display='flex';
+    document.getElementById('alertCount').textContent=ALERTS.length+'건';
+    document.getElementById('alertText').textContent=ALERTS.slice(0,3).map(a=>`${a.name} D-${a.days}`).join(' · ')+(ALERTS.length>3?' 외 '+(ALERTS.length-3)+'건':'');
+  }
+
+  // 알림 패널
+  document.getElementById('notifItems').innerHTML=ALERTS.map(a=>`
+    <div class="np-it"><div class="np-n"><span class="tag ${a.tc}" style="margin-right:6px">${a.type}</span>${a.name}</div>
+    <div class="np-m"><span>${a.date}</span><span class="d-tag ${dCls(a.days)}">D-${a.days}</span></div></div>`).join('');
+
+  // 만료 테이블
+  document.getElementById('dashAlertTbl').innerHTML=ALERTS.map(a=>`<tr>
+    <td><span class="tag ${a.tc}">${a.type}</span></td><td style="font-weight:600">${a.name}</td>
+    <td class="dt">${a.date}</td><td><span class="d-tag ${dCls(a.days)}">D-${a.days}</span></td>
+    <td class="mt">이슬기</td></tr>`).join('');
+
+  // 사이드바 배지
+  [{k:'intangible',v:ALERTS.filter(a=>a.type==='무형자산').length},{k:'rental',v:ALERTS.filter(a=>a.type==='렌탈자산').length},{k:'insurance',v:ALERTS.filter(a=>a.type==='보험').length}]
+    .forEach(({k,v})=>{if(v){const el=document.getElementById('nb-'+k);if(el){el.textContent=v;el.style.display='inline';}}});
+
+  refreshHBadge();
+  renderDashHist();
+  setTimeout(renderVisuals, 100); // 애니메이션을 위해 약간 지연
+}
+
+function setRing(id, pct, color){
+  const circ = 2 * Math.PI * 32; // r=32
+  const el = document.getElementById(id);
+  if(!el) return;
+  const filled = circ * (pct/100);
+  el.style.strokeDasharray = `${filled} ${circ - filled}`;
+  el.style.stroke = color;
+}
+
+function renderVisuals(){
+  // ── 월 비용 계산 ──
+  renderMonthlyCost();
+
+  // ── 유형자산 링 ──
+  const tang = SAMPLE.tangible.rows;
+  const tangTotal = tang.length;
+  const tangUsed  = tang.filter(r=>r['상태']==='사용중').length;
+  const tangPct   = tangTotal>0 ? Math.round(tangUsed/tangTotal*100) : 0;
+  document.getElementById('vc-tangible-sub').textContent = `${tangTotal}개 중 ${tangUsed}개 사용중`;
+  document.getElementById('ring-tangible-pct').textContent = tangPct+'%';
+  document.getElementById('barv-tangible').textContent = tangUsed+'개';
+  document.getElementById('bar-tangible').style.width = tangPct+'%';
+  setRing('ring-tangible', tangPct, '#3a6a3a');
+
+  // ── 렌탈자산 링 ──
+  const rent = SAMPLE.rental.rows;
+  const rentTotal = rent.length;
+  const rentWarn  = rent.filter(r=>r['상태']==='반납예정').length;
+  const rentPct   = rentTotal>0 ? Math.round(rentWarn/rentTotal*100) : 0;
+  document.getElementById('vc-rental-sub').textContent = `${rentTotal}개 중 ${rentWarn}개 반납예정`;
+  document.getElementById('ring-rental-pct').textContent = Math.round((rentTotal-rentWarn)/rentTotal*100)+'%';
+  document.getElementById('barv-rental').textContent = rentWarn+'개';
+  document.getElementById('bar-rental').style.width = rentPct+'%';
+  setRing('ring-rental', Math.round((rentTotal-rentWarn)/rentTotal*100), '#c8a96e');
+
+  // ── 만료 알림 링 ──
+  const allAssets = Object.values(SAMPLE).reduce((s,d)=>s+d.rows.length,0);
+  const alertPct = allAssets>0 ? Math.round(ALERTS.length/allAssets*100) : 0;
+  document.getElementById('ring-alerts-pct').textContent = ALERTS.length+'건';
+  setRing('ring-alerts', Math.min(alertPct*5, 100), '#8a2a2a');
+  document.getElementById('alertMiniList').innerHTML = ALERTS.slice(0,3).map(a=>`
+    <div class="am-item">
+      <span class="am-d ${dCls(a.days)}">D-${a.days}</span>
+      <span style="flex:1;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.name}</span>
+    </div>`).join('');
+
+  // ── 자산 분류 현황 ──
+  const total = allAssets;
+  document.getElementById('total-assets-count').textContent = '총 '+total+'건';
+  const types = [
+    {label:'임대차계약', count:SAMPLE.lease.rows.length,      color:'#1a1a1a'},
+    {label:'유형자산',   count:SAMPLE.tangible.rows.length,   color:'#3a6a3a'},
+    {label:'무형자산',   count:SAMPLE.intangible.rows.length, color:'#c8a96e'},
+    {label:'렌탈자산',   count:SAMPLE.rental.rows.length,     color:'#6a5a8a'},
+    {label:'보험',       count:SAMPLE.insurance.rows.length,  color:'#2a6a6a'},
+  ];
+  document.getElementById('asset-breakdown').innerHTML = types.map(t=>{
+    const pct = total>0 ? Math.round(t.count/total*100) : 0;
+    return `<div class="ab-row">
+      <div class="ab-dot" style="background:${t.color}"></div>
+      <div class="ab-name">${t.label}</div>
+      <div class="ab-bar"><div class="ab-bar-fill" style="width:${pct}%;background:${t.color}"></div></div>
+      <div class="ab-count">${t.count}</div>
+      <div class="ab-pct">${pct}%</div>
+    </div>`;
+  }).join('');
+
+  // ── 상태 분포 ──
+  const allRows = Object.values(SAMPLE).flatMap(d=>d.rows);
+  const statusCounts = {};
+  allRows.forEach(r=>{
+    const s = r['상태'] || '정상';
+    statusCounts[s] = (statusCounts[s]||0)+1;
+  });
+  const statusColors = {'사용중':'#3a6a3a','정상':'#3a6a3a','교체예정':'#8a2a2a','반납예정':'#c8a96e','만료임박':'#7a2020'};
+  document.getElementById('statusDist').innerHTML = Object.entries(statusCounts)
+    .sort((a,b)=>b[1]-a[1])
+    .map(([s,c])=>{
+      const pct = allRows.length>0 ? Math.round(c/allRows.length*100) : 0;
+      const col = statusColors[s]||'#a09890';
+      return `<div class="sd-row">
+        <div class="sd-name">${s}</div>
+        <div class="sd-bar"><div class="sd-bar-fill" style="width:${pct}%;background:${col}"></div></div>
+        <div class="sd-count">${c}건</div>
+      </div>`;
+    }).join('');
+}
+
+// ═══════════════════════ MONTHLY COST ═══════════════════════
+function calcMonthlyCost() {
+  // 임대차: 월임차료 합산
+  const leaseAmt = SAMPLE.lease.rows.reduce((s,r) => {
+    const v = Number(String(r['월임차료']||'0').replace(/[^0-9.-]/g,''));
+    return s + (isNaN(v) ? 0 : v);
+  }, 0);
+
+  // 렌탈: 월렌탈료 합산
+  const rentalAmt = SAMPLE.rental.rows.reduce((s,r) => {
+    const v = Number(String(r['월렌탈료']||'0').replace(/[^0-9.-]/g,''));
+    return s + (isNaN(v) ? 0 : v);
+  }, 0);
+
+  // 보험: 연보험료 ÷ 12
+  const insuranceAmt = Math.round(SAMPLE.insurance.rows.reduce((s,r) => {
+    const v = Number(String(r['보험료(연)']||'0').replace(/[^0-9.-]/g,''));
+    return s + (isNaN(v) ? 0 : v);
+  }, 0) / 12);
+
+  return { leaseAmt, rentalAmt, insuranceAmt,
+           total: leaseAmt + rentalAmt + insuranceAmt };
+}
+
+function renderMonthlyCost() {
+  const c = calcMonthlyCost();
+  const fmtW = n => n > 0 ? Math.round(n).toLocaleString('ko-KR') : '—';
+
+  document.getElementById('cost-total-monthly').textContent     = c.total > 0 ? Math.round(c.total).toLocaleString('ko-KR') : '—';
+  document.getElementById('cost-lease-monthly').textContent     = fmtW(c.leaseAmt);
+  document.getElementById('cost-rental-monthly').textContent    = fmtW(c.rentalAmt);
+  document.getElementById('cost-insurance-monthly').textContent = fmtW(c.insuranceAmt);
+  document.getElementById('cost-lease-cnt').textContent         = SAMPLE.lease.rows.length + '건';
+  document.getElementById('cost-rental-cnt').textContent        = SAMPLE.rental.rows.length + '건';
+  document.getElementById('cost-insurance-cnt').textContent     = SAMPLE.insurance.rows.length + '건';
+
+  // ── 카테고리별 전월 대비 ──
+  const prev = JSON.parse(localStorage.getItem('prevCost') || 'null');
+
+  function momHtml(current, prevVal) {
+    if (!prev || prevVal === undefined || prevVal === null) return '<span style="color:var(--text3);font-size:10px">전월 미입력</span>';
+    const diff = current - prevVal;
+    const pct  = prevVal > 0 ? (diff / prevVal * 100).toFixed(1) : 0;
+    const absDiff = Math.abs(Math.round(diff)).toLocaleString('ko-KR');
+    if (diff > 0)  return `<span style="color:#8a2a2a">▲ ${absDiff}원&nbsp;<span style="font-size:10px">(+${pct}%)</span></span>`;
+    if (diff < 0)  return `<span style="color:#2a5a2a">▼ ${absDiff}원&nbsp;<span style="font-size:10px">(${pct}%)</span></span>`;
+    return `<span style="color:var(--text3)">― 전월 동일</span>`;
+  }
+
+  const prevTotal = prev ? (prev.lease||0)+(prev.rental||0)+(prev.insurance||0) : null;
+  document.getElementById('cost-total-mom').innerHTML     = momHtml(c.total,         prevTotal);
+  document.getElementById('cost-lease-mom').innerHTML     = momHtml(c.leaseAmt,     prev?.lease);
+  document.getElementById('cost-rental-mom').innerHTML    = momHtml(c.rentalAmt,    prev?.rental);
+  document.getElementById('cost-insurance-mom').innerHTML = momHtml(c.insuranceAmt, prev?.insurance);
+
+  // 비율 바
+  if (c.total > 0) {
+    const items = [
+      { label:'임대차', amt:c.leaseAmt,     color:'#1a1a1a' },
+      { label:'렌탈',   amt:c.rentalAmt,    color:'#c8a96e' },
+      { label:'보험',   amt:c.insuranceAmt, color:'#2a6a6a' },
+    ].filter(i => i.amt > 0);
+    document.getElementById('cost-ratio-bar').innerHTML = items.map(i =>
+      `<div style="flex:${i.amt};background:${i.color}"></div>`
+    ).join('');
+    document.getElementById('cost-ratio-legend').innerHTML = items.map(i => {
+      const pct = Math.round(i.amt / c.total * 100);
+      return `<div style="display:flex;align-items:center;gap:5px;font-size:11px">
+        <div style="width:8px;height:8px;background:${i.color};flex-shrink:0"></div>
+        <span style="color:var(--text2)">${i.label}</span>
+        <span style="font-family:var(--mono);font-weight:600">${Math.round(i.amt).toLocaleString('ko-KR')}원</span>
+        <span style="color:var(--text3)">(${pct}%)</span>
+      </div>`;
+    }).join('');
+  }
+}
+
+function openCostEditModal() {
+  const prev = JSON.parse(localStorage.getItem('prevCost') || 'null');
+  const c = calcMonthlyCost();
+  document.getElementById('prev-lease-hint').textContent     = `이번 달: ${c.leaseAmt.toLocaleString('ko-KR')}원`;
+  document.getElementById('prev-rental-hint').textContent    = `이번 달: ${c.rentalAmt.toLocaleString('ko-KR')}원`;
+  document.getElementById('prev-insurance-hint').textContent = `이번 달: ${c.insuranceAmt.toLocaleString('ko-KR')}원`;
+  document.getElementById('prev-lease').value     = prev?.lease     || '';
+  document.getElementById('prev-rental').value    = prev?.rental    || '';
+  document.getElementById('prev-insurance').value = prev?.insurance || '';
+  document.getElementById('moCostEdit').classList.add('open');
+}
+
+
+function savePrevCost() {
+  const prev = {
+    lease:     Number(document.getElementById('prev-lease').value)     || 0,
+    rental:    Number(document.getElementById('prev-rental').value)    || 0,
+    insurance: Number(document.getElementById('prev-insurance').value) || 0,
+  };
+  localStorage.setItem('prevCost', JSON.stringify(prev));
+  closeMo('moCostEdit');
+  renderMonthlyCost();
+  showToast('✅ 전월 비용 저장 완료 — 비교 반영됨');
+}
+
+// ═══════════════════════ NAVIGATION ═══════════════════════
+// 페이지 히스토리 스택
+let pageStack = [];
+
+const PAGE_LABELS = {
+  dash:'전체 대시보드', lease:'임대차계약', tangible:'유형자산',
+  intangible:'무형자산', rental:'렌탈자산', insurance:'보험',
+  history:'이동·변경 이력', cost:'비용 관별배분', qrscan:'QR 현장 스캔'
+};
+
+function go(p, pushHistory=true){
+  // 현재 페이지를 스택에 저장 (dash 제외)
+  const curPage = pageStack.length > 0 ? pageStack[pageStack.length-1] : 'dash';
+  if(pushHistory && curPage !== p){
+    pageStack.push(p);
+  }
+
+  document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
+  document.querySelector(`[data-p="${p}"]`)?.classList.add('active');
+  document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
+
+  if(p==='dash'){document.getElementById('page-dash').classList.add('active');curType=null;pageStack=[];}
+  else if(p==='history'){document.getElementById('page-history').classList.add('active');renderHPage();}
+  else if(p==='cost'){document.getElementById('page-cost').classList.add('active');curType=null;initCostPage();}
+  else if(p==='qrscan'){document.getElementById('page-qrscan').classList.add('active');curType=null;}
+  else{document.getElementById('page-asset').classList.add('active');curType=p;loadAsset(p);}
+
+  // 뒤로가기 버튼 표시/숨김
+  const btnBack = document.getElementById('btnBack');
+  const secLabel = document.getElementById('tb-sec-label');
+  if(p === 'dash' || pageStack.length <= 1){
+    btnBack.classList.add('hidden');
+    secLabel.textContent = '총무기획팀 · 자산관리';
+  } else {
+    btnBack.classList.remove('hidden');
+    secLabel.textContent = PAGE_LABELS[p] || p;
+  }
+
+  closeNotif();
+  window.scrollTo(0,0);
+}
+
+function goBack(){
+  if(pageStack.length <= 1){ go('dash'); return; }
+  pageStack.pop(); // 현재 페이지 제거
+  const prev = pageStack.length > 0 ? pageStack[pageStack.length-1] : 'dash';
+  pageStack.pop(); // 이전 페이지도 제거 (go()에서 다시 push됨)
+  go(prev);
+}
+
+// ═══════════════════════ COST ALLOCATION ═══════════════════
+let costFiles=[], costParsed=[], costResult=[];
+
+const COST_MAP={
+  '각 층 탕비실':{code:'HQ-00',name:'본사공통'},
+  '사무실':{code:'HQ-00',name:'본사공통'},
+  '강의실':{code:'MX-ALL',name:'분원공통'},
+  '휴게실':{code:'HQ-00',name:'본사공통'},
+  'N타워 6층':{code:'GW-01',name:'광교본원'},
+  '수내동 3층':{code:'SN-02',name:'수내캠퍼스'},
+  '다운타운 12층':{code:'DT-03',name:'다운타운'},
+  '정자빌딩 4층':{code:'JJ-04',name:'정자캠퍼스'},
+  'N타워 9층':{code:'GW-01',name:'광교본원'},
+  '경기 수원':{code:'GW-01',name:'광교본원'},
+  '경기 성남':{code:'SN-02',name:'수내캠퍼스'},
+};
+
+function initCostPage(){
+  initCostPeriod();
+  document.getElementById('costPeriodBadge').textContent=document.getElementById('costPeriod').options[0]?.text||'';
+}
+
+function initCostPeriod(){
+  const type=document.getElementById('costPeriodType').value;
+  const sel=document.getElementById('costPeriod');
+  sel.innerHTML='';
+  const now=new Date();
+  if(type==='month'){
+    for(let i=0;i<12;i++){
+      const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+      const v=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+      const lb=d.getFullYear()+'년 '+(d.getMonth()+1)+'월';
+      sel.innerHTML+=`<option value="${v}">${lb}</option>`;
+    }
+  } else {
+    for(let i=0;i<8;i++){
+      const q=Math.ceil((now.getMonth()+1)/3)-Math.floor(i/1);
+      const y=now.getFullYear()-Math.floor(i/4);
+      const qq=((q-1-i%4)+4)%4+1;
+      sel.innerHTML+=`<option value="${y}-Q${qq}">${y}년 ${qq}분기</option>`;
+    }
+  }
+}
+
+function handleCostFiles(inp){
+  [...inp.files].forEach(f=>{
+    const entry={name:f.name,status:'reading',items:[]};
+    costFiles.push(entry);
+    renderCostFileList();
+    const reader=new FileReader();
+    reader.onload=e=>{
+      try{
+        const wb=XLSX.read(e.target.result,{type:'binary'});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+        entry.items=parseCostSheet(rows);
+        entry.status='done';
+        entry.meta=entry.items.length+'개 항목';
+      }catch(err){entry.status='error';entry.meta='파싱 오류';}
+      renderCostFileList();
+    };
+    reader.readAsBinaryString(f);
+  });
+  inp.value='';
+}
+
+function handleCostDrop(e){
+  e.preventDefault();
+  document.getElementById('costUpZone').style.borderColor='var(--border2)';
+  const dt=new DataTransfer();
+  [...e.dataTransfer.files].forEach(f=>dt.items.add(f));
+  document.getElementById('costFileIn').files=dt.files;
+  handleCostFiles(document.getElementById('costFileIn'));
+}
+
+function parseCostSheet(rows){
+  if(!rows||rows.length<2) return [];
+  const hi=rows.findIndex(r=>r.some(c=>/품목|상품|항목|내용|계약/i.test(String(c))));
+  if(hi<0) return [];
+  const h=rows[hi].map(c=>String(c).trim());
+  const ni=h.findIndex(c=>/품목|상품|항목|내용|계약명/i.test(c));
+  const qi=h.findIndex(c=>/수량|qty/i.test(c));
+  const ai=h.findIndex(c=>/공급가액|금액|amount|합계/i.test(c));
+  return rows.slice(hi+1).filter(r=>String(r[ni]||'').trim()).map((r,i)=>{
+    const name=String(r[ni]||'').trim();
+    const qty=Number(String(r[qi]||'1').replace(/,/g,''))||1;
+    const amt=Number(String(r[ai]||'0').replace(/,/g,''))||0;
+    return {idx:i+1,name,qty,amt,costType:guessType(name),matched:matchCostAsset(name)};
+  }).filter(r=>r.amt>0);
+}
+
+function guessType(n){return /임대|임차|보증금/.test(n)?'lease':'rental';}
+
+function matchCostAsset(name){
+  const lo=name.toLowerCase();
+  for(const row of SAMPLE.rental.rows){
+    if((row['렌탈품목']||'').length>2&&lo.includes((row['렌탈품목']||'').slice(0,4).toLowerCase()))
+      return {type:'rental',name:row['렌탈품목'],loc:row['설치위치']||'—',vendor:row['렌탈사']};
+  }
+  for(const row of SAMPLE.lease.rows){
+    if((row['계약명']||'').length>2&&lo.includes((row['계약명']||'').slice(0,3).toLowerCase()))
+      return {type:'lease',name:row['계약명'],loc:row['위치']||'—',landlord:row['임대인']};
+  }
+  return null;
+}
+
+function renderCostFileList(){
+  document.getElementById('costFileList').innerHTML=costFiles.map(f=>`
+    <div style="border:1px solid var(--border);padding:9px 12px;background:${f.status==='done'?'#f0f4e8':f.status==='error'?'#f8f0f0':'var(--cream2)'}">
+      <div style="font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:2px">${f.meta||f.status}</div>
+    </div>`).join('');
+}
+
+function loadCostSample(){
+  costFiles=[
+    {name:'2025-04_임대차_세금계산서.xlsx',status:'done',meta:'5개 항목',
+     items:[
+       {idx:1,name:'N타워 6층 임차료',qty:1,amt:12500000,costType:'lease',matched:{type:'lease',name:'광교본원 임대차',loc:'N타워 6층',landlord:'(주)엔빌딩'}},
+       {idx:2,name:'수내캠퍼스 임대료',qty:1,amt:8800000,costType:'lease',matched:{type:'lease',name:'수내캠퍼스 임대차',loc:'수내동 3층',landlord:'성남빌딩'}},
+       {idx:3,name:'다운타운 12층 임차료',qty:1,amt:21000000,costType:'lease',matched:{type:'lease',name:'다운타운 12층',loc:'다운타운 12층',landlord:'다운타운(주)'}},
+     ]},
+    {name:'2025-04_렌탈_거래명세서.xlsx',status:'done',meta:'4개 항목',
+     items:[
+       {idx:1,name:'정수기 렌탈',qty:8,amt:240000,costType:'rental',matched:{type:'rental',name:'정수기 코웨이',loc:'각 층 탕비실',vendor:'코웨이'}},
+       {idx:2,name:'복합기 리코 임대',qty:5,amt:625000,costType:'rental',matched:{type:'rental',name:'복합기 리코',loc:'사무실',vendor:'리코코리아'}},
+       {idx:3,name:'공기청정기 렌탈',qty:12,amt:360000,costType:'rental',matched:{type:'rental',name:'공기청정기 LG',loc:'강의실',vendor:'LG전자'}},
+       {idx:4,name:'커피머신 월정액',qty:6,amt:180000,costType:'rental',matched:{type:'rental',name:'커피머신 네스프레소',loc:'휴게실',vendor:'네스프레소'}},
+     ]},
+  ];
+  renderCostFileList();
+  setTimeout(runCostCalc,200);
+}
+
+function runCostCalc(){
+  costParsed=costFiles.flatMap(f=>f.items||[]);
+  if(!costParsed.length){showToast('업로드된 파일이 없습니다');return;}
+  const deptMap={};
+  costParsed.forEach(item=>{
+    const loc=item.matched?.loc||'공통';
+    const map=COST_MAP[loc]||{code:'COMMON',name:'공통'};
+    const key=map.code;
+    if(!deptMap[key]) deptMap[key]={code:key,name:map.name,leaseAmt:0,rentalAmt:0,items:[]};
+    if(item.costType==='lease') deptMap[key].leaseAmt+=item.amt;
+    else deptMap[key].rentalAmt+=item.amt;
+    deptMap[key].items.push({...item,deptCode:key,deptName:map.name,loc});
+  });
+  const grand=Object.values(deptMap).reduce((s,d)=>s+d.leaseAmt+d.rentalAmt,0);
+  costResult=Object.values(deptMap).map(d=>({...d,total:d.leaseAmt+d.rentalAmt,pct:grand>0?((d.leaseAmt+d.rentalAmt)/grand*100).toFixed(1):'0.0'})).sort((a,b)=>b.total-a.total);
+
+  const leaseT=costParsed.filter(i=>i.costType==='lease').reduce((s,i)=>s+i.amt,0);
+  const rentT=costParsed.filter(i=>i.costType==='rental').reduce((s,i)=>s+i.amt,0);
+  document.getElementById('ck-total').innerHTML=fmt(grand)+'<span class="kpi-u">원</span>';
+  document.getElementById('ck-lease').innerHTML=fmt(leaseT)+'<span class="kpi-u">원</span>';
+  document.getElementById('ck-rental').innerHTML=fmt(rentT)+'<span class="kpi-u">원</span>';
+  document.getElementById('ck-dept').innerHTML=costResult.length+'<span class="kpi-u">개관</span>';
+  document.getElementById('costPeriodBadge').textContent=document.getElementById('costPeriod').options[document.getElementById('costPeriod').selectedIndex]?.text||'';
+
+  const colors=['#1a1a1a','#3a6a3a','#c8a96e','#6a5a8a','#2a6a6a','#8a2a2a'];
+  document.getElementById('costDeptBody').innerHTML=costResult.map((d,i)=>`<tr>
+    <td class="code" style="color:${colors[i%colors.length]}">${d.code}</td>
+    <td style="font-weight:600">${d.name}</td>
+    <td class="r num">${d.leaseAmt?fmt(d.leaseAmt)+'원':'—'}</td>
+    <td class="r num">${d.rentalAmt?fmt(d.rentalAmt)+'원':'—'}</td>
+    <td class="r num" style="font-weight:700;color:${colors[i%colors.length]}">${fmt(d.total)}원</td>
+    <td><div style="display:flex;align-items:center;gap:6px"><div style="flex:1;height:3px;background:var(--cream2)"><div style="width:${d.pct}%;height:100%;background:${colors[i%colors.length]}"></div></div><span style="font-family:var(--mono);font-size:10px;min-width:32px;text-align:right">${d.pct}%</span></div></td>
+  </tr>`).join('');
+  document.getElementById('cft-lease').textContent=fmt(leaseT)+'원';
+  document.getElementById('cft-rental').textContent=fmt(rentT)+'원';
+  document.getElementById('cft-total').textContent=fmt(grand)+'원';
+  renderCostDetail();
+  showToast('배분 계산 완료 — '+costResult.length+'개 관');
+}
+
+function renderCostDetail(){
+  const f=document.getElementById('costDetailFilter').value;
+  const rows=costResult.flatMap(d=>d.items).filter(r=>!f||r.costType===f);
+  document.getElementById('costDetailBody').innerHTML=rows.length?rows.map(r=>`<tr>
+    <td class="code">${r.deptCode}</td>
+    <td><span class="tag ${r.costType==='lease'?'tg-lease':'tg-rental'}">${r.costType==='lease'?'임대차':'렌탈'}</span></td>
+    <td style="font-weight:500">${r.matched?.name||r.name}</td>
+    <td class="mt">${r.loc}</td>
+    <td class="r num">${fmt(r.amt)}원</td>
+    <td class="mt">${r.matched?.vendor||r.matched?.landlord||'—'}</td>
+    <td class="mt">${r.costType==='lease'?'임차료':'렌탈료'}</td>
+  </tr>`).join(''):'<tr><td colspan="7"><div class="empty" style="padding:20px"><div class="et">해당 항목 없음</div></div></td></tr>';
+}
+
+function exportCostExcel(){
+  if(!costResult.length){showToast('먼저 배분 계산을 실행해 주세요');return;}
+  const period=document.getElementById('costPeriod').options[document.getElementById('costPeriod').selectedIndex]?.text||'';
+  const wb=XLSX.utils.book_new();
+  const s1=[['관 코드','관 명','임대차(원)','렌탈(원)','합계(원)','비율(%)'],
+    ...costResult.map(d=>[d.code,d.name,d.leaseAmt,d.rentalAmt,d.total,parseFloat(d.pct)]),
+    ['합계','',costResult.reduce((s,d)=>s+d.leaseAmt,0),costResult.reduce((s,d)=>s+d.rentalAmt,0),costResult.reduce((s,d)=>s+d.total,0),100]];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(s1),'관별배분요약');
+  XLSX.writeFile(wb,`비용관별배분_${period.replace(/\s/g,'')}.xlsx`);
+  showToast('📥 엑셀 다운로드 완료');
+}
+
+function fmt(n){return Math.round(n).toLocaleString('ko-KR');}
+
+// ═══════════════════════ QR SCAN (내장) ════════════════════
+let qrTodayLog=[];
+const QR_ASSETS=[
+  ...SAMPLE.tangible.rows.map(r=>({code:genCode_('tangible',r),name:r['자산명'],loc:r['위치'],type:'유형자산',status:r['상태'],_ref:{type:'tangible',id:r._id}})),
+  ...SAMPLE.rental.rows.map(r=>({code:genCode_('rental',r),name:r['렌탈품목'],loc:r['설치위치'],type:'렌탈자산',status:r['상태'],_ref:{type:'rental',id:r._id}})),
+];
+function genCode_(t,r){const tp={tangible:'FA',rental:'RT',intangible:'IA',lease:'LC',insurance:'IN'}[t]||'XX';const cf={tangible:'분류',rental:'분류'}[t]||'';const cat=cf?(CAT_PFX[r[cf]]||String(r[cf]||'').slice(0,2).toUpperCase()||'XX'):'XX';return `${tp}-${cat}-${String(r._id||0).padStart(4,'0')}`;}
+
+function lookupQrCode(){
+  const code=document.getElementById('qrCodeInput').value.trim().toUpperCase();
+  if(!code) return;
+  const asset=QR_ASSETS.find(a=>a.code===code)||QR_ASSETS.find(a=>a.name.includes(code));
+  const res=document.getElementById('qrResult');
+  if(!asset){showToast('자산을 찾을 수 없습니다: '+code);return;}
+  document.getElementById('qr-code-disp').textContent=asset.code;
+  document.getElementById('qr-name-disp').textContent=asset.name;
+  document.getElementById('qr-loc-disp').textContent=asset.loc||'—';
+  document.getElementById('qr-new-loc').value=asset.loc||'';
+  document.getElementById('qr-status').value=asset.status||'사용중';
+  res.style.display='block';
+  res._asset=asset;
+}
+
+function saveQrUpdate(){
+  const res=document.getElementById('qrResult');
+  const asset=res._asset;
+  if(!asset) return;
+  const newLoc=document.getElementById('qr-new-loc').value.trim()||asset.loc;
+  const newStatus=document.getElementById('qr-status').value;
+  const worker=document.getElementById('qr-worker').value.trim()||'현장담당자';
+  if(asset.loc!==newLoc||asset.status!==newStatus){
+    addHist({assetCode:asset.code,assetName:asset.name,assetType:asset.type,
+      fromLoc:asset.loc,toLoc:newLoc,fromStatus:asset.status,toStatus:newStatus,
+      worker,src:'QR스캔',memo:`상태: ${newStatus}`});
+    asset.loc=newLoc; asset.status=newStatus;
+    const row=SAMPLE[asset._ref.type]?.rows.find(r=>r._id===asset._ref.id);
+    if(row){row['위치']=newLoc;row['설치위치']=newLoc;row['상태']=newStatus;}
+  }
+  qrTodayLog.unshift({time:new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}),code:asset.code,name:asset.name,loc:newLoc,status:newStatus,worker});
+  document.getElementById('qrTodayList').innerHTML=qrTodayLog.map(l=>`
+    <div class="hr"><div class="hr-time">${l.time}</div>
+    <div class="hr-body">
+      <div class="hr-title"><span class="code">${l.code}</span>${l.name}</div>
+      <div class="hr-detail"><span>${l.loc}</span><span>${l.status}</span><span>${l.worker}</span></div>
+    </div></div>`).join('');
+  showToast(`✅ ${asset.name} — ${newLoc} / ${newStatus} 반영완료`);
+  res.style.display='none';
+  document.getElementById('qrCodeInput').value='';
+}
+
+// ═══════════════════════ ASSET LIST ═══════════════════════
+// 카테고리 — localStorage에 저장되어 추가/수정 가능
+const DEFAULT_RENTAL_CATS = [
+  { key:'복합기/잉크젯', icon:'🖨️', color:'#1a1a1a' },
+  { key:'공기청정기',   icon:'🌬️', color:'#3a6a3a' },
+  { key:'정수기',       icon:'💧', color:'#2a5a8a' },
+  { key:'캡스',         icon:'🔒', color:'#4a3a6a' },
+  { key:'전화기',       icon:'📞', color:'#6a4a2a' },
+  { key:'인터넷',       icon:'🌐', color:'#2a6a6a' },
+];
+let RENTAL_CATS = JSON.parse(localStorage.getItem('rentalCats') || 'null') || DEFAULT_RENTAL_CATS;
+function saveRentalCats(){ localStorage.setItem('rentalCats', JSON.stringify(RENTAL_CATS)); }
+
+let rentalCatFilter = '전체';
+
+function getCatForRow(row) {
+  const cat = (row['분류'] || '').trim();
+  if (cat) return cat; // 분류 컬럼 그대로 사용
+  // 미입력 시 품목명 키워드 자동 추정
+  const name = (row['렌탈품목'] || '').toLowerCase();
+  if (/복합기|잉크젯|프린터|레이저|복사/.test(name)) return '복합기/잉크젯';
+  if (/공기청정|에어/.test(name))                    return '공기청정기';
+  if (/정수기|냉온수|워터/.test(name))               return '정수기';
+  if (/캡스|cctv|보안/.test(name))                  return '캡스';
+  if (/전화|유선|ip폰/.test(name))                  return '전화기';
+  if (/인터넷|wifi|회선|랜/.test(name))             return '인터넷';
+  // 등록된 카테고리 중 이름이 포함되면 매핑
+  const found = RENTAL_CATS.find(c => name.includes(c.key.toLowerCase()));
+  return found ? found.key : (RENTAL_CATS[0]?.key || '기타');
+}
+
+function loadAsset(type){
+  const d = SAMPLE[type];
+  document.getElementById('aEy').textContent = 'Asset Management · ' + d.label;
+  document.getElementById('aT').textContent  = d.icon + ' ' + d.label;
+  document.getElementById('aS').textContent  = '총 ' + d.rows.length + '건 등록';
+
+  const hc = HIST.filter(h => h.assetType === d.label).length;
+  document.getElementById('aStats').innerHTML = [
+    {lb:'총 등록',   v:d.rows.length,                                 c:d.color},
+    {lb:'만료 예정', v:ALERTS.filter(a=>a.type===d.label).length,     c:'#c0392b'},
+    {lb:'이동 이력', v:hc,                                             c:'#0f2d5c'},
+    {lb:'정상',      v:d.rows.filter(r=>r['상태']==='사용중').length,  c:'#1a6a3a'},
+  ].map(s => `<div style="background:#fff;padding:16px 18px;position:relative">
+    <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:${s.c}"></div>
+    <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);margin-bottom:7px">${s.lb}</div>
+    <div style="font-family:var(--serif);font-size:26px;font-weight:700;color:${s.c}">${s.v}</div>
+  </div>`).join('');
+
+  // 렌탈자산 전용: 카테고리 섹션
+  const catSection = document.getElementById('rentalCatSection');
+  if (type === 'rental') {
+    catSection.style.display = 'block';
+    renderRentalCats(d.rows);
+  } else {
+    catSection.style.display = 'none';
+    rentalCatFilter = '전체';
+  }
+
+  renderATable(d, d.rows);
+}
+
+function renderRentalCats(rows) {
+  // 카테고리별 집계
+  const catMap = {};
+  rows.forEach(r => {
+    const cat = getCatForRow(r);
+    if (!catMap[cat]) catMap[cat] = { count:0, amt:0, rows:[] };
+    catMap[cat].count++;
+    const amt = Number(String(r['월렌탈료']||'0').replace(/[^0-9]/g,'')) || 0;
+    catMap[cat].amt += amt;
+    catMap[cat].rows.push(r);
+  });
+
+  const cats = Object.entries(catMap).sort((a,b) => b[1].amt - a[1].amt);
+  const totalAmt = rows.reduce((s,r) => s + (Number(String(r['월렌탈료']||'0').replace(/[^0-9]/g,''))||0), 0);
+
+  // 카테고리 요약 카드
+  const allCard = `<div class="rcat-card ${rentalCatFilter==='전체'?'active':''}" style="--rc:#1a1a1a" onclick="setRentalCatFilter('전체')">
+    <div class="rcat-label">전체</div>
+    <div class="rcat-count">${rows.length}<span style="font-size:13px;font-weight:400;color:var(--text3)">건</span></div>
+    <div class="rcat-amt">${totalAmt>0?totalAmt.toLocaleString('ko-KR')+'원/월':'—'}</div>
+  </div>`;
+
+  const catCards = cats.map(([cat, info]) => {
+    const found = RENTAL_CATS.find(c => c.key === cat);
+    const icon  = found?.icon || '📦';
+    const color = found?.color || '#8a6a20';
+    return `<div class="rcat-card ${rentalCatFilter===cat?'active':''}" style="--rc:${color}" onclick="setRentalCatFilter('${cat}')">
+      <div class="rcat-label">${icon} ${cat}</div>
+      <div class="rcat-count">${info.count}<span style="font-size:13px;font-weight:400;color:var(--text3)">건</span></div>
+      <div class="rcat-amt">${info.amt>0?info.amt.toLocaleString('ko-KR')+'원/월':'—'}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('rentalCatCards').innerHTML = allCard + catCards;
+
+  // 필터 버튼
+  const filterBtns = ['전체', ...cats.map(([k])=>k)].map(k =>
+    `<button class="rcat-filter-btn ${rentalCatFilter===k?'active':''}" onclick="setRentalCatFilter('${k}')">${k}</button>`
+  ).join('');
+  document.getElementById('rentalCatFilters').innerHTML = filterBtns;
+}
+
+function setRentalCatFilter(cat) {
+  rentalCatFilter = cat;
+  const d = SAMPLE.rental;
+  renderRentalCats(d.rows);
+  const filtered = cat === '전체' ? d.rows : d.rows.filter(r => getCatForRow(r) === cat);
+  renderATable(d, filtered, cat !== '전체');
+  document.getElementById('aSearch').value = '';
+}
+
+function renderATable(d, rows, groupByCat=false) {
+  const DKW = ['만료','종료','갱신','반납','만기'];
+  const today = new Date('2025-04-09');
+  document.getElementById('aHead').innerHTML = d.headers.map(h=>`<th>${h}</th>`).join('') + '<th>관리</th>';
+
+  if (!rows.length) {
+    document.getElementById('aBody').innerHTML = `<tr><td colspan="${d.headers.length+1}"><div class="empty"><div class="ei">📂</div><div class="et">등록된 항목 없음</div></div></td></tr>`;
+    return;
+  }
+
+  // 렌탈자산 전체 보기 시 카테고리별 그룹 헤더 추가
+  if (d.label === '렌탈자산' && !groupByCat && rentalCatFilter === '전체') {
+    const grouped = {};
+    rows.forEach(r => {
+      const cat = getCatForRow(r);
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(r);
+    });
+
+    let html = '';
+    Object.entries(grouped).sort((a,b) => {
+      const amtA = a[1].reduce((s,r)=>s+(Number(String(r['월렌탈료']||'0').replace(/[^0-9]/g,''))||0),0);
+      const amtB = b[1].reduce((s,r)=>s+(Number(String(r['월렌탈료']||'0').replace(/[^0-9]/g,''))||0),0);
+      return amtB - amtA;
+    }).forEach(([cat, catRows]) => {
+      const catAmt = catRows.reduce((s,r)=>s+(Number(String(r['월렌탈료']||'0').replace(/[^0-9]/g,''))||0),0);
+      const found = RENTAL_CATS.find(c=>c.key===cat);
+      html += `<tr><td colspan="${d.headers.length+1}" class="cat-group-hd">
+        <span>${found?.icon||'📦'} ${cat}</span>
+        <span><span class="cat-group-cnt">${catRows.length}건 &nbsp;</span><span class="cat-group-amt">${catAmt>0?catAmt.toLocaleString('ko-KR')+'원/월':''}</span></span>
+      </td></tr>`;
+      html += catRows.map(row => buildRow(row, d, today, DKW)).join('');
+    });
+    document.getElementById('aBody').innerHTML = html;
+    return;
+  }
+
+  document.getElementById('aBody').innerHTML = rows.map(row => buildRow(row, d, today, DKW)).join('');
+}
+
+function buildRow(row, d, today, DKW) {
+  const dk   = d.headers.find(h => DKW.some(k=>h.includes(k)));
+  const diff = dk ? Math.ceil((new Date(row[dk]) - today) / 86400000) : 999;
+  const rc   = diff>=0&&diff<=7 ? 'tr-critical' : diff>=0&&diff<=90 ? 'tr-warn' : '';
+  return `<tr class="${rc}">${d.headers.map(h => {
+    const v    = row[h] ?? '';
+    const isDt = ['만료','종료','갱신','반납','만기','취득일','구매일','시작'].some(k=>h.includes(k));
+    return `<td class="${isDt?'dt':''}">${v}</td>`;
+  }).join('')}
+  <td><div style="display:flex;gap:5px">
+    <button class="btn btn-out btn-sm" onclick="openModal(${row._id})">수정</button>
+    <button class="btn btn-ghost btn-sm" onclick="openQR(${row._id})" title="QR 출력">QR</button>
+    <button class="btn btn-danger btn-sm" onclick="deleteItem(${row._id})">삭제</button>
+  </div></td></tr>`;
+}
+
+function filterAsset(){
+  const q = document.getElementById('aSearch').value.toLowerCase();
+  const d = SAMPLE[curType];
+  let base = d.rows;
+  if (curType === 'rental' && rentalCatFilter !== '전체') {
+    base = base.filter(r => getCatForRow(r) === rentalCatFilter);
+  }
+  renderATable(d, q ? base.filter(r=>Object.values(r).some(v=>String(v).toLowerCase().includes(q))) : base, rentalCatFilter !== '전체');
+}
+function refreshAsset(){ rentalCatFilter='전체'; loadAsset(curType); showToast('새로고침 완료'); }
+
+// ═══════════════════════ 카테고리 관리 ═══════════════════════
+function openCatMgr() {
+  renderCatMgrList();
+  document.getElementById('newCatName').value  = '';
+  document.getElementById('newCatIcon').value  = '';
+  document.getElementById('moCatMgr').classList.add('open');
+}
+
+function renderCatMgrList() {
+  document.getElementById('catMgrList').innerHTML = RENTAL_CATS.map((c, i) => `
+    <div style="display:grid;grid-template-columns:44px 1fr 60px 100px 36px 36px;gap:6px;align-items:center;background:var(--cream2);padding:8px 12px">
+      <!-- 아이콘 -->
+      <input type="text" value="${c.icon}" id="cicon-${i}"
+        style="border:1px solid var(--border);padding:5px;font-size:16px;text-align:center;background:#fff;outline:none;width:44px"
+        oninput="updateCat(${i},'icon',this.value)">
+      <!-- 이름 -->
+      <input type="text" value="${c.key}" id="cname-${i}"
+        style="border:1px solid var(--border);padding:7px 10px;font-size:12px;font-family:var(--font);background:#fff;outline:none;font-weight:600"
+        oninput="updateCat(${i},'key',this.value)">
+      <!-- 색상 미리보기 -->
+      <div style="height:32px;background:${c.color};display:flex;align-items:center;justify-content:center">
+        <span style="color:#fff;font-size:9px;font-weight:700">색상</span>
+      </div>
+      <!-- 색상 선택 -->
+      <select id="ccolor-${i}" onchange="updateCat(${i},'color',this.value)"
+        style="border:1px solid var(--border);padding:6px 8px;font-size:11px;font-family:var(--font);background:#fff;outline:none">
+        <option value="#1a1a1a" ${c.color==='#1a1a1a'?'selected':''}>● 블랙</option>
+        <option value="#2a5a8a" ${c.color==='#2a5a8a'?'selected':''}>● 블루</option>
+        <option value="#3a6a3a" ${c.color==='#3a6a3a'?'selected':''}>● 그린</option>
+        <option value="#6a4a2a" ${c.color==='#6a4a2a'?'selected':''}>● 브라운</option>
+        <option value="#4a3a6a" ${c.color==='#4a3a6a'?'selected':''}>● 퍼플</option>
+        <option value="#2a6a6a" ${c.color==='#2a6a6a'?'selected':''}>● 틸</option>
+        <option value="#8a2a2a" ${c.color==='#8a2a2a'?'selected':''}>● 레드</option>
+        <option value="#8a6a20" ${c.color==='#8a6a20'?'selected':''}>● 골드</option>
+      </select>
+      <!-- 순서 이동 -->
+      <button onclick="moveCat(${i},-1)" style="border:1px solid var(--border);background:#fff;padding:5px;cursor:pointer;font-size:12px" title="위로">↑</button>
+      <!-- 삭제 -->
+      <button onclick="deleteCat(${i})" style="border:1px solid #d89898;background:#fdf0f0;color:#8a2a2a;padding:5px;cursor:pointer;font-size:12px" title="삭제">✕</button>
+    </div>`).join('');
+}
+
+function updateCat(i, field, val) {
+  RENTAL_CATS[i][field] = val;
+  saveRentalCats();
+  // 색상 미리보기 즉시 반영
+  if (field === 'color') renderCatMgrList();
+}
+
+function addCat() {
+  const name  = document.getElementById('newCatName').value.trim();
+  const icon  = document.getElementById('newCatIcon').value.trim() || '📦';
+  const color = document.getElementById('newCatColor').value;
+  if (!name) { document.getElementById('newCatName').focus(); return; }
+  if (RENTAL_CATS.find(c => c.key === name)) { showToast('이미 존재하는 카테고리입니다'); return; }
+  RENTAL_CATS.push({ key:name, icon, color });
+  saveRentalCats();
+  document.getElementById('newCatName').value = '';
+  document.getElementById('newCatIcon').value = '';
+  renderCatMgrList();
+  showToast('✅ 카테고리 추가됨: ' + name);
+}
+
+function deleteCat(i) {
+  if (!confirm(`"${RENTAL_CATS[i].key}" 카테고리를 삭제할까요?\n해당 카테고리로 등록된 자산은 자동으로 재분류됩니다.`)) return;
+  RENTAL_CATS.splice(i, 1);
+  saveRentalCats();
+  renderCatMgrList();
+  showToast('카테고리 삭제됨');
+}
+
+function moveCat(i, dir) {
+  const j = i + dir;
+  if (j < 0 || j >= RENTAL_CATS.length) return;
+  [RENTAL_CATS[i], RENTAL_CATS[j]] = [RENTAL_CATS[j], RENTAL_CATS[i]];
+  saveRentalCats();
+  renderCatMgrList();
+}
+
+function resetCats() {
+  if (!confirm('기본 카테고리로 초기화할까요?')) return;
+  RENTAL_CATS.length = 0;
+  DEFAULT_RENTAL_CATS.forEach(c => RENTAL_CATS.push({...c}));
+  saveRentalCats();
+  renderCatMgrList();
+  showToast('기본 카테고리로 초기화됨');
+}
+
+// ═══════════════════════ MODAL + HISTORY RECORD ═══════════════════════
+function openModal(id=null){
+  editId=id;
+  const d=SAMPLE[curType];
+  const row=id?d.rows.find(r=>r._id===id):null;
+  editOld=row?{...row}:null;
+  document.getElementById('moT').textContent=id?'항목 수정 — '+(row[d.headers[0]]||''):'신규 등록 — '+d.label;
+  document.getElementById('moF').innerHTML=d.headers.map(h=>{
+    const v=row?(row[h]??''):'';
+    const isDt=['만료','종료','갱신','반납','만기','취득일','구매일','시작'].some(k=>h.includes(k));
+    return `<div class="fg"><label>${h}</label><input type="${isDt?'date':'text'}" id="mf-${h.replace(/\s/g,'_')}" value="${v}" placeholder="${h}"></div>`;
+  }).join('')+`
+    <div class="fg full"><label>변경 사유 · 메모</label><textarea id="mf-memo" placeholder="변경 이유, 특이사항 (선택)"></textarea></div>
+    <div class="fg full"><label>현장 사진 첨부 (선택)</label><input type="file" id="mf-photo" accept="image/*" style="padding:6px;background:var(--cream);border:1px solid var(--border)"></div>`;
+  document.getElementById('moForm').classList.add('open');
+}
+function closeMo(id){document.getElementById(id).classList.remove('open');}
+function closeMoBg(e,id){if(e.target===document.getElementById(id))closeMo(id);}
+
+function saveItem(){
+  const d=SAMPLE[curType];
+  const isNew=!editId;
+  const newRow={_id:editId||(Math.max(0,...d.rows.map(r=>r._id))+1)};
+  d.headers.forEach(h=>{newRow[h]=document.getElementById('mf-'+h.replace(/\s/g,'_'))?.value||'';});
+  const memo=document.getElementById('mf-memo')?.value||'';
+  const pf=document.getElementById('mf-photo')?.files?.[0];
+  const worker=document.getElementById('uNm')?.textContent||'관리자';
+
+  const commit=photo=>{
+    if(editId){
+      const idx=d.rows.findIndex(r=>r._id===editId);
+      d.rows[idx]=newRow;
+      const changed=d.headers.filter(h=>String(editOld[h])!==String(newRow[h]));
+      if(changed.length){
+        changed.forEach(h=>addHist({assetType:d.label,assetName:newRow[d.headers[0]],assetCode:genCode(curType,newRow),field:h,from:editOld[h]||'—',to:newRow[h]||'—',worker,source:'대시보드',memo,photo:photo||null}));
+      }
+      showToast('수정 완료 ✓');
+    } else {
+      d.rows.push(newRow);
+      addHist({assetType:d.label,assetName:newRow[d.headers[0]],assetCode:genCode(curType,newRow),field:'신규등록',from:'—',to:'등록완료',worker,source:'대시보드',memo,photo:photo||null});
+      showToast('등록 완료 ✓');
+      if(['tangible','rental'].includes(curType)) setTimeout(()=>openQR(newRow._id),350);
+    }
+    closeMo('moForm');
+    loadAsset(curType);
+    renderDashHist();
+  };
+
+  if(pf){const r=new FileReader();r.onload=e=>commit(e.target.result);r.readAsDataURL(pf);}
+  else commit(null);
+}
+
+async function deleteItem(id){
+  if(!confirm('삭제하시겠습니까?')) return;
+  const d=SAMPLE[curType];
+  const row=d.rows.find(r=>r._id===id);
+  addHist({assetType:d.label,assetName:row?.[d.headers[0]]||id,assetCode:genCode(curType,row),field:'삭제',from:'등록상태',to:'삭제됨',worker:document.getElementById('uNm')?.textContent||'관리자',source:'대시보드',memo:'자산 삭제',photo:null});
+  SAMPLE[curType].rows=d.rows.filter(r=>r._id!==id);
+  loadAsset(curType);
+  renderDashHist();
+  showToast('삭제 완료');
+}
+
+// ═══════════════════════ HISTORY RENDER ═══════════════════════
+function hRowHTML(h){
+  const ts=new Date(h.ts);
+  const ds=ts.toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit'});
+  const tm=ts.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+  const tc={임대차계약:'tg-lease',유형자산:'tg-tangible',무형자산:'tg-intangible',렌탈자산:'tg-rental',보험:'tg-insurance'}[h.assetType]||'tg-lease';
+  const sc=h.source==='QR스캔'?'src-scan':'src-dash';
+  return `<div class="hr">
+    <div class="hr-time">${ds}<br>${tm}</div>
+    <div class="hr-body">
+      <div class="hr-title">
+        <span class="tag ${tc}">${h.assetType}</span>
+        ${h.assetName}
+        <span class="hr-src ${sc}">${h.source}</span>
+        ${h.assetCode?`<span class="code" style="font-size:10px">${h.assetCode}</span>`:''}
+      </div>
+      <div class="hr-detail">
+        <span>${h.field}</span>
+        <span class="hr-chg"><span>${h.from}</span><span class="hr-arr">→</span><span>${h.to}</span></span>
+        ${h.worker?`<span>처리: ${h.worker}</span>`:''}
+        ${h.memo?`<span style="color:var(--text3);font-style:italic">${h.memo}</span>`:''}
+      </div>
+    </div>
+    <div class="hr-photo">${h.photo?`<img class="hr-img" src="${h.photo}" onclick="openLB('${h.photo}')" title="사진 클릭 시 확대">`:''}</div>
+  </div>`;
+}
+
+function renderDashHist(){
+  const el=document.getElementById('dashHistList');
+  el.innerHTML=HIST.length?HIST.slice(0,8).map(hRowHTML).join(''):'<div class="empty"><div class="ei">📋</div><div class="et">기록된 이력이 없습니다</div></div>';
+}
+
+function renderHPage(){
+  const tf=document.getElementById('hTF')?.value||'';
+  const sf=document.getElementById('hSF')?.value||'';
+  const filtered=HIST.filter(h=>(!tf||h.assetType===tf)&&(!sf||h.source===sf));
+  document.getElementById('histCnt').textContent=filtered.length+'건';
+  document.getElementById('hPageList').innerHTML=filtered.length?filtered.map(hRowHTML).join(''):'<div class="empty"><div class="ei">📋</div><div class="et">조건에 맞는 이력이 없습니다</div></div>';
+}
+
+function clearHist(){
+  if(!confirm('모든 이력을 삭제하시겠습니까?')) return;
+  HIST=[];localStorage.removeItem('ah');refreshHBadge();renderHPage();renderDashHist();showToast('이력 초기화 완료');
+}
+
+// ═══════════════════════ QR ═══════════════════════
+function openQR(id){
+  const d=SAMPLE[curType],row=d.rows.find(r=>r._id===id);
+  if(!row) return;
+  const code=genCode(curType,row),name=row[d.headers[0]],loc=row['위치']||row['설치위치']||row['건물명']||'—';
+  document.getElementById('qrContent').innerHTML=`
+    <div style="display:flex;gap:20px;align-items:flex-start;padding:14px 0 16px">
+      <div style="flex:1">
+        <div style="font-family:var(--serif);font-size:20px;font-weight:700;color:var(--navy);letter-spacing:2px;margin-bottom:8px">${code}</div>
+        <div style="font-weight:600;margin-bottom:4px">${name}</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:16px">📍 ${loc}</div>
+        <div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:6px">바코드 (Code 128)</div>
+        <canvas id="bcCanvas"></canvas>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:8px">QR 코드</div>
+        <div id="qrDiv"></div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:5px">${code}</div>
+      </div>
+    </div>
+    <div style="border-left:2px solid var(--gold);background:rgba(201,168,76,.06);padding:9px 14px;font-size:11px;color:var(--amber)">
+      QR 스캔 시 현장 팀원이 위치·상태를 업데이트하며 이력이 자동 기록됩니다.
+    </div>`;
+  document.getElementById('moQr').classList.add('open');
+  setTimeout(()=>{
+    const url=location.href.replace('asset_dashboard_demo.html','scan.html')+'?scan='+encodeURIComponent(code)+'&name='+encodeURIComponent(name);
+    genQR('qrDiv',url,116);genBC('bcCanvas',code);
+  },50);
+  window._prtS={code,name,loc};
+}
+
+function openBulk(){
+  if(!curType) return;
+  const d=SAMPLE[curType];
+  document.getElementById('bulkList').innerHTML=d.rows.map(row=>{
+    const code=genCode(curType,row),name=row[d.headers[0]];
+    return `<div style="border:1px solid var(--border);padding:10px;cursor:pointer" onclick="togBC(${row._id})">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" class="bchk" data-id="${row._id}" onchange="updSC()">
+        <div><div style="font-family:var(--mono);font-size:10px;color:var(--navy);font-weight:600">${code}</div><div style="font-size:11px;margin-top:2px">${name}</div></div>
+      </label>
+      <div id="bqr-${row._id}" style="margin-top:8px;text-align:center"></div>
+    </div>`;
+  }).join('');
+  document.getElementById('selCnt').textContent='0개';
+  document.getElementById('moBulk').classList.add('open');
+  setTimeout(()=>{d.rows.forEach(row=>{genQR(`bqr-${row._id}`,location.href.replace('asset_dashboard_demo.html','scan.html')+'?scan='+encodeURIComponent(genCode(curType,row)),68);});},80);
+}
+function togBC(id){const c=document.querySelector(`.bchk[data-id="${id}"]`);if(c){c.checked=!c.checked;updSC();}}
+function togSelAll(el){document.querySelectorAll('.bchk').forEach(c=>c.checked=el.checked);updSC();}
+function updSC(){document.getElementById('selCnt').textContent=document.querySelectorAll('.bchk:checked').length+'개';}
+
+function genQR(cid,text,sz){
+  const el=document.getElementById(cid);if(!el) return;el.innerHTML='';
+  if(typeof QRCode!=='undefined'){new QRCode(el,{text,width:sz,height:sz,colorDark:'#0f2d5c',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});}
+  else{const img=document.createElement('img');img.src=`https://api.qrserver.com/v1/create-qr-code/?size=${sz}x${sz}&data=${encodeURIComponent(text)}&color=0f2d5c`;img.width=sz;img.height=sz;el.appendChild(img);}
+}
+function genBC(cid,text){
+  const c=document.getElementById(cid);if(!c) return;
+  if(typeof JsBarcode!=='undefined') JsBarcode(c,text,{format:'CODE128',width:2,height:34,displayValue:true,fontSize:10,background:'#fff',lineColor:'#0f2d5c',margin:4});
+}
+
+function printLabel(){
+  const s=window._prtS;if(!s) return;
+  document.getElementById('prt').innerHTML=`<div class="pg"><div class="pl"><div class="pl-c">${s.code}</div><div class="pl-n">${s.name}</div><div id="plqr"></div><canvas id="plbc"></canvas><div class="pl-l">📍 ${s.loc}</div></div></div>`;
+  setTimeout(()=>{genQR('plqr',location.href.replace('asset_dashboard_demo.html','scan.html')+'?scan='+encodeURIComponent(s.code),80);genBC('plbc',s.code);setTimeout(()=>window.print(),300);},50);
+}
+
+function printBulk(){
+  const ids=[...document.querySelectorAll('.bchk:checked')].map(c=>parseInt(c.dataset.id));
+  if(!ids.length){alert('출력할 자산을 선택해 주세요');return;}
+  const d=SAMPLE[curType];
+  document.getElementById('prt').innerHTML=`<div class="pg">${ids.map(id=>{const row=d.rows.find(r=>r._id===id);const code=genCode(curType,row);return `<div class="pl"><div class="pl-c">${code}</div><div class="pl-n">${row[d.headers[0]]}</div><div id="plqr-${id}"></div><canvas id="plbc-${id}"></canvas><div class="pl-l">📍 ${row['위치']||row['설치위치']||'—'}</div></div>`;}).join('')}</div>`;
+  setTimeout(()=>{ids.forEach(id=>{const row=d.rows.find(r=>r._id===id);const code=genCode(curType,row);genQR(`plqr-${id}`,location.href.replace('asset_dashboard_demo.html','scan.html')+'?scan='+encodeURIComponent(code),80);genBC(`plbc-${id}`,code);});setTimeout(()=>window.print(),400);},50);
+}
+
+// ═══════════════════════ UTIL ═══════════════════════
+function toggleNotif(){document.getElementById('notifPanel').classList.toggle('open');}
+function closeNotif(){document.getElementById('notifPanel').classList.remove('open');}
+function openLB(src){document.getElementById('lbImg').src=src;document.getElementById('lb').classList.add('open');}
+function showToast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',2800);}
+document.addEventListener('click',e=>{if(!e.target.closest('#notifPanel')&&!e.target.closest('.tb-bell'))closeNotif();});
+</script>
+</body>
+</html>
