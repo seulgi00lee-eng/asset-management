@@ -748,8 +748,8 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
           </div>
         </div>
 
-        <!-- 요약 카드 -->
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);margin-bottom:16px" id="campusStats"></div>
+        <!-- 요약 인라인 -->
+        <div id="campusStats" style="margin-bottom:14px;display:flex;gap:20px;font-size:12px;color:var(--text2)"></div>
 
         <!-- 검색 + 테이블 -->
         <div class="sec">
@@ -2289,7 +2289,7 @@ function downloadExTemplate() {
 
 
 // ═══════════════════════ 캠퍼스 전체 현황 ═══════════════════════
-const CAMPUS_HEADERS = ['NO','지역','법인명','건물명','층수','담당자','내선번호'];
+const CAMPUS_HEADERS = ['NO','지역','법인명','관코드','건물명','층수','담당자','내선번호'];
 let CAMPUS_ROWS = [];
 let campusSortState = { col: null, asc: true };
 let campusEditId = null;
@@ -2314,15 +2314,12 @@ function renderCampusStats() {
   const corps = [...new Set(CAMPUS_ROWS.map(r => r['법인명']).filter(Boolean))].length;
 
   document.getElementById('campusCount').textContent = `총 ${total}개 캠퍼스 등록`;
-  document.getElementById('campusStats').innerHTML = [
-    { lb:'총 캠퍼스', v: total,   c:'#0f2d5c' },
-    { lb:'지역 수',   v: regions, c:'#1a6a3a' },
-    { lb:'법인 수',   v: corps,   c:'#5a1a8a' },
-  ].map(s => `<div style="background:#fff;padding:16px 18px;position:relative">
-    <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:${s.c}"></div>
-    <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);margin-bottom:7px">${s.lb}</div>
-    <div style="font-family:var(--serif);font-size:26px;font-weight:700;color:${s.c}">${s.v}</div>
-  </div>`).join('');
+  document.getElementById('campusStats').innerHTML =
+    `<span>총 <b style="color:var(--text);font-weight:700">${total}</b>개 캠퍼스</span>
+     <span style="color:var(--border2)">|</span>
+     <span>지역 <b style="color:var(--text)">${regions}</b>곳</span>
+     <span style="color:var(--border2)">|</span>
+     <span>법인 <b style="color:var(--text)">${corps}</b>개</span>`;
 }
 
 function renderCampusTable(rows) {
@@ -2385,13 +2382,15 @@ function applyCampusSort(rows) {
 function openCampusModal(id=null) {
   campusEditId = id;
   const row = id ? CAMPUS_ROWS.find(r => r._id === id) : null;
-  const autoNo = id ? null : CAMPUS_ROWS.length + 1;
+  const autoNo = id ? null : (CAMPUS_ROWS.length + 1);
 
   // 모달 재사용 (moForm)
   document.getElementById('moT').textContent = id ? '캠퍼스 수정' : '캠퍼스 등록';
   document.getElementById('moF').innerHTML = CAMPUS_HEADERS.map(h => {
     let v = row ? (row[h]||'') : '';
-    return `<div class="fg"><label>${h}</label><input type="text" id="cf-${h.replace(/[\s\(\)㎡]/g,'_')}" value="${v}" placeholder="${h}"></div>`;
+    if(!id && h === 'NO') v = String(autoNo);
+    const isNo = (h === 'NO');
+    return `<div class="fg"><label>${h}${isNo&&!id?' <span style="font-size:9px;color:var(--gold)">(자동)</span>':''}</label><input type="text" id="cf-${h.replace(/[\s\(\)㎡]/g,'_')}" value="${v}" placeholder="${h}" ${isNo&&!id?'readonly style="background:var(--cream2);color:var(--text3)"':''}></div>`;
   }).join('');
 
   // 저장 버튼 교체
