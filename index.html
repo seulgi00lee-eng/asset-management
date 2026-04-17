@@ -2910,15 +2910,20 @@ function saveItem(){
   else commit(null);
 }
 
-function delItem(id){
-  if(!confirm('삭제하시겠습니까?')) return;
+async function delItem(id){
+  if(!confirm('삭제하시겠습니까?\n삭제된 데이터는 복구할 수 없습니다.')) return;
   const d=SAMPLE[curType];
   const row=d.rows.find(r=>r._id===id);
-  addHist({assetType:d.label,assetName:row?.[d.headers[0]]||id,assetCode:genCode(curType,row),field:'삭제',from:'등록상태',to:'삭제됨',worker:document.getElementById('uNm')?.textContent||'관리자',source:'대시보드',memo:'자산 삭제',photo:null});
-  SAMPLE[curType].rows=d.rows.filter(r=>r._id!==id);
-  loadAsset(curType);
+  if(!row){showToast('항목을 찾을 수 없습니다');return;}
+  setLoading(true);
+  const ok = d.dbTable ? await sbDelete(d.dbTable, row._rowId||row.id) : true;
+  setLoading(false);
+  if(!ok){showToast('삭제 실패 — 다시 시도해 주세요');return;}
+  addHist({assetType:d.label,assetName:row[d.headers[0]]||id,assetCode:genCode(curType,row),field:'삭제',from:'등록상태',to:'삭제됨',worker:document.getElementById('uNm')?.textContent||'관리자',source:'대시보드',memo:'자산 삭제'});
+  d.rows=d.rows.filter(r=>r._id!==id);
+  await loadAsset(curType);
   renderDashHist();
-  showToast('삭제 완료');
+  showToast('✅ 삭제 완료 — Supabase 반영됨');
 }
 
 // ═══════════════════════ HISTORY RENDER ═══════════════════════
