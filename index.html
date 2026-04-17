@@ -1550,7 +1550,7 @@ async function loadAlertsFromServer() {
       rows.forEach(r => {
         const d = r[c.dateCol];
         if(!d) return;
-        const exp = new Date(d);
+        const exp = new Date(fmtDate(d));
         if(isNaN(exp)) return;
         const diff = Math.ceil((exp - today) / 86400000);
         if(diff >= 0 && diff <= 90){
@@ -1991,7 +1991,7 @@ function setRentalCatFilter(cat) {
 
 function renderATable(d, rows, groupByCat=false) {
   const DKW = ['만료','종료','갱신','반납','만기'];
-  const today = new Date('2025-04-09');
+  const today = new Date();
   // 정렬 상태 표시
   document.getElementById('aHead').innerHTML = d.headers.map(h=>{
     const arrow = sortState.col===h ? (sortState.asc?'▲':'▼') : '';
@@ -2043,7 +2043,7 @@ function getExpBadge(diff) {
 
 function buildRow(row, d, today, DKW) {
   const dk   = d.headers.find(h => DKW.some(k=>h.includes(k)));
-  const diff = dk ? Math.ceil((new Date(row[dk]) - today) / 86400000) : 999;
+  const diff = dk ? Math.ceil((new Date(fmtDate(row[dk])) - today) / 86400000) : 999;
   const rc   = diff>=0&&diff<=7 ? 'tr-critical' : diff>=0&&diff<=30 ? 'tr-critical' : diff>=0&&diff<=60 ? 'tr-warn' : diff>=0&&diff<=90 ? 'tr-warn' : '';
   const isKwanType = (curType === 'rental' || curType === 'lease');
 
