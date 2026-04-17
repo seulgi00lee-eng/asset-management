@@ -2289,7 +2289,7 @@ function downloadExTemplate() {
 
 
 // ═══════════════════════ 캠퍼스 전체 현황 ═══════════════════════
-const CAMPUS_HEADERS = ['관코드','건물명','캠퍼스명','지역','법인명'];
+const CAMPUS_HEADERS = ['NO','지역','법인명','건물명','층수','담당자','내선번호'];
 let CAMPUS_ROWS = [];
 let campusSortState = { col: null, asc: true };
 let campusEditId = null;
@@ -2315,10 +2315,9 @@ function renderCampusStats() {
 
   document.getElementById('campusCount').textContent = `총 ${total}개 캠퍼스 등록`;
   document.getElementById('campusStats').innerHTML = [
-    { lb:'총 캠퍼스', v: total,                              c:'#0f2d5c' },
-    { lb:'지역 수',   v: regions,                            c:'#1a6a3a' },
-    { lb:'법인 수',   v: corps,                              c:'#5a1a8a' },
-    { lb:'월 임차료 합계', v: totalAmt > 0 ? (totalAmt/10000).toFixed(0)+'만원' : '—', c:'#c8a96e' },
+    { lb:'총 캠퍼스', v: total,   c:'#0f2d5c' },
+    { lb:'지역 수',   v: regions, c:'#1a6a3a' },
+    { lb:'법인 수',   v: corps,   c:'#5a1a8a' },
   ].map(s => `<div style="background:#fff;padding:16px 18px;position:relative">
     <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:${s.c}"></div>
     <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);margin-bottom:7px">${s.lb}</div>
