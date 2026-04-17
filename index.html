@@ -357,6 +357,7 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
       <div class="nav-sec" style="margin-top:10px">비용 관리</div>
       <div class="nav-item" data-p="cost" onclick="go('cost')"><span class="nav-ico">▫</span>비용 관별배분<span class="nb-new">NEW</span></div>
       <div class="nav-sec" style="margin-top:10px">운영</div>
+      <div class="nav-item" data-p="campus" onclick="go('campus')"><span class="nav-ico">▫</span>캠퍼스 전체 현황</div>
       <div class="nav-item" data-p="qrscan" onclick="go('qrscan')"><span class="nav-ico">▫</span>QR 현장 스캔</div>
       <div class="nav-item" onclick="showToast('알림 설정')"><span class="nav-ico">▫</span>알림 설정</div>
     </div>
@@ -695,7 +696,7 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
             <div class="sec" style="margin-bottom:0">
               <div class="sec-hd">
                 <div class="sec-t">관별 비용 배분 <span class="badge bd-gold" id="costPeriodBadge"></span></div>
-                <button class="btn btn-ghost btn-sm" onclick="go('cost-mapping')">관 코드 설정</button>
+                <button class="btn btn-ghost btn-sm" onclick="openKwanMgr()">관 코드 설정</button>
               </div>
               <div class="tbl-wrap">
                 <table>
@@ -726,6 +727,41 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
               <tbody id="costDetailBody">
                 <tr><td colspan="7"><div class="empty" style="padding:24px"><div class="et">배분 계산 후 표시됩니다</div></div></td></tr>
               </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- CAMPUS PAGE -->
+      <div class="page" id="page-campus">
+        <div class="ph">
+          <div>
+            <div class="ph-ey">Campus Management · 운영 관리</div>
+            <div class="ph-t">🏫 캠퍼스 전체 현황</div>
+            <div class="ph-s" id="campusCount">총 0개 캠퍼스 등록</div>
+            <div class="ph-rule"></div>
+          </div>
+          <div class="ph-acts">
+            <button class="btn btn-ghost btn-sm" onclick="openCampusExcel()">📥 엑셀 업로드</button>
+            <button class="btn btn-ghost btn-sm" onclick="exportCampusExcel()">📤 엑셀 다운로드</button>
+            <button class="btn btn-navy" onclick="openCampusModal()">＋ 캠퍼스 등록</button>
+          </div>
+        </div>
+
+        <!-- 요약 카드 -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);margin-bottom:16px" id="campusStats"></div>
+
+        <!-- 검색 + 테이블 -->
+        <div class="sec">
+          <div style="padding:14px 18px 0">
+            <input id="campusSearch" style="border:1px solid var(--border);padding:8px 14px;font-size:12px;font-family:var(--font);background:var(--cream2);outline:none;width:240px" placeholder="검색..." oninput="filterCampus()">
+          </div>
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:12px">
+              <thead>
+                <tr id="campusHead" style="background:var(--cream2);border-bottom:1px solid var(--border)"></tr>
+              </thead>
+              <tbody id="campusBody"></tbody>
             </table>
           </div>
         </div>
@@ -818,6 +854,36 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
       <div class="mla" style="display:flex;gap:8px"><button class="btn btn-ghost btn-sm" onclick="closeMo('moBulk')">닫기</button><button class="btn btn-gold btn-sm" onclick="printBulk()">🖨️ 인쇄</button></div>
     </div>
     <div id="bulkList" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-height:52vh;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- 관코드 관리 모달 -->
+<div class="mo" id="moKwanMgr" onclick="closeMoBg(event,'moKwanMgr')">
+  <div class="mo-box" style="width:500px">
+    <div class="mo-t">🏢 관 코드 관리</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:16px">비용 관별배분에 사용되는 관 코드 목록을 관리합니다.</div>
+
+    <!-- 관코드 목록 -->
+    <div id="kwanMgrList" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);margin-bottom:16px"></div>
+
+    <!-- 새 관코드 추가 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-bottom:4px">
+      <div class="fg" style="margin:0">
+        <label>관 코드</label>
+        <input type="text" id="kwanMgrCode" placeholder="예: GW-01" style="text-transform:uppercase"
+          oninput="this.value=this.value.toUpperCase()">
+      </div>
+      <div class="fg" style="margin:0">
+        <label>관 이름</label>
+        <input type="text" id="kwanMgrName" placeholder="예: 광교본원">
+      </div>
+      <button class="btn btn-navy" style="margin-bottom:0;height:36px" onclick="addKwanFromMgr()">추가</button>
+    </div>
+
+    <div class="mo-ft">
+      <button class="btn btn-ghost" onclick="closeMo('moKwanMgr')">닫기</button>
+      <button class="btn btn-navy" onclick="saveKwanMgr()">✅ 저장</button>
+    </div>
   </div>
 </div>
 
@@ -1484,7 +1550,7 @@ let pageStack = [];
 const PAGE_LABELS = {
   dash:'전체 대시보드', lease:'임대차계약', tangible:'유형자산',
   intangible:'무형자산', rental:'렌탈자산', insurance:'보험',
-  history:'이동·변경 이력', cost:'비용 관별배분', qrscan:'QR 현장 스캔'
+  history:'이동·변경 이력', cost:'비용 관별배분', qrscan:'QR 현장 스캔', campus:'캠퍼스 전체 현황'
 };
 
 function go(p, pushHistory=true){
@@ -1501,6 +1567,7 @@ function go(p, pushHistory=true){
   if(p==='dash'){document.getElementById('page-dash').classList.add('active');curType=null;pageStack=[];}
   else if(p==='history'){document.getElementById('page-history').classList.add('active');renderHPage();}
   else if(p==='cost'){document.getElementById('page-cost').classList.add('active');curType=null;initCostPage();}
+  else if(p==='campus'){document.getElementById('page-campus').classList.add('active');curType=null;initCampusPage();}
   else if(p==='qrscan'){document.getElementById('page-qrscan').classList.add('active');curType=null;}
   else if(SAMPLE[p]){document.getElementById('page-asset').classList.add('active');curType=p;loadAsset(p);}
   else{document.getElementById('page-dash').classList.add('active');curType=null;}
@@ -2218,6 +2285,255 @@ function downloadExTemplate() {
   XLSX.utils.book_append_sheet(wb, ws, d.label);
   XLSX.writeFile(wb, `${d.label}_업로드템플릿.xlsx`);
   showToast(`📋 ${d.label} 템플릿 다운로드 완료`);
+}
+
+
+// ═══════════════════════ 캠퍼스 전체 현황 ═══════════════════════
+const CAMPUS_HEADERS = ['관코드','건물명','캠퍼스명','지역','법인명'];
+let CAMPUS_ROWS = [];
+let campusSortState = { col: null, asc: true };
+let campusEditId = null;
+
+function saveCampusLocal() {
+  // Supabase에 저장됨 — 로컬 저장 불필요
+}
+
+async function initCampusPage() {
+  setLoading(true);
+  const rows = await sbSelect('campus');
+  CAMPUS_ROWS = rows.map(r => ({ _id: r.id, _rowId: r.id, ...r }));
+  setLoading(false);
+  renderCampusStats();
+  renderCampusTable(CAMPUS_ROWS);
+}
+
+function renderCampusStats() {
+  const total = CAMPUS_ROWS.length;
+  const regions = [...new Set(CAMPUS_ROWS.map(r => r['지역']).filter(Boolean))].length;
+  const totalAmt = CAMPUS_ROWS.reduce((s, r) => s + (Number(String(r['임차료']||'0').replace(/[^0-9]/g,''))||0), 0);
+  const corps = [...new Set(CAMPUS_ROWS.map(r => r['법인명']).filter(Boolean))].length;
+
+  document.getElementById('campusCount').textContent = `총 ${total}개 캠퍼스 등록`;
+  document.getElementById('campusStats').innerHTML = [
+    { lb:'총 캠퍼스', v: total,                              c:'#0f2d5c' },
+    { lb:'지역 수',   v: regions,                            c:'#1a6a3a' },
+    { lb:'법인 수',   v: corps,                              c:'#5a1a8a' },
+    { lb:'월 임차료 합계', v: totalAmt > 0 ? (totalAmt/10000).toFixed(0)+'만원' : '—', c:'#c8a96e' },
+  ].map(s => `<div style="background:#fff;padding:16px 18px;position:relative">
+    <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:${s.c}"></div>
+    <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);margin-bottom:7px">${s.lb}</div>
+    <div style="font-family:var(--serif);font-size:26px;font-weight:700;color:${s.c}">${s.v}</div>
+  </div>`).join('');
+}
+
+function renderCampusTable(rows) {
+  // 헤더
+  document.getElementById('campusHead').innerHTML =
+    CAMPUS_HEADERS.map(h => {
+      const arrow = campusSortState.col===h ? (campusSortState.asc?'▲':'▼') : '';
+      return `<th style="padding:10px 14px;text-align:left;font-size:9px;letter-spacing:1px;color:var(--text3);font-weight:700;cursor:pointer;white-space:nowrap" onclick="sortCampus('${h}')">${h} <span style="color:var(--gold);font-size:9px">${arrow}</span></th>`;
+    }).join('') + '<th style="padding:10px 14px;font-size:9px;letter-spacing:1px;color:var(--text3)">관리</th>';
+
+  if(!rows.length) {
+    document.getElementById('campusBody').innerHTML = `<tr><td colspan="${CAMPUS_HEADERS.length+1}">
+      <div class="empty"><div class="ei">🏫</div><div class="et">등록된 캠퍼스가 없습니다</div></div>
+    </td></tr>`;
+    return;
+  }
+
+  document.getElementById('campusBody').innerHTML = rows.map((row, i) => `
+    <tr style="border-bottom:1px solid var(--cream2);${i%2?'background:var(--cream2)':''}">
+      ${CAMPUS_HEADERS.map(h => {
+        const v = row[h] || '';
+        const isAmt = h.includes('임차료');
+        const fv = isAmt && v ? Number(String(v).replace(/[^0-9]/g,'')).toLocaleString('ko-KR') : v;
+        return `<td style="padding:9px 14px;color:var(--text);white-space:nowrap">${fv}</td>`;
+      }).join('')}
+      <td style="padding:9px 14px">
+        <div style="display:flex;gap:5px">
+          <button class="btn btn-out btn-sm" onclick="openCampusModal(${row._id})">수정</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteCampus(${row._id})">삭제</button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+function filterCampus() {
+  const q = document.getElementById('campusSearch').value.toLowerCase();
+  let rows = q ? CAMPUS_ROWS.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q))) : CAMPUS_ROWS;
+  rows = applyCampusSort(rows);
+  renderCampusTable(rows);
+}
+
+function sortCampus(col) {
+  if(campusSortState.col === col) campusSortState.asc = !campusSortState.asc;
+  else { campusSortState.col = col; campusSortState.asc = true; }
+  filterCampus();
+}
+
+function applyCampusSort(rows) {
+  if(!campusSortState.col) return rows;
+  return [...rows].sort((a, b) => {
+    const va = a[campusSortState.col] || '';
+    const vb = b[campusSortState.col] || '';
+    const na = Number(String(va).replace(/[^0-9.-]/g,''));
+    const nb = Number(String(vb).replace(/[^0-9.-]/g,''));
+    if(!isNaN(na) && !isNaN(nb) && va !== '' && vb !== '') return campusSortState.asc ? na-nb : nb-na;
+    return campusSortState.asc ? String(va).localeCompare(String(vb),'ko') : String(vb).localeCompare(String(va),'ko');
+  });
+}
+
+function openCampusModal(id=null) {
+  campusEditId = id;
+  const row = id ? CAMPUS_ROWS.find(r => r._id === id) : null;
+  const autoNo = id ? null : CAMPUS_ROWS.length + 1;
+
+  // 모달 재사용 (moForm)
+  document.getElementById('moT').textContent = id ? '캠퍼스 수정' : '캠퍼스 등록';
+  document.getElementById('moF').innerHTML = CAMPUS_HEADERS.map(h => {
+    let v = row ? (row[h]||'') : '';
+    return `<div class="fg"><label>${h}</label><input type="text" id="cf-${h.replace(/[\s\(\)㎡]/g,'_')}" value="${v}" placeholder="${h}"></div>`;
+  }).join('');
+
+  // 저장 버튼 교체
+  document.querySelector('#moForm .mo-ft').innerHTML = `
+    <button class="btn btn-ghost" onclick="closeMo('moForm')">취소</button>
+    <button class="btn btn-navy" onclick="saveCampusItem()">저장</button>`;
+
+  document.getElementById('moForm').classList.add('open');
+}
+
+async function saveCampusItem() {
+  const saveData = {};
+  CAMPUS_HEADERS.forEach(h => {
+    saveData[h] = document.getElementById('cf-' + h.replace(/[\s\(\)㎡]/g,'_'))?.value || '';
+  });
+
+  setLoading(true);
+  let ok = false;
+  if(campusEditId) {
+    const row = CAMPUS_ROWS.find(r => r._id === campusEditId);
+    ok = await sbUpdate('campus', row._rowId || row.id, saveData);
+    if(ok) showToast('✅ 캠퍼스 수정 완료 — Supabase 반영됨');
+  } else {
+    ok = await sbInsert('campus', saveData);
+    if(ok) showToast('✅ 캠퍼스 등록 완료 — Supabase 반영됨');
+  }
+  setLoading(false);
+
+  if(!ok) { showToast('저장 실패 — 다시 시도해 주세요'); return; }
+
+  closeMo('moForm');
+  document.querySelector('#moForm .mo-ft').innerHTML = `
+    <button class="btn btn-ghost" onclick="closeMo('moForm')">취소</button>
+    <button class="btn btn-navy" onclick="saveItem()">저장</button>`;
+  await initCampusPage();
+}
+
+async function deleteCampus(id) {
+  if(!confirm('삭제하시겠습니까?\n삭제된 데이터는 복구할 수 없습니다.')) return;
+  const row = CAMPUS_ROWS.find(r => r._id === id);
+  if(!row) return;
+  setLoading(true);
+  const ok = await sbDelete('campus', row._rowId || row.id);
+  setLoading(false);
+  if(!ok) { showToast('삭제 실패 — 다시 시도해 주세요'); return; }
+  CAMPUS_ROWS = CAMPUS_ROWS.filter(r => r._id !== id);
+  renderCampusStats();
+  renderCampusTable(CAMPUS_ROWS);
+  showToast('✅ 삭제 완료 — Supabase 반영됨');
+}
+
+function exportCampusExcel() {
+  if(!window.XLSX) { showToast('엑셀 라이브러리 로딩 중...'); return; }
+  const wb = XLSX.utils.book_new();
+  const data = [CAMPUS_HEADERS, ...CAMPUS_ROWS.map(r => CAMPUS_HEADERS.map(h => r[h]||''))];
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = CAMPUS_HEADERS.map(() => ({ wch: 16 }));
+  XLSX.utils.book_append_sheet(wb, ws, '캠퍼스현황');
+  XLSX.writeFile(wb, '캠퍼스전체현황.xlsx');
+  showToast('📤 엑셀 다운로드 완료');
+}
+
+function openCampusExcel() {
+  // 엑셀 업로드 모달 재사용
+  curType = '__campus__';
+  SAMPLE['__campus__'] = { label:'캠퍼스현황', headers: CAMPUS_HEADERS, rows: CAMPUS_ROWS, dbTable: null };
+  openExcelUpload();
+}
+
+// 캠퍼스 업로드 후 저장 오버라이드
+const _origRunExUpload = window.runExUpload;
+async function runExUpload() {
+  if(curType === '__campus__') {
+    const d = SAMPLE['__campus__'];
+    if(!exParsedData.length) { showToast('업로드할 데이터가 없습니다'); return; }
+    let success = 0;
+    for(const row of exParsedData) {
+      const obj = {};
+      CAMPUS_HEADERS.forEach(h => {
+        const exCol = exColMap[h];
+        const idx = exHeaders.indexOf(exCol);
+        obj[h] = idx >= 0 ? String(row[idx]||'').trim() : '';
+      });
+      if(Object.values(obj).some(v => v)) {
+        const ok = await sbInsert('campus', obj);
+        if(ok) success++;
+      }
+    }
+    closeMo('moExcel');
+    resetExUpload();
+    curType = null;
+    delete SAMPLE['__campus__'];
+    initCampusPage();
+    showToast(`✅ ${success}건 등록 완료`);
+    return;
+  }
+  if(_origRunExUpload) await _origRunExUpload();
+}
+
+// ═══════════════════════ 관코드 관리 모달 ═══════════════════════
+function openKwanMgr() {
+  renderKwanMgrList();
+  document.getElementById('moKwanMgr').classList.add('open');
+}
+
+function renderKwanMgrList() {
+  const list = document.getElementById('kwanMgrList');
+  if(!KWAN_CODES.length) {
+    list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">등록된 관 코드가 없습니다</div>';
+    return;
+  }
+  list.innerHTML = KWAN_CODES.map((k, i) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--cream2)">
+      <span style="font-family:var(--mono);font-weight:700;font-size:12px;min-width:70px;color:var(--text)">${k.code}</span>
+      <span style="flex:1;font-size:12px;color:var(--text2)">${k.name}</span>
+      <button onclick="deleteKwanFromMgr(${i})"
+        style="background:none;border:1px solid var(--border);padding:3px 10px;font-size:10px;cursor:pointer;color:var(--text3);font-family:var(--font)">삭제</button>
+    </div>`).join('');
+}
+
+function addKwanFromMgr() {
+  const code = document.getElementById('kwanMgrCode').value.trim().toUpperCase();
+  const name = document.getElementById('kwanMgrName').value.trim();
+  if(!code || !name) { showToast('관 코드와 이름을 모두 입력해 주세요'); return; }
+  if(KWAN_CODES.find(k => k.code === code)) { showToast('이미 등록된 관 코드입니다'); return; }
+  KWAN_CODES.push({ code, name });
+  document.getElementById('kwanMgrCode').value = '';
+  document.getElementById('kwanMgrName').value = '';
+  renderKwanMgrList();
+}
+
+function deleteKwanFromMgr(idx) {
+  if(!confirm(`"${KWAN_CODES[idx].code} ${KWAN_CODES[idx].name}" 을 삭제할까요?`)) return;
+  KWAN_CODES.splice(idx, 1);
+  renderKwanMgrList();
+}
+
+function saveKwanMgr() {
+  localStorage.setItem('kwanCodes', JSON.stringify(KWAN_CODES));
+  closeMo('moKwanMgr');
+  showToast('✅ 관 코드 저장 완료');
 }
 
 // ═══════════════════════ 관코드 빠른 수정 ═══════════════════════
