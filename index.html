@@ -1180,11 +1180,20 @@ function initApp(){
 
   refreshHBadge();
   renderDashHist();
-  setTimeout(renderVisuals, 100);
-  // Supabase에서 만료 알림 로드 후 팝업
-  loadAlertsFromServer().then(() => {
+
+  // 로그인 시 모든 Supabase 데이터 미리 로드 → 대시보드 통계 반영
+  (async () => {
+    try {
+      const tables = ['lease','tangible','rental','intangible','insurance'];
+      await Promise.all(tables.map(async t => {
+        const rows = await sbSelect(t);
+        if(SAMPLE[t]) SAMPLE[t].rows = rows.map((r,i) => ({ _id: r.id, _rowId: r.id, ...r }));
+      }));
+    } catch(e) { console.warn('대시보드 데이터 로드 오류:', e); }
+    renderVisuals();
+    await loadAlertsFromServer();
     setTimeout(showLoginAlertPopup, 300);
-  });
+  })();
 }
 
 function showLoginAlertPopup() {
