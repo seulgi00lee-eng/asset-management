@@ -857,6 +857,20 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
   </div>
 </div>
 
+
+<!-- 관코드 다중 선택 모달 -->
+<div class="mo" id="moKwanPicker" onclick="closeMoBg(event,'moKwanPicker')">
+  <div class="mo-box" style="width:420px">
+    <div class="mo-t">🏢 관코드 선택 (중복 가능)</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:14px">해당 자산을 사용하는 관을 모두 선택하세요.</div>
+    <div id="kwanPickerList" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);margin-bottom:16px;padding:8px"></div>
+    <div class="mo-ft">
+      <button class="btn btn-ghost" onclick="closeMo('moKwanPicker')">취소</button>
+      <button class="btn btn-navy" onclick="saveKwanPicker()">✅ 저장</button>
+    </div>
+  </div>
+</div>
+
 <!-- 관코드 관리 모달 -->
 <div class="mo" id="moKwanMgr" onclick="closeMoBg(event,'moKwanMgr')">
   <div class="mo-box" style="width:500px">
@@ -1042,6 +1056,26 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
+
+
+// 날짜 포맷 통일 함수 (다양한 형식 → YYYY-MM-DD)
+function fmtDate(val) {
+  if(!val) return '';
+  const s = String(val).trim();
+  // 이미 YYYY-MM-DD 형식
+  if(/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+  // M/D/YY 또는 M/D/YYYY 형식 (엑셀 자동변환)
+  const m1 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if(m1) {
+    let [,mo,dd,yy] = m1;
+    if(yy.length===2) yy = (parseInt(yy)>=50?'19':'20')+yy;
+    return `${yy}-${mo.padStart(2,'0')}-${dd.padStart(2,'0')}`;
+  }
+  // YYYY.MM.DD 형식
+  const m2 = s.match(/^(\d{4})\.(\d{1,2})\.(\d{1,2})$/);
+  if(m2) return `${m2[1]}-${m2[2].padStart(2,'0')}-${m2[3].padStart(2,'0')}`;
+  return s;
+}
 
 // ═══════════════════════ SUPABASE ═══════════════════════
 function setLoading(on){const el=document.getElementById("loadingOverlay");if(el)el.style.display=on?"flex":"none";}
@@ -2019,25 +2053,22 @@ function buildRow(row, d, today, DKW) {
     const isDt = ['만료','종료','갱신','반납','만기','취득일','구매일','시작'].some(k=>h.includes(k));
     const badge = isExp && diff <= 90 ? getExpBadge(diff) : '';
 
-    // 관코드 셀 → 인라인 편집 드롭다운
+    // 관코드 셀 → 다중 선택 버튼
     if(isKwanType && h === '관코드') {
-      return `<td style="padding:6px 10px">
-        <div style="display:flex;align-items:center;gap:4px">
-          <select id="kwan-sel-${row._id}"
-            style="border:1px solid var(--border);background:${v?'var(--cream2)':'#fff'};
-            padding:3px 6px;font-family:var(--mono);font-size:11px;font-weight:600;
-            color:${v?'var(--text)':'var(--text3)'};outline:none;cursor:pointer;max-width:110px"
-            onchange="inlineKwanChange(${row._id},this.value)">
-            <option value="">— 미지정 —</option>
-            ${KWAN_CODES.map(k=>`<option value="${k.code}" ${k.code===v?'selected':''}>${k.code} ${k.name}</option>`).join('')}
-            <option value="__NEW__">+ 직접 입력...</option>
-          </select>
-          ${v ? `<span style="font-size:9px;color:#3a6a3a;font-weight:700">✓</span>` : ''}
+      const codes = v ? v.split(',').map(c=>c.trim()).filter(Boolean) : [];
+      const badgeHtml = codes.length
+        ? codes.map(c=>`<span style="display:inline-block;margin:1px 2px;padding:1px 6px;background:var(--cream2);border:1px solid var(--border);font-family:var(--mono);font-size:10px;font-weight:600;color:var(--text)">${c}</span>`).join('')
+        : `<span style="font-size:11px;color:var(--text3)">— 미지정 —</span>`;
+      return `<td style="padding:6px 10px;min-width:120px">
+        <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;cursor:pointer" onclick="openKwanPicker(${row._id},'${v||''}')">
+          ${badgeHtml}
+          <span style="font-size:10px;color:var(--gold);margin-left:2px">✎</span>
         </div>
       </td>`;
     }
 
-    return `<td class="${isDt?'dt':''}">${v}${badge}</td>`;
+    const dv = isDt ? fmtDate(v) : v;
+    return `<td class="${isDt?'dt':''}">${dv}${badge}</td>`;
   }).join('')}
   <td><div style="display:flex;gap:5px">
     <button class="btn btn-out btn-sm" onclick="openModal(${row._id})">수정</button>
@@ -2535,6 +2566,101 @@ function saveKwanMgr() {
   localStorage.setItem('kwanCodes', JSON.stringify(KWAN_CODES));
   closeMo('moKwanMgr');
   showToast('✅ 관 코드 저장 완료');
+}
+
+
+// ═══════════════════════ 관코드 다중 선택 ═══════════════════════
+let kwanPickerRowId = null;
+let kwanPickerSelected = [];
+
+function openKwanPicker(rowId, currentVal) {
+  syncKwanFromCampus();
+  kwanPickerRowId = rowId;
+  kwanPickerSelected = currentVal ? currentVal.split(',').map(c=>c.trim()).filter(Boolean) : [];
+
+  const list = document.getElementById('kwanPickerList');
+  if(!KWAN_CODES.length) {
+    list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">캠퍼스 현황에 데이터를 먼저 등록해 주세요.</div>';
+  } else {
+    list.innerHTML = KWAN_CODES.map(k => `
+      <label style="display:flex;align-items:center;gap:10px;padding:8px 10px;cursor:pointer;border-radius:2px;margin-bottom:4px;background:${kwanPickerSelected.includes(k.code)?'var(--cream2)':'#fff'}" id="kpl-${k.code}">
+        <input type="checkbox" value="${k.code}" ${kwanPickerSelected.includes(k.code)?'checked':''}
+          onchange="toggleKwanPick('${k.code}',this.checked)"
+          style="width:14px;height:14px;accent-color:var(--gold)">
+        <span style="font-family:var(--mono);font-weight:700;font-size:11px;min-width:60px">${k.code}</span>
+        <span style="font-size:11px;color:var(--text2)">${k.name}</span>
+      </label>`).join('') +
+      `<label style="display:flex;align-items:center;gap:10px;padding:8px 10px;cursor:pointer;border-top:1px solid var(--border);margin-top:6px">
+        <input type="checkbox" id="kwanPickerCustomCheck" onchange="toggleKwanCustom(this.checked)" style="width:14px;height:14px">
+        <input type="text" id="kwanPickerCustomInput" placeholder="직접 입력 (예: SJ-05)" style="border:1px solid var(--border);padding:4px 8px;font-family:var(--mono);font-size:11px;flex:1;outline:none" onclick="event.stopPropagation()">
+      </label>`;
+  }
+  document.getElementById('moKwanPicker').classList.add('open');
+}
+
+function toggleKwanPick(code, checked) {
+  if(checked) {
+    if(!kwanPickerSelected.includes(code)) kwanPickerSelected.push(code);
+  } else {
+    kwanPickerSelected = kwanPickerSelected.filter(c => c !== code);
+  }
+  // 배경색 업데이트
+  const lbl = document.getElementById('kpl-' + code);
+  if(lbl) lbl.style.background = checked ? 'var(--cream2)' : '#fff';
+}
+
+function toggleKwanCustom(checked) {
+  const inp = document.getElementById('kwanPickerCustomInput');
+  if(inp) inp.disabled = !checked;
+  if(checked && inp) inp.focus();
+}
+
+async function saveKwanPicker() {
+  // 직접 입력 처리
+  const customCheck = document.getElementById('kwanPickerCustomCheck');
+  const customInput = document.getElementById('kwanPickerCustomInput');
+  if(customCheck?.checked && customInput?.value.trim()) {
+    const c = customInput.value.trim().toUpperCase();
+    if(!kwanPickerSelected.includes(c)) kwanPickerSelected.push(c);
+    if(!KWAN_CODES.find(k=>k.code===c)) {
+      KWAN_CODES.push({ code:c, name:c });
+      localStorage.setItem('kwanCodes', JSON.stringify(KWAN_CODES));
+    }
+  }
+
+  const newVal = kwanPickerSelected.join(', ');
+  const d = SAMPLE[curType];
+  const row = d.rows.find(r => r._id === kwanPickerRowId);
+  if(!row) return;
+
+  const oldVal = row['관코드'] || '';
+  row['관코드'] = newVal;
+
+  // Supabase 업데이트
+  if(d.dbTable) {
+    setLoading(true);
+    await sbUpdate(d.dbTable, row._rowId || row.id, { '관코드': newVal });
+    setLoading(false);
+  }
+
+  // 이동이력 기록
+  if(oldVal !== newVal) {
+    const nameCol = d.headers.find(h => ['자산명','렌탈품목','계약명','건물명'].includes(h)) || d.headers[0];
+    addHist({
+      assetType: d.label,
+      assetName: row[nameCol] || '—',
+      assetCode: row['자산코드'] || '—',
+      fromLoc: oldVal || '미지정',
+      toLoc: newVal || '미지정',
+      worker: document.getElementById('uNm')?.textContent || '관리자',
+      source: '관코드변경',
+      memo: `관코드 변경: ${oldVal||'미지정'} → ${newVal||'미지정'}`,
+    });
+  }
+
+  closeMo('moKwanPicker');
+  filterAsset();
+  showToast(`✅ 관코드 저장 완료 — ${newVal || '미지정'}`);
 }
 
 // ═══════════════════════ 관코드 빠른 수정 ═══════════════════════
