@@ -866,23 +866,9 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
     <!-- 관코드 목록 -->
     <div id="kwanMgrList" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);margin-bottom:16px"></div>
 
-    <!-- 새 관코드 추가 -->
-    <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-bottom:4px">
-      <div class="fg" style="margin:0">
-        <label>관 코드</label>
-        <input type="text" id="kwanMgrCode" placeholder="예: GW-01" style="text-transform:uppercase"
-          oninput="this.value=this.value.toUpperCase()">
-      </div>
-      <div class="fg" style="margin:0">
-        <label>관 이름</label>
-        <input type="text" id="kwanMgrName" placeholder="예: 광교본원">
-      </div>
-      <button class="btn btn-navy" style="margin-bottom:0;height:36px" onclick="addKwanFromMgr()">추가</button>
-    </div>
-
     <div class="mo-ft">
       <button class="btn btn-ghost" onclick="closeMo('moKwanMgr')">닫기</button>
-      <button class="btn btn-navy" onclick="saveKwanMgr()">✅ 저장</button>
+      <button class="btn btn-navy" onclick="go('campus');closeMo('moKwanMgr')">🏫 캠퍼스 현황으로 이동</button>
     </div>
   </div>
 </div>
@@ -1897,6 +1883,7 @@ async function loadAsset(type){
   </div>`).join('');
 
   sortState = { col: null, asc: true };
+  syncKwanFromCampus(); // 관코드 최신화
   const catSection = document.getElementById('rentalCatSection');
   if (type === 'rental') {
     catSection.style.display = 'block';
@@ -2334,6 +2321,7 @@ async function initCampusPage() {
   setLoading(false);
   renderCampusStats();
   renderCampusTable(CAMPUS_ROWS);
+  syncKwanFromCampus(); // 관코드 목록 자동 동기화
 }
 
 function renderCampusStats() {
@@ -2492,6 +2480,7 @@ function openCampusExcel() {
 
 // ═══════════════════════ 관코드 관리 모달 ═══════════════════════
 function openKwanMgr() {
+  syncKwanFromCampus();
   renderKwanMgrList();
   document.getElementById('moKwanMgr').classList.add('open');
 }
@@ -2499,16 +2488,21 @@ function openKwanMgr() {
 function renderKwanMgrList() {
   const list = document.getElementById('kwanMgrList');
   if(!KWAN_CODES.length) {
-    list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">등록된 관 코드가 없습니다</div>';
+    list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">
+      캠퍼스 전체 현황에 데이터를 먼저 등록해 주세요.<br>
+      <span style="font-size:10px">관코드는 캠퍼스 현황에서 자동으로 불러옵니다.</span>
+    </div>`;
     return;
   }
   list.innerHTML = KWAN_CODES.map((k, i) => `
     <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--cream2)">
       <span style="font-family:var(--mono);font-weight:700;font-size:12px;min-width:70px;color:var(--text)">${k.code}</span>
       <span style="flex:1;font-size:12px;color:var(--text2)">${k.name}</span>
-      <button onclick="deleteKwanFromMgr(${i})"
-        style="background:none;border:1px solid var(--border);padding:3px 10px;font-size:10px;cursor:pointer;color:var(--text3);font-family:var(--font)">삭제</button>
-    </div>`).join('');
+      <span style="font-size:9px;color:var(--text3);background:var(--cream2);padding:2px 8px">캠퍼스 연동</span>
+    </div>`).join('') +
+    `<div style="padding:10px 14px;font-size:10px;color:var(--text3);background:var(--cream2);border-top:1px solid var(--border)">
+      💡 관코드는 캠퍼스 전체 현황 데이터에서 자동으로 불러옵니다.
+    </div>`;
 }
 
 function addKwanFromMgr() {
@@ -2538,6 +2532,7 @@ function saveKwanMgr() {
 
 // 인라인 관코드 변경 (드롭다운)
 function inlineKwanChange(rowId, newCode) {
+  syncKwanFromCampus(); // 최신 캠퍼스 데이터 반영
   // 직접 입력 선택 시
   if(newCode === '__NEW__') {
     const code = prompt('새 관코드를 입력하세요 (예: SJ-05)');
@@ -2596,13 +2591,29 @@ function inlineKwanChange(rowId, newCode) {
   const kwanName = KWAN_CODES.find(k=>k.code===newCode)?.name || '';
   showToast(`✅ ${row[nameCol]||''} — 관코드 ${oldCode} → ${newCode}${kwanName?' ('+kwanName+')':''}`);
 }
-let KWAN_CODES = JSON.parse(localStorage.getItem('kwanCodes') || 'null') || [
-  { code:'GW-01', name:'광교본원' },
-  { code:'SN-02', name:'수내캠퍼스' },
-  { code:'DT-03', name:'다운타운' },
-  { code:'JJ-04', name:'정자캠퍼스' },
-  { code:'HQ-00', name:'본사공통' },
-];
+let KWAN_CODES = [];
+
+// 캠퍼스 전체 현황에서 관코드 목록 자동 생성
+function syncKwanFromCampus() {
+  if(!CAMPUS_ROWS || !CAMPUS_ROWS.length) return;
+  const seen = new Set();
+  const fromCampus = [];
+  CAMPUS_ROWS.forEach(r => {
+    const code = r['관코드'];
+    if(!code || seen.has(code)) return;
+    seen.add(code);
+    // 관 이름: 지역 + 사업부 + 브랜드 조합
+    const parts = [r['지역'], r['사업부'], r['브랜드']].filter(Boolean);
+    const name = parts.join(' · ') || code;
+    fromCampus.push({ code, name });
+  });
+  if(fromCampus.length) {
+    KWAN_CODES = fromCampus;
+  } else {
+    // 캠퍼스 데이터 없으면 로컬 저장 값 사용
+    KWAN_CODES = JSON.parse(localStorage.getItem('kwanCodes') || '[]');
+  }
+}
 
 let kwanEditId = null;
 
