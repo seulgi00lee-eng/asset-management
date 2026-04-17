@@ -2318,7 +2318,7 @@ function downloadExTemplate() {
 
 
 // ═══════════════════════ 캠퍼스 전체 현황 ═══════════════════════
-const CAMPUS_HEADERS = ['NO','법인명','지역','관코드','사업부','브랜드','건물명','층수','담당자','내선번호'];
+const CAMPUS_HEADERS = ['no','법인명','지역','관코드','사업부','브랜드','건물명','층수','담당자','내선번호'];
 let CAMPUS_ROWS = [];
 let campusSortState = { col: null, asc: true };
 let campusEditId = null;
@@ -2356,7 +2356,8 @@ function renderCampusTable(rows) {
   document.getElementById('campusHead').innerHTML =
     CAMPUS_HEADERS.map(h => {
       const arrow = campusSortState.col===h ? (campusSortState.asc?'▲':'▼') : '';
-      return `<th style="padding:10px 14px;text-align:left;font-size:9px;letter-spacing:1px;color:var(--text3);font-weight:700;cursor:pointer;white-space:nowrap" onclick="sortCampus('${h}')">${h} <span style="color:var(--gold);font-size:9px">${arrow}</span></th>`;
+      const label = h === 'no' ? 'NO' : h;
+      return `<th style="padding:10px 14px;text-align:left;font-size:9px;letter-spacing:1px;color:var(--text3);font-weight:700;cursor:pointer;white-space:nowrap" onclick="sortCampus('${h}')">${label} <span style="color:var(--gold);font-size:9px">${arrow}</span></th>`;
     }).join('') + '<th style="padding:10px 14px;font-size:9px;letter-spacing:1px;color:var(--text3)">관리</th>';
 
   if(!rows.length) {
@@ -2417,8 +2418,8 @@ function openCampusModal(id=null) {
   document.getElementById('moT').textContent = id ? '캠퍼스 수정' : '캠퍼스 등록';
   document.getElementById('moF').innerHTML = CAMPUS_HEADERS.map(h => {
     let v = row ? (row[h]||'') : '';
-    if(!id && h === 'NO') v = String(autoNo);
-    const isNo = (h === 'NO');
+    if(!id && h === 'no') v = String(autoNo);
+    const isNo = (h === 'no');
     return `<div class="fg"><label>${h}${isNo&&!id?' <span style="font-size:9px;color:var(--gold)">(자동)</span>':''}</label><input type="text" id="cf-${h.replace(/[\s\(\)㎡]/g,'_')}" value="${v}" placeholder="${h}" ${isNo&&!id?'readonly style="background:var(--cream2);color:var(--text3)"':''}></div>`;
   }).join('');
 
