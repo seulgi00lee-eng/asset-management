@@ -513,7 +513,7 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
           </div>
 
           <!-- 만료 예정 알림 -->
-          <div class="vc" style="background:linear-gradient(145deg,#fff,#fdf8f0)" onclick="go('history')">
+          <div class="vc" style="background:linear-gradient(145deg,#fff,#fdf8f0);cursor:pointer" onclick="document.getElementById('dashAlertTbl').closest('.sec').scrollIntoView({behavior:'smooth'})">
             <div class="vc-hd">
               <div>
                 <div class="vc-lb">만료 예정 알림</div>
@@ -563,7 +563,7 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
         <!-- ── ROW 3: 만료예정 테이블 + 이력 ── -->
         <div style="display:grid;grid-template-columns:3fr 2fr;gap:12px;margin-bottom:12px">
           <div class="sec" style="margin-bottom:0">
-            <div class="sec-hd"><div class="sec-t">만료 예정 항목 <span class="badge bd-red">주의</span></div><button class="btn btn-ghost btn-sm" onclick="go('history')">이동 이력 →</button></div>
+            <div class="sec-hd"><div class="sec-t">만료 예정 항목 <span class="badge bd-red">주의</span></div><button class="btn btn-ghost btn-sm" onclick="toggleNotif()">🔔 알림 패널 →</button></div>
             <div class="tbl-wrap"><table><thead><tr><th>유형</th><th>자산·계약명</th><th>만료일</th><th>D-day</th><th>담당자</th></tr></thead><tbody id="dashAlertTbl"></tbody></table></div>
           </div>
 
@@ -1204,9 +1204,12 @@ function initApp(){
 
   // 만료 테이블
   document.getElementById('dashAlertTbl').innerHTML=ALERTS.map(a=>`<tr>
-    <td><span class="tag ${a.tc}">${a.type}</span></td><td style="font-weight:600">${a.name}</td>
-    <td class="dt">${a.date}</td><td><span class="d-tag ${dCls(a.days)}">D-${a.days}</span></td>
-    <td class="mt">이슬기</td></tr>`).join('');
+    <td><span class="tag ${a.tc}">${a.type}</span></td>
+    <td style="font-weight:600">${a.name}</td>
+    <td class="dt">${a.date}</td>
+    <td><span class="d-tag ${dCls(a.days)}">D-${a.days}</span></td>
+    <td class="mt">${a.worker||'—'}</td></tr>`).join('') ||
+    '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text3);font-size:12px">90일 이내 만료 예정 항목이 없습니다</td></tr>';
 
   // 사이드바 배지
   [{k:'intangible',v:ALERTS.filter(a=>a.type==='무형자산').length},{k:'rental',v:ALERTS.filter(a=>a.type==='렌탈자산').length},{k:'insurance',v:ALERTS.filter(a=>a.type==='보험').length}]
