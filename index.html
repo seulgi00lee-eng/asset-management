@@ -2230,7 +2230,6 @@ function buildPreview() {
 }
 
 async function runExUpload() {
-  const d = SAMPLE[curType];
   if(!exParsedData.length) { showToast('업로드할 데이터가 없습니다'); return; }
 
   const btn = document.getElementById('exUploadBtn');
@@ -2238,6 +2237,35 @@ async function runExUpload() {
   btn.disabled = true;
   setLoading(true);
 
+  // ── 캠퍼스 전용 업로드 ──
+  if(curType === '__campus__') {
+    let success = 0;
+    for(const row of exParsedData) {
+      const obj = {};
+      CAMPUS_HEADERS.forEach(h => {
+        const exCol = exColMap[h];
+        const idx = exHeaders.indexOf(exCol);
+        obj[h] = idx >= 0 ? String(row[idx]||'').trim() : '';
+      });
+      if(Object.values(obj).some(v => v)) {
+        const ok = await sbInsert('campus', obj);
+        if(ok) success++;
+      }
+    }
+    setLoading(false);
+    btn.textContent = '✅ 일괄 등록';
+    btn.disabled = false;
+    closeMo('moExcel');
+    resetExUpload();
+    curType = null;
+    delete SAMPLE['__campus__'];
+    await initCampusPage();
+    showToast(`✅ ${success}건 등록 완료 — Supabase 반영됨`);
+    return;
+  }
+
+  // ── 일반 자산 업로드 ──
+  const d = SAMPLE[curType];
   let success = 0, fail = 0;
 
   for(const row of exParsedData) {
@@ -2247,14 +2275,15 @@ async function runExUpload() {
       const idx = exHeaders.indexOf(exCol);
       obj[sysCol] = idx >= 0 ? String(row[idx]||'').trim() : '';
     });
-
-    // 빈 행 스킵
     if(Object.values(obj).every(v => !v)) continue;
-
-    // 로컬 데이터에 추가
-    const newRow = { _id: d.rows.length + success + 1, ...obj };
-    d.rows.push(newRow);
-    success++;
+    if(d.dbTable) {
+      const ok = await sbInsert(d.dbTable, obj);
+      if(ok) success++; else fail++;
+    } else {
+      const newRow = { _id: d.rows.length + success + 1, ...obj };
+      d.rows.push(newRow);
+      success++;
+    }
   }
 
   setLoading(false);
@@ -2458,36 +2487,6 @@ function openCampusExcel() {
   curType = '__campus__';
   SAMPLE['__campus__'] = { label:'캠퍼스현황', headers: CAMPUS_HEADERS, rows: CAMPUS_ROWS, dbTable: null };
   openExcelUpload();
-}
-
-// 캠퍼스 업로드 후 저장 오버라이드
-const _origRunExUpload = window.runExUpload;
-async function runExUpload() {
-  if(curType === '__campus__') {
-    const d = SAMPLE['__campus__'];
-    if(!exParsedData.length) { showToast('업로드할 데이터가 없습니다'); return; }
-    let success = 0;
-    for(const row of exParsedData) {
-      const obj = {};
-      CAMPUS_HEADERS.forEach(h => {
-        const exCol = exColMap[h];
-        const idx = exHeaders.indexOf(exCol);
-        obj[h] = idx >= 0 ? String(row[idx]||'').trim() : '';
-      });
-      if(Object.values(obj).some(v => v)) {
-        const ok = await sbInsert('campus', obj);
-        if(ok) success++;
-      }
-    }
-    closeMo('moExcel');
-    resetExUpload();
-    curType = null;
-    delete SAMPLE['__campus__'];
-    initCampusPage();
-    showToast(`✅ ${success}건 등록 완료`);
-    return;
-  }
-  if(_origRunExUpload) await _origRunExUpload();
 }
 
 // ═══════════════════════ 관코드 관리 모달 ═══════════════════════
