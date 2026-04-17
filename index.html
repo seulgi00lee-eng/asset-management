@@ -1348,10 +1348,10 @@ function renderVisuals(){
   // ── 렌탈자산 링 ──
   const rent = SAMPLE.rental.rows;
   const rentTotal = rent.length;
-  const rentWarn  = rent.filter(r=>r['상태']==='반납예정').length;
+  const rentWarn  = rent.filter(r=>(r['운용상태']||r['상태'])==='반납예정').length;
   const rentPct   = rentTotal>0 ? Math.round(rentWarn/rentTotal*100) : 0;
   document.getElementById('vc-rental-sub').textContent = `${rentTotal}개 중 ${rentWarn}개 반납예정`;
-  document.getElementById('ring-rental-pct').textContent = Math.round((rentTotal-rentWarn)/rentTotal*100)+'%';
+  document.getElementById('ring-rental-pct').textContent = rentTotal>0 ? Math.round((rentTotal-rentWarn)/rentTotal*100)+'%' : '0%';
   document.getElementById('barv-rental').textContent = rentWarn+'개';
   document.getElementById('bar-rental').style.width = rentPct+'%';
   setRing('ring-rental', Math.round((rentTotal-rentWarn)/rentTotal*100), '#c8a96e');
@@ -1624,7 +1624,22 @@ function go(p, pushHistory=true){
   document.querySelector(`[data-p="${p}"]`)?.classList.add('active');
   document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
 
-  if(p==='dash'){document.getElementById('page-dash').classList.add('active');curType=null;pageStack=[];}
+  if(p==='dash'){
+    document.getElementById('page-dash').classList.add('active');
+    curType=null;pageStack=[];
+    // 대시보드 진입 시 데이터 새로고침
+    (async()=>{
+      try{
+        const tables=['lease','tangible','rental','intangible','insurance'];
+        await Promise.all(tables.map(async t=>{
+          const rows=await sbSelect(t);
+          if(SAMPLE[t]) SAMPLE[t].rows=rows.map((r,i)=>({_id:r.id,_rowId:r.id,...r}));
+        }));
+      }catch(e){}
+      renderVisuals();
+      loadAlertsFromServer();
+    })();
+  }
   else if(p==='history'){document.getElementById('page-history').classList.add('active');renderHPage();}
   else if(p==='cost'){document.getElementById('page-cost').classList.add('active');curType=null;initCostPage();}
   else if(p==='campus'){document.getElementById('page-campus').classList.add('active');curType=null;initCampusPage();}
