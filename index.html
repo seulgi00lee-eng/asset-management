@@ -811,28 +811,91 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
             <div class="ph-s" id="campusCount">총 0개 캠퍼스 등록</div>
             <div class="ph-rule"></div>
           </div>
-          <div class="ph-acts">
+          <div class="ph-acts" id="campusActsBtns">
             <button class="btn btn-ghost btn-sm" onclick="openCampusExcel()">📥 엑셀 업로드</button>
             <button class="btn btn-ghost btn-sm" onclick="exportCampusExcel()">📤 엑셀 다운로드</button>
             <button class="btn btn-navy" onclick="openCampusModal()">＋ 캠퍼스 등록</button>
           </div>
         </div>
 
-        <!-- 요약 인라인 -->
-        <div id="campusStats" style="margin-bottom:14px;display:flex;gap:20px;font-size:12px;color:var(--text2)"></div>
+        <!-- 탭 -->
+        <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:16px">
+          <button id="ctab-list" onclick="switchCampusTab('list')"
+            style="padding:10px 22px;font-size:12px;font-weight:600;font-family:var(--font);border:none;background:none;cursor:pointer;border-bottom:2px solid var(--text);margin-bottom:-2px;color:var(--text)">
+            📋 캠퍼스 목록
+          </button>
+          <button id="ctab-kwan" onclick="switchCampusTab('kwan')"
+            style="padding:10px 22px;font-size:12px;font-weight:600;font-family:var(--font);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--text3)">
+            🔄 관코드 일괄 수정
+          </button>
+        </div>
 
-        <!-- 검색 + 테이블 -->
-        <div class="sec">
-          <div style="padding:14px 18px 0">
-            <input id="campusSearch" style="border:1px solid var(--border);padding:8px 14px;font-size:12px;font-family:var(--font);background:var(--cream2);outline:none;width:240px" placeholder="검색..." oninput="filterCampus()">
+        <!-- 탭 1: 캠퍼스 목록 -->
+        <div id="ctab-content-list">
+          <div id="campusStats" style="margin-bottom:14px;display:flex;gap:20px;font-size:12px;color:var(--text2)"></div>
+          <div class="sec">
+            <div style="padding:14px 18px 0">
+              <input id="campusSearch" style="border:1px solid var(--border);padding:8px 14px;font-size:12px;font-family:var(--font);background:var(--cream2);outline:none;width:240px" placeholder="검색..." oninput="filterCampus()">
+            </div>
+            <div style="overflow-x:auto">
+              <table style="width:100%;border-collapse:collapse;font-size:12px">
+                <thead><tr id="campusHead" style="background:var(--cream2);border-bottom:1px solid var(--border)"></tr></thead>
+                <tbody id="campusBody"></tbody>
+              </table>
+            </div>
           </div>
-          <div style="overflow-x:auto">
-            <table style="width:100%;border-collapse:collapse;font-size:12px">
-              <thead>
-                <tr id="campusHead" style="background:var(--cream2);border-bottom:1px solid var(--border)"></tr>
-              </thead>
-              <tbody id="campusBody"></tbody>
-            </table>
+        </div>
+
+        <!-- 탭 2: 관코드 일괄 수정 -->
+        <div id="ctab-content-kwan" style="display:none">
+          <!-- 설명 배너 -->
+          <div style="background:rgba(200,169,110,.08);border-left:3px solid var(--gold);padding:10px 16px;font-size:12px;color:var(--amber);margin-bottom:16px">
+            자산(렌탈/임대차/유형/무형/보험)에서 관코드를 검색 후 체크박스로 선택 → 새 관코드 입력 → 일괄 변경 저장
+          </div>
+
+          <!-- 검색 + 필터 -->
+          <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+            <select id="kwanBulkTypeFilter" style="border:1px solid var(--border);padding:8px 12px;font-size:12px;font-family:var(--font);background:var(--cream2);outline:none" onchange="loadKwanBulkData()">
+              <option value="rental">렌탈자산</option>
+              <option value="lease">임대차계약</option>
+              <option value="tangible">유형자산</option>
+              <option value="intangible">무형자산</option>
+              <option value="insurance">보험</option>
+            </select>
+            <input id="kwanBulkSearch" style="border:1px solid var(--border);padding:8px 12px;font-size:12px;font-family:var(--font);background:var(--cream2);outline:none;width:200px" placeholder="자산명 또는 관코드 검색..." oninput="filterKwanBulk()">
+            <select id="kwanBulkCurFilter" style="border:1px solid var(--border);padding:8px 12px;font-size:12px;font-family:var(--font);background:var(--cream2);outline:none" onchange="filterKwanBulk()">
+              <option value="">전체 관코드</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" onclick="loadKwanBulkData()">↻ 새로고침</button>
+          </div>
+
+          <!-- 일괄 변경 액션 바 -->
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;padding:12px 16px;background:var(--cream2);border:1px solid var(--border)">
+            <span id="kwanBulkSelCnt" style="font-size:12px;color:var(--text3)">0개 선택됨</span>
+            <div style="flex:1"></div>
+            <span style="font-size:12px;color:var(--text2);font-weight:600">새 관코드:</span>
+            <input id="kwanBulkNewCode" style="border:1px solid var(--border);padding:7px 12px;font-size:12px;font-family:var(--mono);font-weight:600;background:#fff;outline:none;width:140px;text-transform:uppercase" placeholder="예: GW-01" oninput="this.value=this.value.toUpperCase()">
+            <select id="kwanBulkNewCodeSel" style="border:1px solid var(--border);padding:7px 12px;font-size:12px;font-family:var(--font);background:#fff;outline:none" onchange="if(this.value){document.getElementById('kwanBulkNewCode').value=this.value;}">
+              <option value="">캠퍼스에서 선택</option>
+            </select>
+            <button class="btn btn-navy" onclick="applyKwanBulkChange()" style="font-size:12px">✅ 일괄 변경 적용</button>
+          </div>
+
+          <!-- 자산 테이블 -->
+          <div class="sec">
+            <div class="sec-hd">
+              <div class="sec-t">자산 목록 <span class="badge bd-navy" id="kwanBulkTotalCnt">0건</span></div>
+              <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" id="kwanBulkChkAll" onchange="toggleKwanBulkAll(this.checked)" style="accent-color:var(--gold)">
+                전체 선택
+              </label>
+            </div>
+            <div style="overflow-x:auto">
+              <table style="width:100%;border-collapse:collapse;font-size:12px">
+                <thead><tr id="kwanBulkHead" style="background:var(--cream2);border-bottom:2px solid var(--text)"></tr></thead>
+                <tbody id="kwanBulkBody"></tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -3827,6 +3890,170 @@ function toggleNotif(){
 function closeNotif(){document.getElementById('notifPanel').classList.remove('open');}
 function openLB(src){document.getElementById('lbImg').src=src;document.getElementById('lb').classList.add('open');}
 function showToast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',2800);}
+
+// ═══════════════════════ 캠퍼스 탭 전환 ═══════════════════════
+function switchCampusTab(tab) {
+  const isKwan = tab === 'kwan';
+
+  // 탭 버튼 스타일
+  document.getElementById('ctab-list').style.borderBottomColor = isKwan ? 'transparent' : 'var(--text)';
+  document.getElementById('ctab-list').style.color = isKwan ? 'var(--text3)' : 'var(--text)';
+  document.getElementById('ctab-kwan').style.borderBottomColor = isKwan ? 'var(--text)' : 'transparent';
+  document.getElementById('ctab-kwan').style.color = isKwan ? 'var(--text)' : 'var(--text3)';
+
+  // 콘텐츠 표시
+  document.getElementById('ctab-content-list').style.display = isKwan ? 'none' : 'block';
+  document.getElementById('ctab-content-kwan').style.display = isKwan ? 'block' : 'none';
+
+  // 상단 버튼
+  document.getElementById('campusActsBtns').style.display = isKwan ? 'none' : 'flex';
+
+  if(isKwan) loadKwanBulkData();
+}
+
+// ═══════════════════════ 관코드 일괄 수정 ═══════════════════════
+let kwanBulkRows = [];
+let kwanBulkFiltered = [];
+
+async function loadKwanBulkData() {
+  const type = document.getElementById('kwanBulkTypeFilter')?.value || 'rental';
+  setLoading(true);
+  const rows = await sbSelect(type);
+  setLoading(false);
+
+  kwanBulkRows = rows.map(r => ({ _dbId: r.id, ...r }));
+
+  // 관코드 필터 옵션 갱신
+  const kwans = [...new Set(kwanBulkRows.map(r => String(r['관코드']||'').trim()).filter(Boolean))].sort();
+  const sel = document.getElementById('kwanBulkCurFilter');
+  if(sel) sel.innerHTML = '<option value="">전체 관코드</option>' + kwans.map(k=>`<option value="${k}">${k}</option>`).join('');
+
+  // 캠퍼스 관코드 빠른 선택 갱신
+  const campusKwans = [...new Set(CAMPUS_ROWS.map(r=>r['관코드']||'').filter(Boolean))].sort();
+  const nsel = document.getElementById('kwanBulkNewCodeSel');
+  if(nsel) nsel.innerHTML = '<option value="">캠퍼스에서 선택</option>' + campusKwans.map(k=>`<option value="${k}">${k}</option>`).join('');
+
+  filterKwanBulk();
+}
+
+function filterKwanBulk() {
+  const q = (document.getElementById('kwanBulkSearch')?.value || '').toLowerCase();
+  const kf = document.getElementById('kwanBulkCurFilter')?.value || '';
+  const type = document.getElementById('kwanBulkTypeFilter')?.value || 'rental';
+  const d = SAMPLE[type];
+
+  kwanBulkFiltered = kwanBulkRows.filter(r => {
+    if(kf && String(r['관코드']||'').trim() !== kf) return false;
+    if(q) {
+      const vals = Object.values(r).map(v=>String(v||'').toLowerCase());
+      return vals.some(v=>v.includes(q));
+    }
+    return true;
+  });
+
+  renderKwanBulkTable(type, d);
+}
+
+function renderKwanBulkTable(type, d) {
+  const nameCol = {rental:'렌탈품목', lease:'건물명', tangible:'자산명', intangible:'상품명', insurance:'보험사'}[type] || '자산명';
+  const cols = [nameCol, '관코드', '캠퍼스명', '지역', '법인명'].filter(c => c);
+
+  const head = document.getElementById('kwanBulkHead');
+  const body = document.getElementById('kwanBulkBody');
+  const cntEl = document.getElementById('kwanBulkTotalCnt');
+  if(cntEl) cntEl.textContent = kwanBulkFiltered.length + '건';
+
+  if(head) head.innerHTML =
+    `<th style="width:32px;padding:8px 10px"><input type="checkbox" id="kwanBulkChkAll2" onchange="toggleKwanBulkAll(this.checked)" style="accent-color:var(--gold)"></th>` +
+    cols.map(c=>`<th style="padding:9px 14px;font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--text3)">${c}</th>`).join('') +
+    `<th style="padding:9px 14px;font-size:9px;letter-spacing:1px;color:var(--text3)">현재 관코드</th>`;
+
+  if(!kwanBulkFiltered.length) {
+    if(body) body.innerHTML = `<tr><td colspan="${cols.length+2}"><div class="empty"><div class="et">데이터가 없습니다</div></div></td></tr>`;
+    return;
+  }
+
+  if(body) body.innerHTML = kwanBulkFiltered.map((r,i) => {
+    const kwan = String(r['관코드']||'').trim();
+    const kwanBadges = kwan ? kwan.split(/[,，]/).map(k=>`<span style="display:inline-block;margin:1px 2px;padding:1px 6px;background:var(--cream2);border:1px solid var(--border);font-family:var(--mono);font-size:10px;font-weight:600">${k.trim()}</span>`).join('') : `<span style="color:var(--text3);font-size:11px">— 미지정 —</span>`;
+    return `<tr style="border-bottom:1px solid var(--cream2)" data-dbid="${r._dbId}">
+      <td style="width:32px;padding:8px 10px;text-align:center">
+        <input type="checkbox" class="kwanBulkChk" data-dbid="${r._dbId}" data-curkwan="${kwan}" onchange="updateKwanBulkSelCnt()" style="accent-color:var(--gold);cursor:pointer">
+      </td>
+      ${cols.map(c=>`<td style="padding:9px 14px;font-size:12px">${r[c]||'—'}</td>`).join('')}
+      <td style="padding:9px 14px">${kwanBadges}</td>
+    </tr>`;
+  }).join('');
+}
+
+function toggleKwanBulkAll(checked) {
+  document.querySelectorAll('.kwanBulkChk').forEach(c => c.checked = checked);
+  const all1 = document.getElementById('kwanBulkChkAll');
+  const all2 = document.getElementById('kwanBulkChkAll2');
+  if(all1) all1.checked = checked;
+  if(all2) all2.checked = checked;
+  updateKwanBulkSelCnt();
+}
+
+function updateKwanBulkSelCnt() {
+  const cnt = document.querySelectorAll('.kwanBulkChk:checked').length;
+  const el = document.getElementById('kwanBulkSelCnt');
+  if(el) el.textContent = cnt + '개 선택됨';
+  if(el) el.style.color = cnt > 0 ? 'var(--text)' : 'var(--text3)';
+}
+
+async function applyKwanBulkChange() {
+  const newKwan = document.getElementById('kwanBulkNewCode')?.value.trim().toUpperCase();
+  if(!newKwan) { showToast('새 관코드를 입력해 주세요'); return; }
+
+  const checked = [...document.querySelectorAll('.kwanBulkChk:checked')];
+  if(!checked.length) { showToast('변경할 자산을 선택해 주세요'); return; }
+
+  const type = document.getElementById('kwanBulkTypeFilter')?.value || 'rental';
+  const dbTable = SAMPLE[type]?.dbTable || type;
+
+  if(!confirm(`선택한 ${checked.length}건의 관코드를 "${newKwan}"으로 일괄 변경하시겠습니까?\n\n이 작업은 Supabase에 즉시 반영됩니다.`)) return;
+
+  setLoading(true);
+  let success = 0, fail = 0;
+  const worker = document.getElementById('uNm')?.textContent || '관리자';
+
+  for(const chk of checked) {
+    const dbId = chk.dataset.dbid;
+    const oldKwan = chk.dataset.curkwan || '—';
+    const { error } = await _supa.from(dbTable).update({ '관코드': newKwan }).eq('id', dbId);
+    if(!error) {
+      success++;
+      // 메모리 데이터 동기화
+      const row = kwanBulkRows.find(r => String(r._dbId) === String(dbId));
+      if(row) row['관코드'] = newKwan;
+      if(SAMPLE[type]) {
+        const sr = SAMPLE[type].rows.find(r => String(r.id || r._id) === String(dbId));
+        if(sr) sr['관코드'] = newKwan;
+      }
+      // 이동이력 기록
+      addHist({
+        assetType: SAMPLE[type]?.label || type,
+        assetName: chk.closest('tr')?.cells[1]?.textContent || '—',
+        assetCode: '—',
+        field: '관코드 일괄변경',
+        from: oldKwan,
+        to: newKwan,
+        worker,
+        source: '대시보드',
+        memo: `관코드 일괄 수정: ${oldKwan} → ${newKwan}`
+      });
+    } else { fail++; }
+  }
+  setLoading(false);
+
+  // 체크박스 해제 + 리렌더
+  document.getElementById('kwanBulkNewCode').value = '';
+  document.getElementById('kwanBulkNewCodeSel').value = '';
+  await loadKwanBulkData();
+
+  showToast(`✅ ${success}건 관코드 → ${newKwan} 변경 완료${fail>0?' (실패 '+fail+'건)':''}`);
+}
 
 function handleMemoSel(val) {
   const ta = document.getElementById('mf-memo');
