@@ -616,8 +616,23 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
         <div class="sec">
           <div class="toolbar">
             <input class="tb-s" id="aSearch" placeholder="검색..." oninput="filterAsset()">
+            <button class="btn btn-ghost btn-sm" onclick="toggleColFilter()" style="font-size:11px;gap:5px">
+              ⊞ 컬럼 필터 <span id="colFilterBadge" style="display:none;background:var(--gold);color:#1a1a1a;font-family:var(--mono);font-size:9px;font-weight:700;padding:0 5px;margin-left:3px"></span>
+            </button>
+            <button id="dDaySortBtn" class="btn btn-ghost btn-sm" onclick="toggleDdaySort()" style="font-size:11px">
+              📅 D-day 우선
+            </button>
             <div class="mla"></div>
+            <span id="selCntLabel" style="font-size:11px;color:var(--text3);margin-right:4px;display:none"></span>
+            <button id="btnDelSelected" class="btn btn-ghost btn-sm" onclick="deleteSelectedRows()" style="font-size:11px;display:none;color:#8a2a2a;border-color:#d89898">
+              🗑️ 선택 삭제
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="deleteAllRows()" style="font-size:11px;color:#8a2a2a">
+              ⚠️ 전체 삭제
+            </button>
           </div>
+          <!-- 컬럼 필터 패널 -->
+          <div id="colFilterPanel" style="display:none;padding:10px 16px;background:var(--cream2);border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px"></div>
           <div class="tbl-wrap"><table><thead><tr id="aHead"></tr></thead><tbody id="aBody"></tbody></table></div>
         </div>
       </div>
@@ -1110,7 +1125,7 @@ async function sbDelete(table, id) {
 // ═══════════════════════ DATA ═══════════════════════
 const SAMPLE={
   lease:{label:'임대차계약',tc:'tg-lease',icon:'🏢',color:'#0f2d5c',dbTable:'lease',
-    headers:['no','지역','법인명','건물명','층수','계약시작일','계약종료일','보증금','전용평수','임차료','임대인','관코드','비고'],
+    headers:['no','지역','법인명','건물명','층수','상세주소','계약시작일','계약종료일','보증금','전용평수','임차료','임대인','관코드','비고'],
     rows:[]},
   tangible:{label:'유형자산',tc:'tg-tangible',icon:'🖥️',color:'#1a6a3a',dbTable:'tangible',
     headers:['no','법인명','품목명','자산명','모델명','sn','관코드','캠퍼스명','위치','운용상태','자산코드','비고'],
@@ -1986,6 +2001,26 @@ async function loadAsset(type){
   </div>`).join('');
 
   sortState = { col: null, asc: true };
+  colFilterState = {};
+  // ── D-day 정렬 기본 ON (날짜 컬럼이 있는 자산만) ──
+  const DKW_CHK = ['만료','종료','갱신','반납','만기'];
+  const hasDateCol = d.headers.some(h => DKW_CHK.some(k => h.includes(k)));
+  ddaySortOn = hasDateCol;
+  const ddb = document.getElementById('dDaySortBtn');
+  if(ddb){
+    if(hasDateCol){
+      ddb.style.background='#1a1a1a';
+      ddb.style.color='#fff';
+      ddb.textContent='📅 D-day 정렬 ON';
+    } else {
+      ddb.style.background='';
+      ddb.style.color='';
+      ddb.textContent='📅 D-day 우선';
+    }
+  }
+  const cfp = document.getElementById('colFilterPanel');
+  if(cfp) cfp.style.display='none';
+  updateColFilterBadge();
   syncKwanFromCampus(); // 관코드 최신화
   const catSection = document.getElementById('rentalCatSection');
   if (type === 'rental') {
@@ -1995,7 +2030,12 @@ async function loadAsset(type){
     catSection.style.display = 'none';
     rentalCatFilter = '전체';
   }
-  renderATable(d, d.rows);
+  // D-day 정렬이 기본 ON이면 filterAsset으로 정렬 적용
+  if(hasDateCol) {
+    filterAsset();
+  } else {
+    renderATable(d, d.rows);
+  }
 }
 
 function renderRentalCats(rows) {
@@ -2053,13 +2093,15 @@ function renderATable(d, rows, groupByCat=false) {
   const DKW = ['만료','종료','갱신','반납','만기'];
   const today = new Date();
   // 정렬 상태 표시
-  document.getElementById('aHead').innerHTML = d.headers.map(h=>{
-    const arrow = sortState.col===h ? (sortState.asc?'▲':'▼') : '';
-    return `<th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortByCol('${h}')">${h} <span style="font-size:9px;color:var(--gold)">${arrow}</span></th>`;
-  }).join('') + '<th>관리</th>';
+  document.getElementById('aHead').innerHTML =
+    `<th style="width:32px;padding:8px 10px"><input type="checkbox" id="chkAll" onchange="toggleAllRows(this.checked)" style="accent-color:var(--gold);cursor:pointer"></th>` +
+    d.headers.map(h=>{
+      const arrow = sortState.col===h ? (sortState.asc?'▲':'▼') : '';
+      return `<th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortByCol('${h}')">${h} <span style="font-size:9px;color:var(--gold)">${arrow}</span></th>`;
+    }).join('') + '<th>관리</th>';
 
   if (!rows.length) {
-    document.getElementById('aBody').innerHTML = `<tr><td colspan="${d.headers.length+1}"><div class="empty"><div class="ei">📂</div><div class="et">등록된 항목 없음</div></div></td></tr>`;
+    document.getElementById('aBody').innerHTML = `<tr><td colspan="${d.headers.length+2}"><div class="empty"><div class="ei">📂</div><div class="et">등록된 항목 없음</div></div></td></tr>`;
     return;
   }
 
@@ -2080,17 +2122,19 @@ function renderATable(d, rows, groupByCat=false) {
     }).forEach(([cat, catRows]) => {
       const catAmt = catRows.reduce((s,r)=>s+(Number(String(r['월렌탈료']||'0').replace(/[^0-9]/g,''))||0),0);
       const found = RENTAL_CATS.find(c=>c.key===cat);
-      html += `<tr><td colspan="${d.headers.length+1}" class="cat-group-hd">
+      html += `<tr><td colspan="${d.headers.length+2}" class="cat-group-hd">
         <span>${found?.icon||'📦'} ${cat}</span>
         <span><span class="cat-group-cnt">${catRows.length}건 &nbsp;</span><span class="cat-group-amt">${catAmt>0?catAmt.toLocaleString('ko-KR')+'원/월':''}</span></span>
       </td></tr>`;
       html += catRows.map(row => buildRow(row, d, today, DKW)).join('');
     });
     document.getElementById('aBody').innerHTML = html;
+    updateSelCount();
     return;
   }
 
   document.getElementById('aBody').innerHTML = rows.map(row => buildRow(row, d, today, DKW)).join('');
+  updateSelCount();
 }
 
 function getExpBadge(diff) {
@@ -2107,7 +2151,11 @@ function buildRow(row, d, today, DKW) {
   const rc   = diff>=0&&diff<=7 ? 'tr-critical' : diff>=0&&diff<=30 ? 'tr-critical' : diff>=0&&diff<=60 ? 'tr-warn' : diff>=0&&diff<=90 ? 'tr-warn' : '';
   const isKwanType = (curType === 'rental' || curType === 'lease');
 
-  return `<tr class="${rc}">${d.headers.map(h => {
+  return `<tr class="${rc}" data-rowid="${row._id}">
+    <td style="width:32px;padding:8px 10px;text-align:center">
+      <input type="checkbox" class="rowChk" data-id="${row._id}" onchange="updateSelCount()" style="accent-color:var(--gold);cursor:pointer">
+    </td>
+    ${d.headers.map(h => {
     const v    = row[h] ?? '';
     const isExp = DKW.some(k=>h.includes(k));
     const isDt = ['만료','종료','갱신','반납','만기','취득일','구매일','시작'].some(k=>h.includes(k));
@@ -2174,6 +2222,9 @@ function applySort(rows) {
   });
 }
 
+let ddaySortOn = false;
+let colFilterState = {}; // { colName: Set([val1, val2]) }
+
 function filterAsset(){
   const q = document.getElementById('aSearch').value.toLowerCase();
   const d = SAMPLE[curType];
@@ -2181,10 +2232,227 @@ function filterAsset(){
   if (curType === 'rental' && rentalCatFilter !== '전체') {
     base = base.filter(r => getCatForRow(r) === rentalCatFilter);
   }
+  // 검색 필터
   let filtered = q ? base.filter(r=>Object.values(r).some(v=>String(v).toLowerCase().includes(q))) : base;
-  filtered = applySort(filtered);
+
+  // 컬럼 필터 적용
+  Object.entries(colFilterState).forEach(([col, vals]) => {
+    if(vals && vals.size > 0) {
+      filtered = filtered.filter(r => vals.has(String(r[col]||'')));
+    }
+  });
+
+  // D-day 우선 정렬
+  if(ddaySortOn) {
+    const DKW = ['만료','종료','갱신','반납','만기'];
+    const dk = d.headers.find(h => DKW.some(k=>h.includes(k)));
+    if(dk) {
+      const today = new Date();
+      filtered = [...filtered].sort((a, b) => {
+        const da = new Date(fmtDate(a[dk]||''));
+        const db = new Date(fmtDate(b[dk]||''));
+        const diffA = isNaN(da) ? 99999 : Math.ceil((da-today)/86400000);
+        const diffB = isNaN(db) ? 99999 : Math.ceil((db-today)/86400000);
+        // 만료 임박(양수 작은값) 먼저, 그 다음 일반 순
+        const scoreA = diffA >= 0 ? diffA : 99999;
+        const scoreB = diffB >= 0 ? diffB : 99999;
+        return scoreA - scoreB;
+      });
+    }
+  } else {
+    filtered = applySort(filtered);
+  }
+
   renderATable(d, filtered, rentalCatFilter !== '전체');
 }
+
+function toggleDdaySort() {
+  ddaySortOn = !ddaySortOn;
+  const btn = document.getElementById('dDaySortBtn');
+  if(btn) {
+    btn.style.background = ddaySortOn ? '#1a1a1a' : '';
+    btn.style.color = ddaySortOn ? '#fff' : '';
+    btn.textContent = ddaySortOn ? '📅 D-day 정렬 ON' : '📅 D-day 우선';
+  }
+  filterAsset();
+  showToast(ddaySortOn ? '📅 만료 임박 순으로 정렬됩니다' : '정렬 해제됨');
+}
+
+function toggleColFilter() {
+  const panel = document.getElementById('colFilterPanel');
+  if(!panel) return;
+  const isOpen = panel.style.display !== 'none' && panel.style.display !== '';
+  if(isOpen) { panel.style.display = 'none'; return; }
+
+  const d = SAMPLE[curType];
+  if(!d) return;
+
+  // 필터 제외 — 숫자/장문/의미없는 값만 제외 (상세주소 포함)
+  const EXCLUDE = ['no','보증금','전용평수','임차료','월렌탈료','월청구금액','보험료','sn','시리얼','모델명','비고','파일첨부','자산코드','증권번호','mu_code','회선서비스번호','관리번호'];
+  const filterCols = d.headers.filter(h => !EXCLUDE.includes(h));
+
+  panel.innerHTML = `
+    <div style="width:100%;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--text3)">컬럼 기준 필터 — 체크한 값만 표시</div>
+      <button onclick="clearAllColFilters()" style="font-size:10px;padding:3px 10px;background:#fff;border:1px solid var(--border);cursor:pointer;color:var(--text2)">필터 초기화</button>
+    </div>
+  ` + filterCols.map(col => {
+    const vals = [...new Set(d.rows.map(r => String(r[col]||'')).filter(Boolean))].sort();
+    if(vals.length === 0) return '';
+    const selected = colFilterState[col] || new Set();
+    const showLimit = vals.length > 15;
+    return `<div style="display:inline-flex;flex-direction:column;gap:3px;margin-right:16px;margin-bottom:10px;vertical-align:top;max-width:200px">
+      <div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--text);font-weight:700;margin-bottom:3px;padding-bottom:3px;border-bottom:1px solid var(--border)">
+        ${col} <span style="color:var(--text3);font-weight:400">(${vals.length})</span>
+      </div>
+      <div style="max-height:${showLimit?'150px':'auto'};overflow-y:${showLimit?'auto':'visible'};padding-right:4px">
+        ${vals.map(v => `
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;padding:2px 0;white-space:nowrap">
+            <input type="checkbox" value="${v.replace(/"/g,'&quot;')}" ${selected.has(v)?'checked':''}
+              onchange="updateColFilter('${col.replace(/'/g,"\\'")}', this.value, this.checked)"
+              style="accent-color:var(--gold)">
+            <span style="overflow:hidden;text-overflow:ellipsis">${v||'(빈값)'}</span>
+          </label>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+  panel.style.display = 'flex';
+  panel.style.flexWrap = 'wrap';
+  updateColFilterBadge();
+}
+
+function clearAllColFilters() {
+  colFilterState = {};
+  filterAsset();
+  const panel = document.getElementById('colFilterPanel');
+  if(panel) panel.style.display = 'none';
+  updateColFilterBadge();
+  showToast('필터 초기화됨');
+}
+
+function updateColFilterBadge() {
+  const badge = document.getElementById('colFilterBadge');
+  if(!badge) return;
+  const active = Object.keys(colFilterState).filter(k => colFilterState[k]?.size > 0).length;
+  if(active > 0) {
+    badge.style.display = 'inline';
+    badge.textContent = active;
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function updateColFilter(col, val, checked) {
+  if(!colFilterState[col]) colFilterState[col] = new Set();
+  if(checked) colFilterState[col].add(val);
+  else colFilterState[col].delete(val);
+  if(colFilterState[col].size === 0) delete colFilterState[col];
+  filterAsset();
+  updateColFilterBadge();
+}
+
+// ═══════════════════════ 체크박스 선택 + 삭제 ═══════════════════════
+function toggleAllRows(checked) {
+  document.querySelectorAll('.rowChk').forEach(c => c.checked = checked);
+  updateSelCount();
+}
+
+function updateSelCount() {
+  const cnt = document.querySelectorAll('.rowChk:checked').length;
+  const lbl = document.getElementById('selCntLabel');
+  const btn = document.getElementById('btnDelSelected');
+  if(!lbl || !btn) return;
+  if(cnt > 0) {
+    lbl.style.display = 'inline';
+    lbl.textContent = cnt + '개 선택됨';
+    btn.style.display = 'inline-flex';
+    btn.textContent = `🗑️ 선택 삭제 (${cnt})`;
+  } else {
+    lbl.style.display = 'none';
+    btn.style.display = 'none';
+  }
+  // 전체선택 체크박스 동기화
+  const all = document.querySelectorAll('.rowChk').length;
+  const chkAll = document.getElementById('chkAll');
+  if(chkAll) chkAll.checked = cnt > 0 && cnt === all;
+}
+
+async function deleteSelectedRows() {
+  const ids = [...document.querySelectorAll('.rowChk:checked')].map(c => parseInt(c.dataset.id));
+  if(!ids.length) { showToast('선택된 항목이 없습니다'); return; }
+  if(!confirm(`선택한 ${ids.length}건을 삭제하시겠습니까?\n삭제된 데이터는 복구할 수 없습니다.`)) return;
+
+  const d = SAMPLE[curType];
+  setLoading(true);
+  let success = 0, fail = 0;
+  for(const id of ids) {
+    const row = d.rows.find(r => r._id === id);
+    if(!row) { fail++; continue; }
+    if(d.dbTable) {
+      const ok = await sbDelete(d.dbTable, row._rowId || row.id);
+      if(ok) {
+        success++;
+        addHist({
+          assetType: d.label,
+          assetName: row[d.headers[0]] || id,
+          assetCode: row['자산코드'] || '—',
+          field: '삭제',
+          from: '등록상태',
+          to: '삭제됨',
+          worker: document.getElementById('uNm')?.textContent || '관리자',
+          source: '대시보드',
+          memo: '선택 일괄 삭제'
+        });
+      } else { fail++; }
+    }
+  }
+  setLoading(false);
+  await loadAsset(curType);
+  renderDashHist();
+  showToast(`✅ ${success}건 삭제 완료${fail>0?' (실패 '+fail+'건)':''}`);
+}
+
+async function deleteAllRows() {
+  const d = SAMPLE[curType];
+  if(!d || !d.rows.length) { showToast('삭제할 데이터가 없습니다'); return; }
+
+  const firstConfirm = confirm(
+    `⚠️ ${d.label} 테이블의 전체 ${d.rows.length}건을 삭제합니다.\n\n` +
+    `이 작업은 복구할 수 없습니다.\n계속하시겠습니까?`
+  );
+  if(!firstConfirm) return;
+
+  const typed = prompt(`최종 확인\n\n삭제를 진행하려면 아래에 "삭제"를 입력하세요.`);
+  if(typed !== '삭제') { showToast('삭제 취소됨'); return; }
+
+  setLoading(true);
+  let success = 0, fail = 0;
+  const rowsCopy = [...d.rows];
+  for(const row of rowsCopy) {
+    if(d.dbTable) {
+      const ok = await sbDelete(d.dbTable, row._rowId || row.id);
+      if(ok) success++; else fail++;
+    }
+  }
+  setLoading(false);
+
+  addHist({
+    assetType: d.label,
+    assetName: `전체 ${success}건`,
+    assetCode: '—',
+    field: '전체 삭제',
+    from: `${rowsCopy.length}건 등록`,
+    to: '전체 삭제됨',
+    worker: document.getElementById('uNm')?.textContent || '관리자',
+    source: '대시보드',
+    memo: `${d.label} 테이블 전체 삭제`
+  });
+
+  await loadAsset(curType);
+  renderDashHist();
+  showToast(`✅ 전체 삭제 완료 — ${success}건${fail>0?' (실패 '+fail+'건)':''}`);
+}
+
 function refreshAsset(){ rentalCatFilter='전체'; loadAsset(curType); showToast('새로고침 완료'); }
 
 // ═══════════════════════ 엑셀 일괄 업로드 ═══════════════════════
