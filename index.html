@@ -1143,10 +1143,26 @@ function genCode(type,row){
 }
 
 function addHist(e){
-  HIST.unshift({id:Date.now(),ts:new Date().toISOString(),...e});
+  const entry = {id:Date.now(), ts:new Date().toISOString(), ...e};
+  HIST.unshift(entry);
   if(HIST.length>500) HIST=HIST.slice(0,500);
   localStorage.setItem('ah',JSON.stringify(HIST));
   refreshHBadge();
+  // Supabase history 테이블에 저장
+  if(typeof sbInsert === 'function') {
+    sbInsert('history', {
+      일시: entry.ts,
+      자산코드: entry.assetCode || '',
+      자산명: entry.assetName || '',
+      자산유형: entry.assetType || '',
+      이전관코드: entry.fromLoc || '',
+      이후관코드: entry.toLoc || '',
+      이전위치: entry.fromLoc || '',
+      이후위치: entry.toLoc || '',
+      요청자: entry.worker || '',
+      이동사유: entry.memo || entry.source || '',
+    }).catch(err => console.warn('이력 저장 오류:', err));
+  }
 }
 
 function refreshHBadge(){
@@ -3122,8 +3138,8 @@ function hRowHTML(h){
         ${h.assetCode?`<span class="code" style="font-size:10px">${h.assetCode}</span>`:''}
       </div>
       <div class="hr-detail">
-        <span>${h.field}</span>
-        <span class="hr-chg"><span>${h.from}</span><span class="hr-arr">→</span><span>${h.to}</span></span>
+        ${h.field&&h.field!=='undefined'?`<span>${h.field}</span>`:''}
+        ${(h.from&&h.from!=='undefined')||(h.to&&h.to!=='undefined')?`<span class="hr-chg"><span>${h.from||'—'}</span><span class="hr-arr">→</span><span>${h.to||'—'}</span></span>`:''}
         ${h.worker?`<span>처리: ${h.worker}</span>`:''}
         ${h.memo?`<span style="color:var(--text3);font-style:italic">${h.memo}</span>`:''}
       </div>
