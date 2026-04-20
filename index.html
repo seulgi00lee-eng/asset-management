@@ -2998,8 +2998,61 @@ async function saveCampusItem() {
   let ok = false;
   if(campusEditId) {
     const row = CAMPUS_ROWS.find(r => r._id === campusEditId);
+    const oldKwan = String(row['관코드']||'').trim();
+    const newKwan = String(saveData['관코드']||'').trim();
+
     ok = await sbUpdate('campus', row._rowId || row.id, saveData);
-    if(ok) showToast('✅ 캠퍼스 수정 완료 — Supabase 반영됨');
+
+    // ★ 관코드 변경 시 → 연결된 모든 자산 테이블 일괄 업데이트
+    if(ok && oldKwan && newKwan && oldKwan !== newKwan) {
+      const ASSET_TABLES = [
+        { table:'rental',     nameCol:'렌탈품목' },
+        { table:'lease',      nameCol:'건물명'   },
+        { table:'tangible',   nameCol:'자산명'   },
+        { table:'intangible', nameCol:'상품명'   },
+        { table:'insurance',  nameCol:'보험사'   },
+      ];
+      let totalUpdated = 0;
+      for(const t of ASSET_TABLES) {
+        // 해당 테이블에서 구 관코드를 포함하는 행 조회
+        const { data: rows } = await _supa.from(t.table).select('id, 관코드').filter('관코드', 'ilike', `%${oldKwan}%`);
+        if(!rows || !rows.length) continue;
+
+        for(const r of rows) {
+          // 다중 관코드 처리 (예: "101, 102" → "GW-101, 102")
+          const codes = String(r['관코드']||'').split(/[,，]/).map(c=>c.trim());
+          const updated = codes.map(c => c === oldKwan ? newKwan : c).join(', ');
+          await _supa.from(t.table).update({ '관코드': updated }).eq('id', r.id);
+          totalUpdated++;
+        }
+        // 메모리 데이터도 동기화
+        if(SAMPLE[t.table]) {
+          SAMPLE[t.table].rows.forEach(r => {
+            if(String(r['관코드']||'').includes(oldKwan)) {
+              const codes = String(r['관코드']||'').split(/[,，]/).map(c=>c.trim());
+              r['관코드'] = codes.map(c => c === oldKwan ? newKwan : c).join(', ');
+            }
+          });
+        }
+      }
+
+      // 이동이력 기록
+      addHist({
+        assetType: '캠퍼스',
+        assetName: saveData['건물명'] || oldKwan,
+        assetCode: newKwan,
+        field: '관코드 변경',
+        from: oldKwan,
+        to: newKwan,
+        worker: document.getElementById('uNm')?.textContent || '관리자',
+        source: '대시보드',
+        memo: `캠퍼스 관코드 변경 → 연결 자산 ${totalUpdated}건 일괄 반영`
+      });
+
+      showToast(`✅ 관코드 ${oldKwan} → ${newKwan} 변경 완료 · 연결 자산 ${totalUpdated}건 자동 반영됨`);
+    } else {
+      showToast('✅ 캠퍼스 수정 완료 — Supabase 반영됨');
+    }
   } else {
     ok = await sbInsert('campus', saveData);
     if(ok) showToast('✅ 캠퍼스 등록 완료 — Supabase 반영됨');
@@ -3540,7 +3593,17 @@ function openModal(id=null){
     // ★ 인덱스 기반 id 사용 (한글 id 문제 완전 해결)
     return `<div class="fg"><label>${h}${isNo&&!id?' <span style="font-size:9px;color:var(--gold)">(자동)</span>':''}</label><input type="${isDt?'date':'text'}" id="mf-idx-${idx}" data-col="${h}" value="${v}" placeholder="${h}" ${isNo&&!id?'style="background:var(--cream2);color:var(--text3)" readonly':''}>  </div>`;
   }).join('')+`
-    <div class="fg full"><label>변경 사유 · 메모</label><textarea id="mf-memo" placeholder="변경 이유, 특이사항 (선택)"></textarea></div>
+    <div class="fg full">
+      <label>변경 사유 · 메모</label>
+      <select id="mf-memo-sel" onchange="handleMemoSel(this.value)"
+        style="background:var(--card2);border:1px solid var(--border);border-radius:7px;padding:9px 12px;color:var(--text);font-size:13px;font-family:var(--font);outline:none;margin-bottom:6px;width:100%">
+        <option value="">— 사유 선택 (선택) —</option>
+        <option value="운영 관 위치 이동">운영 관 위치 이동</option>
+        <option value="기타">기타</option>
+        <option value="__direct__">직접 입력</option>
+      </select>
+      <textarea id="mf-memo" placeholder="직접 입력 시 여기에 작성" style="display:none;resize:vertical;min-height:60px;background:var(--card2);border:1px solid var(--border);border-radius:7px;padding:9px 12px;color:var(--text);font-size:13px;font-family:var(--font);outline:none;width:100%"></textarea>
+    </div>
     <div class="fg full"><label>현장 사진 첨부 (선택)</label><input type="file" id="mf-photo" accept="image/*" style="padding:6px;background:var(--cream);border:1px solid var(--border)"></div>`;
   document.getElementById('moForm').classList.add('open');
 }
@@ -3558,7 +3621,9 @@ async function saveItem(){
     newRow[h] = el?.value || '';
   });
 
-  const memo   = document.getElementById('mf-memo')?.value || '';
+  const memoSel = document.getElementById('mf-memo-sel')?.value || '';
+  const memoDirect = document.getElementById('mf-memo')?.value || '';
+  const memo = memoSel === '__direct__' ? memoDirect : (memoSel || memoDirect);
   const pf     = document.getElementById('mf-photo')?.files?.[0];
   const worker = document.getElementById('uNm')?.textContent || '관리자';
 
@@ -3762,6 +3827,19 @@ function toggleNotif(){
 function closeNotif(){document.getElementById('notifPanel').classList.remove('open');}
 function openLB(src){document.getElementById('lbImg').src=src;document.getElementById('lb').classList.add('open');}
 function showToast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',2800);}
+
+function handleMemoSel(val) {
+  const ta = document.getElementById('mf-memo');
+  if(!ta) return;
+  if(val === '__direct__') {
+    ta.style.display = 'block';
+    ta.focus();
+    ta.value = '';
+  } else {
+    ta.style.display = 'none';
+    ta.value = val; // 선택값을 textarea에도 저장 (saveItem에서 읽음)
+  }
+}
 document.addEventListener('click',e=>{if(!e.target.closest('#notifPanel')&&!e.target.closest('.tb-bell'))closeNotif();});
 
 // ═══════════════════════ 비용 월 마감 ═══════════════════════
