@@ -1839,19 +1839,34 @@ function loadCostSample(){
 }
 
 async function runCostCalc(){
-  // Supabase에서 렌탈자산 데이터 직접 로드
+  // ── 고정 분류 컬럼 8개 ──
+  const FIXED_CATS = ['복합기','잉크젯','공기청정기','정수기','LMS','캡스','청소용역','청소용품'];
+
+  // ── Supabase 렌탈자산 로드 ──
   setLoading(true);
   const rows = SAMPLE.rental.rows.length > 0
     ? SAMPLE.rental.rows
     : await sbSelect('rental');
+
+  // 캠퍼스 데이터 로드 (법인명/사업부/브랜드 조인용)
+  const campusRows = CAMPUS_ROWS.length > 0
+    ? CAMPUS_ROWS
+    : await sbSelect('campus');
   setLoading(false);
 
   if(!rows.length){
-    showToast('렌탈자산 데이터가 없습니다. 렌탈자산 탭에서 데이터를 먼저 등록해 주세요.');
+    showToast('렌탈자산 데이터가 없습니다.');
     return;
   }
 
-  // 관코드별 배분 계산
+  // 캠퍼스 데이터를 관코드 기준으로 맵핑
+  const campusMap = {};
+  campusRows.forEach(c => {
+    const code = String(c['관코드']||'').trim();
+    if(code) campusMap[code] = c;
+  });
+
+  // ── 관코드별 피벗 계산 ──
   const deptMap = {};
   let totalAmt = 0;
 
@@ -1859,77 +1874,103 @@ async function runCostCalc(){
     const amt = Number(String(row['월렌탈료']||'0').replace(/[^0-9.-]/g,'')) || 0;
     if(!amt) return;
 
-    // 관코드 파싱 (다중 관코드 지원: "GW-01, SN-02" 형태)
     const rawKwan = String(row['관코드']||'공통').trim();
-    const kwanList = rawKwan.split(/[,，]/).map(k=>k.trim()).filter(Boolean);
+    const kwanList = rawKwan.split(/[,，\s]+/).map(k=>k.trim()).filter(Boolean);
     const splitAmt = kwanList.length > 0 ? amt / kwanList.length : amt;
+
+    // 분류 정규화 (유사 키워드 매칭)
+    const rawCat = String(row['분류']||'').trim();
+    let matchedCat = FIXED_CATS.find(c => rawCat.includes(c) || c.includes(rawCat)) || '기타';
 
     kwanList.forEach(kwan => {
       if(!kwan) return;
-      if(!deptMap[kwan]) deptMap[kwan] = { code:kwan, name:kwan, rentalAmt:0, items:[] };
-      deptMap[kwan].rentalAmt += splitAmt;
-      deptMap[kwan].items.push({
-        ...row,
-        deptCode: kwan,
-        splitAmt: splitAmt,
-        origAmt: amt,
-        kwanCount: kwanList.length
-      });
+      const campus = campusMap[kwan] || {};
+      if(!deptMap[kwan]) {
+        deptMap[kwan] = {
+          code: kwan,
+          법인명: campus['법인명'] || '—',
+          사업부: campus['사업부'] || '—',
+          브랜드: campus['브랜드'] || '—',
+          catAmts: {},
+          총비용: 0,
+          항목수: 0,
+          items: []
+        };
+        FIXED_CATS.forEach(c => deptMap[kwan].catAmts[c] = 0);
+        deptMap[kwan].catAmts['기타'] = 0;
+      }
+      deptMap[kwan].catAmts[matchedCat] = (deptMap[kwan].catAmts[matchedCat]||0) + splitAmt;
+      deptMap[kwan].총비용 += splitAmt;
+      deptMap[kwan].항목수 += 1;
+      deptMap[kwan].items.push({...row, deptCode:kwan, splitAmt, origAmt:amt, kwanCount:kwanList.length, matchedCat});
     });
     totalAmt += amt;
   });
 
   costResult = Object.values(deptMap)
-    .map(d => ({...d, total: d.rentalAmt, pct: totalAmt>0 ? (d.rentalAmt/totalAmt*100).toFixed(1) : '0.0'}))
-    .sort((a,b) => b.total - a.total);
+    .sort((a,b) => b.총비용 - a.총비용);
 
-  // KPI 카드 업데이트
+  // ── KPI 카드 ──
   const setEl = (id, html) => { const el = document.getElementById(id); if(el) el.innerHTML = html; };
-  setEl('ck-total',  fmt(totalAmt)+'<span class="kpi-u">원/월</span>');
+  setEl('ck-total',  fmt(Math.round(totalAmt))+'<span class="kpi-u">원/월</span>');
   setEl('ck-rental', rows.length+'<span class="kpi-u">건</span>');
   setEl('ck-dept',   costResult.length+'<span class="kpi-u">개 관</span>');
-  const cats = [...new Set(rows.map(r => r['분류']||'기타').filter(Boolean))];
-  setEl('ck-cat', cats.length+'<span class="kpi-u">개</span>');
+  setEl('ck-cat',    FIXED_CATS.length+'<span class="kpi-u">개</span>');
 
-  // 써머리 테이블 렌더
-  const colors = ['#1a1a1a','#3a6a3a','#c8a96e','#6a5a8a','#2a6a6a','#8a2a2a'];
+  // ── 피벗 써머리 테이블 ──
   const thead = document.getElementById('costSummaryHead');
   const tbody = document.getElementById('costSummaryBody');
   const tfoot = document.getElementById('costSummaryFoot');
+  const TH = (txt, right=false) => `<th style="padding:8px 10px;font-size:9px;letter-spacing:1px;color:var(--text3);white-space:nowrap;${right?'text-align:right':''}">${txt}</th>`;
+  const TD = (txt, opts='') => `<td style="padding:8px 10px;font-size:11px;white-space:nowrap;${opts}">${txt}</td>`;
+  const TDN = (n) => TD(n>0?fmt(Math.round(n)):'—', 'text-align:right;font-family:var(--mono);font-size:10px;');
 
   if(thead) thead.innerHTML = `<tr style="background:var(--cream2);border-bottom:2px solid var(--text)">
-    <th style="padding:9px 14px;font-size:9px;letter-spacing:1px;color:var(--text3)">관코드</th>
-    <th style="padding:9px 14px;font-size:9px;letter-spacing:1px;color:var(--text3)">관 명</th>
-    <th style="padding:9px 14px;text-align:right;font-size:9px;letter-spacing:1px;color:var(--text3)">렌탈 비용</th>
-    <th style="padding:9px 14px;font-size:9px;letter-spacing:1px;color:var(--text3)">항목 수</th>
-    <th style="padding:9px 14px;font-size:9px;letter-spacing:1px;color:var(--text3)">비율</th>
+    ${TH('법인명')}${TH('관코드')}${TH('사업부')}${TH('브랜드')}
+    ${FIXED_CATS.map(c=>TH(c,true)).join('')}
+    ${TH('비용합계',true)}${TH('항목수')}${TH('비율')}
   </tr>`;
 
-  if(tbody) tbody.innerHTML = costResult.map((d,i) => `<tr style="border-bottom:1px solid var(--cream2)">
-    <td style="padding:10px 14px;font-family:var(--mono);font-weight:700;color:${colors[i%colors.length]}">${d.code}</td>
-    <td style="padding:10px 14px;font-weight:600">${d.name}</td>
-    <td style="padding:10px 14px;text-align:right;font-family:var(--mono);font-weight:700;color:${colors[i%colors.length]}">${fmt(Math.round(d.rentalAmt))}원</td>
-    <td style="padding:10px 14px;color:var(--text3)">${d.items.length}건</td>
-    <td style="padding:10px 14px">
-      <div style="display:flex;align-items:center;gap:8px">
-        <div style="flex:1;height:4px;background:var(--cream2)"><div style="width:${d.pct}%;height:100%;background:${colors[i%colors.length]}"></div></div>
-        <span style="font-family:var(--mono);font-size:11px;min-width:36px;text-align:right">${d.pct}%</span>
-      </div>
-    </td>
-  </tr>`).join('');
+  const colors = ['#1a1a1a','#3a6a3a','#c8a96e','#6a5a8a','#2a6a6a','#8a2a2a'];
+  if(tbody) tbody.innerHTML = costResult.map((d,i) => {
+    const pct = totalAmt>0 ? (d.총비용/totalAmt*100).toFixed(1) : '0.0';
+    const color = colors[i%colors.length];
+    return `<tr style="border-bottom:1px solid var(--cream2)">
+      ${TD(`<span style="font-weight:600">${d.법인명}</span>`)}
+      ${TD(`<span style="font-family:var(--mono);font-weight:700;color:${color}">${d.code}</span>`)}
+      ${TD(d.사업부)}
+      ${TD(d.브랜드)}
+      ${FIXED_CATS.map(c=>TDN(d.catAmts[c]||0)).join('')}
+      ${TD(fmt(Math.round(d.총비용)), `text-align:right;font-family:var(--mono);font-weight:700;color:${color};`)}
+      ${TD(d.항목수+'건', 'color:var(--text3);')}
+      <td style="padding:8px 10px;min-width:100px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="flex:1;height:4px;background:var(--cream2)"><div style="width:${pct}%;height:100%;background:${color}"></div></div>
+          <span style="font-family:var(--mono);font-size:10px;min-width:32px;text-align:right">${pct}%</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
 
+  // ── 합계 행 ──
+  const catTotals = {};
+  FIXED_CATS.forEach(c => {
+    catTotals[c] = costResult.reduce((s,d) => s+(d.catAmts[c]||0), 0);
+  });
   if(tfoot) tfoot.innerHTML = `<tr style="background:var(--cream2);border-top:2px solid var(--text)">
-    <td colspan="2" style="padding:10px 14px;font-weight:700">합계</td>
-    <td style="padding:10px 14px;text-align:right;font-family:var(--mono);font-weight:700">${fmt(Math.round(totalAmt))}원</td>
-    <td style="padding:10px 14px;font-weight:700">${rows.length}건</td>
-    <td style="padding:10px 14px;font-family:var(--mono);font-weight:700">100%</td>
+    <td colspan="4" style="padding:9px 10px;font-weight:700;font-size:12px">합계</td>
+    ${FIXED_CATS.map(c=>TDN(catTotals[c])).join('')}
+    ${TD(fmt(Math.round(totalAmt)), 'text-align:right;font-family:var(--mono);font-weight:700;')}
+    ${TD(rows.length+'건', 'font-weight:700;')}
+    ${TD('100%', 'font-family:var(--mono);font-weight:700;')}
   </tr>`;
 
-  // 상세 내역 필터 옵션 업데이트
+  // ── 상세 내역 필터 ──
   const filterSel = document.getElementById('costDetailFilter');
   if(filterSel){
-    const cats2 = [...new Set(rows.map(r=>r['분류']||'').filter(Boolean))].sort();
-    filterSel.innerHTML = '<option value="">전체 분류</option>' + cats2.map(c=>`<option value="${c}">${c}</option>`).join('');
+    filterSel.innerHTML = '<option value="">전체 분류</option>'
+      + FIXED_CATS.map(c=>`<option value="${c}">${c}</option>`).join('')
+      + '<option value="기타">기타</option>';
   }
 
   renderCostDetail();
@@ -1961,13 +2002,30 @@ function renderCostDetail(){
 
 function exportCostExcel(){
   if(!costResult.length){showToast('먼저 배분 계산을 실행해 주세요');return;}
-  const period=document.getElementById('costPeriod').options[document.getElementById('costPeriod').selectedIndex]?.text||'';
-  const wb=XLSX.utils.book_new();
-  const s1=[['관 코드','관 명','임대차(원)','렌탈(원)','합계(원)','비율(%)'],
-    ...costResult.map(d=>[d.code,d.name,d.leaseAmt,d.rentalAmt,d.total,parseFloat(d.pct)]),
-    ['합계','',costResult.reduce((s,d)=>s+d.leaseAmt,0),costResult.reduce((s,d)=>s+d.rentalAmt,0),costResult.reduce((s,d)=>s+d.total,0),100]];
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(s1),'관별배분요약');
-  XLSX.writeFile(wb,`비용관별배분_${period.replace(/\s/g,'')}.xlsx`);
+  const FIXED_CATS = ['복합기','잉크젯','공기청정기','정수기','LMS','캡스','청소용역','청소용품'];
+  const now = new Date();
+  const period = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}`;
+  const wb = XLSX.utils.book_new();
+
+  // 써머리 시트
+  const header = ['법인명','관코드','사업부','브랜드',...FIXED_CATS,'비용합계(원)','항목수','비율(%)'];
+  const totalAmt = costResult.reduce((s,d)=>s+d.총비용,0);
+  const rows = costResult.map(d => [
+    d.법인명, d.code, d.사업부, d.브랜드,
+    ...FIXED_CATS.map(c => Math.round(d.catAmts[c]||0)),
+    Math.round(d.총비용), d.항목수,
+    parseFloat((d.총비용/totalAmt*100).toFixed(1))
+  ]);
+  const footer = ['합계','','','',
+    ...FIXED_CATS.map(c => Math.round(costResult.reduce((s,d)=>s+(d.catAmts[c]||0),0))),
+    Math.round(totalAmt),
+    costResult.reduce((s,d)=>s+d.항목수,0),
+    100
+  ];
+  const ws = XLSX.utils.aoa_to_sheet([header, ...rows, footer]);
+  ws['!cols'] = header.map((_,i) => ({ wch: i < 4 ? 14 : 10 }));
+  XLSX.utils.book_append_sheet(wb, ws, '관별배분요약');
+  XLSX.writeFile(wb, `비용관별배분_${period}.xlsx`);
   showToast('📥 엑셀 다운로드 완료');
 }
 
