@@ -3345,19 +3345,19 @@ function openModal(id=null){
   // NO 자동 채번 (신규 등록 시)
   const autoNo = id ? null : (d.rows.length + 1);
   document.getElementById('moT').textContent=id?'항목 수정 — '+(row[d.headers[0]]||''):'신규 등록 — '+d.label;
-  document.getElementById('moF').innerHTML=d.headers.map(h=>{
+  document.getElementById('moF').innerHTML=d.headers.map((h, idx)=>{
     let v = row ? (row[h]??'') : '';
     // NO 컬럼 자동 채번
     if(!id && (h==='no'||h==='NO'||h==='번호')) v = String(autoNo);
     const isDt=['만료','종료','갱신','반납','만기','취득일','구매일','시작'].some(k=>h.includes(k));
     const isNo = (h==='no'||h==='NO'||h==='번호');
-    // 날짜 필드는 YYYY-MM-DD 형식으로 정규화 (그렇지 않으면 경고 발생)
+    // 날짜 필드는 YYYY-MM-DD 형식으로 정규화
     if(isDt && v) {
       const normalized = fmtDate(v);
-      // 유효한 YYYY-MM-DD 형식인지 검증
       v = /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : '';
     }
-    return `<div class="fg"><label>${h}${isNo&&!id?' <span style="font-size:9px;color:var(--gold)">(자동)</span>':''}</label><input type="${isDt?'date':'text'}" id="mf-${h.replace(/\s/g,'_')}" value="${v}" placeholder="${h}" ${isNo&&!id?'style="background:var(--cream2);color:var(--text3)" readonly':''}>  </div>`;
+    // ★ 인덱스 기반 id 사용 (한글 id 문제 완전 해결)
+    return `<div class="fg"><label>${h}${isNo&&!id?' <span style="font-size:9px;color:var(--gold)">(자동)</span>':''}</label><input type="${isDt?'date':'text'}" id="mf-idx-${idx}" data-col="${h}" value="${v}" placeholder="${h}" ${isNo&&!id?'style="background:var(--cream2);color:var(--text3)" readonly':''}>  </div>`;
   }).join('')+`
     <div class="fg full"><label>변경 사유 · 메모</label><textarea id="mf-memo" placeholder="변경 이유, 특이사항 (선택)"></textarea></div>
     <div class="fg full"><label>현장 사진 첨부 (선택)</label><input type="file" id="mf-photo" accept="image/*" style="padding:6px;background:var(--cream);border:1px solid var(--border)"></div>`;
@@ -3370,7 +3370,11 @@ function saveItem(){
   const d=SAMPLE[curType];
   const isNew=!editId;
   const newRow={_id:editId||(Math.max(0,...d.rows.map(r=>r._id))+1)};
-  d.headers.forEach(h=>{newRow[h]=document.getElementById('mf-'+h.replace(/\s/g,'_'))?.value||'';});
+  d.headers.forEach((h, idx)=>{
+    // ★ 인덱스 기반으로 값 수집 (한글 id 문제 완전 해결)
+    const el = document.getElementById('mf-idx-'+idx) || document.getElementById('mf-'+h.replace(/\s/g,'_'));
+    newRow[h] = el?.value || '';
+  });
   const memo=document.getElementById('mf-memo')?.value||'';
   const pf=document.getElementById('mf-photo')?.files?.[0];
   const worker=document.getElementById('uNm')?.textContent||'관리자';
