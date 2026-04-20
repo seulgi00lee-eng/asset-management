@@ -1718,16 +1718,31 @@ const COST_MAP={
 };
 
 function initCostPage(){
-  initCostPeriod();
-  document.getElementById('costPeriodBadge').textContent=document.getElementById('costPeriod').options[0]?.text||'';
+  // costPeriodType/costPeriod/costPeriodBadge DOM이 있을 때만 실행
+  const typeEl = document.getElementById('costPeriodType');
+  const selEl  = document.getElementById('costPeriod');
+  const bdgEl  = document.getElementById('costPeriodBadge');
+  if(typeEl && selEl) {
+    initCostPeriod();
+    if(bdgEl && selEl.options[0]) {
+      bdgEl.textContent = selEl.options[0].text || '';
+    }
+  }
+  // 비용 페이지 KPI 초기화 (데이터 없을 때 기본 표시)
+  ['ck-total','ck-rental','ck-dept','ck-cat'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el && el.textContent === '—') el.textContent = '—';
+  });
 }
 
 function initCostPeriod(){
-  const type=document.getElementById('costPeriodType').value;
-  const sel=document.getElementById('costPeriod');
-  sel.innerHTML='';
-  const now=new Date();
-  if(type==='month'){
+  const typeEl = document.getElementById('costPeriodType');
+  const sel    = document.getElementById('costPeriod');
+  if(!typeEl || !sel) return;
+  const type = typeEl.value;
+  sel.innerHTML = '';
+  const now = new Date();
+  if(type === 'month'){
     for(let i=0;i<12;i++){
       const d=new Date(now.getFullYear(),now.getMonth()-i,1);
       const v=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
@@ -1838,11 +1853,16 @@ function runCostCalc(){
 
   const leaseT=costParsed.filter(i=>i.costType==='lease').reduce((s,i)=>s+i.amt,0);
   const rentT=costParsed.filter(i=>i.costType==='rental').reduce((s,i)=>s+i.amt,0);
-  document.getElementById('ck-total').innerHTML=fmt(grand)+'<span class="kpi-u">원</span>';
-  document.getElementById('ck-lease').innerHTML=fmt(leaseT)+'<span class="kpi-u">원</span>';
-  document.getElementById('ck-rental').innerHTML=fmt(rentT)+'<span class="kpi-u">원</span>';
-  document.getElementById('ck-dept').innerHTML=costResult.length+'<span class="kpi-u">개관</span>';
-  document.getElementById('costPeriodBadge').textContent=document.getElementById('costPeriod').options[document.getElementById('costPeriod').selectedIndex]?.text||'';
+  const setEl = (id, html) => { const el = document.getElementById(id); if(el) el.innerHTML = html; };
+  setEl('ck-total',  fmt(grand)+'<span class="kpi-u">원</span>');
+  setEl('ck-lease',  fmt(leaseT)+'<span class="kpi-u">원</span>');
+  setEl('ck-rental', fmt(rentT)+'<span class="kpi-u">원</span>');
+  setEl('ck-dept',   costResult.length+'<span class="kpi-u">개관</span>');
+  const bdgEl = document.getElementById('costPeriodBadge');
+  const selEl = document.getElementById('costPeriod');
+  if(bdgEl && selEl) {
+    bdgEl.textContent = selEl.options[selEl.selectedIndex]?.text || '';
+  }
 
   const colors=['#1a1a1a','#3a6a3a','#c8a96e','#6a5a8a','#2a6a6a','#8a2a2a'];
   document.getElementById('costDeptBody').innerHTML=costResult.map((d,i)=>`<tr>
@@ -3331,6 +3351,12 @@ function openModal(id=null){
     if(!id && (h==='no'||h==='NO'||h==='번호')) v = String(autoNo);
     const isDt=['만료','종료','갱신','반납','만기','취득일','구매일','시작'].some(k=>h.includes(k));
     const isNo = (h==='no'||h==='NO'||h==='번호');
+    // 날짜 필드는 YYYY-MM-DD 형식으로 정규화 (그렇지 않으면 경고 발생)
+    if(isDt && v) {
+      const normalized = fmtDate(v);
+      // 유효한 YYYY-MM-DD 형식인지 검증
+      v = /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : '';
+    }
     return `<div class="fg"><label>${h}${isNo&&!id?' <span style="font-size:9px;color:var(--gold)">(자동)</span>':''}</label><input type="${isDt?'date':'text'}" id="mf-${h.replace(/\s/g,'_')}" value="${v}" placeholder="${h}" ${isNo&&!id?'style="background:var(--cream2);color:var(--text3)" readonly':''}>  </div>`;
   }).join('')+`
     <div class="fg full"><label>변경 사유 · 메모</label><textarea id="mf-memo" placeholder="변경 이유, 특이사항 (선택)"></textarea></div>
