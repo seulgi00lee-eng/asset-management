@@ -1072,6 +1072,9 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
 <script>
 
 
+// 숫자 포맷 (천단위 콤마)
+function fmt(n){ return n ? Number(n).toLocaleString('ko-KR') : '0'; }
+
 // 날짜 포맷 통일 함수 (다양한 형식 → YYYY-MM-DD)
 function fmtDate(val) {
   if(!val) return '';
@@ -1835,63 +1838,125 @@ function loadCostSample(){
   setTimeout(runCostCalc,200);
 }
 
-function runCostCalc(){
-  costParsed=costFiles.flatMap(f=>f.items||[]);
-  if(!costParsed.length){showToast('업로드된 파일이 없습니다');return;}
-  const deptMap={};
-  costParsed.forEach(item=>{
-    const loc=item.matched?.loc||'공통';
-    const map=COST_MAP[loc]||{code:'COMMON',name:'공통'};
-    const key=map.code;
-    if(!deptMap[key]) deptMap[key]={code:key,name:map.name,leaseAmt:0,rentalAmt:0,items:[]};
-    if(item.costType==='lease') deptMap[key].leaseAmt+=item.amt;
-    else deptMap[key].rentalAmt+=item.amt;
-    deptMap[key].items.push({...item,deptCode:key,deptName:map.name,loc});
-  });
-  const grand=Object.values(deptMap).reduce((s,d)=>s+d.leaseAmt+d.rentalAmt,0);
-  costResult=Object.values(deptMap).map(d=>({...d,total:d.leaseAmt+d.rentalAmt,pct:grand>0?((d.leaseAmt+d.rentalAmt)/grand*100).toFixed(1):'0.0'})).sort((a,b)=>b.total-a.total);
+async function runCostCalc(){
+  // Supabase에서 렌탈자산 데이터 직접 로드
+  setLoading(true);
+  const rows = SAMPLE.rental.rows.length > 0
+    ? SAMPLE.rental.rows
+    : await sbSelect('rental');
+  setLoading(false);
 
-  const leaseT=costParsed.filter(i=>i.costType==='lease').reduce((s,i)=>s+i.amt,0);
-  const rentT=costParsed.filter(i=>i.costType==='rental').reduce((s,i)=>s+i.amt,0);
-  const setEl = (id, html) => { const el = document.getElementById(id); if(el) el.innerHTML = html; };
-  setEl('ck-total',  fmt(grand)+'<span class="kpi-u">원</span>');
-  setEl('ck-lease',  fmt(leaseT)+'<span class="kpi-u">원</span>');
-  setEl('ck-rental', fmt(rentT)+'<span class="kpi-u">원</span>');
-  setEl('ck-dept',   costResult.length+'<span class="kpi-u">개관</span>');
-  const bdgEl = document.getElementById('costPeriodBadge');
-  const selEl = document.getElementById('costPeriod');
-  if(bdgEl && selEl) {
-    bdgEl.textContent = selEl.options[selEl.selectedIndex]?.text || '';
+  if(!rows.length){
+    showToast('렌탈자산 데이터가 없습니다. 렌탈자산 탭에서 데이터를 먼저 등록해 주세요.');
+    return;
   }
 
-  const colors=['#1a1a1a','#3a6a3a','#c8a96e','#6a5a8a','#2a6a6a','#8a2a2a'];
-  document.getElementById('costDeptBody').innerHTML=costResult.map((d,i)=>`<tr>
-    <td class="code" style="color:${colors[i%colors.length]}">${d.code}</td>
-    <td style="font-weight:600">${d.name}</td>
-    <td class="r num">${d.leaseAmt?fmt(d.leaseAmt)+'원':'—'}</td>
-    <td class="r num">${d.rentalAmt?fmt(d.rentalAmt)+'원':'—'}</td>
-    <td class="r num" style="font-weight:700;color:${colors[i%colors.length]}">${fmt(d.total)}원</td>
-    <td><div style="display:flex;align-items:center;gap:6px"><div style="flex:1;height:3px;background:var(--cream2)"><div style="width:${d.pct}%;height:100%;background:${colors[i%colors.length]}"></div></div><span style="font-family:var(--mono);font-size:10px;min-width:32px;text-align:right">${d.pct}%</span></div></td>
+  // 관코드별 배분 계산
+  const deptMap = {};
+  let totalAmt = 0;
+
+  rows.forEach(row => {
+    const amt = Number(String(row['월렌탈료']||'0').replace(/[^0-9.-]/g,'')) || 0;
+    if(!amt) return;
+
+    // 관코드 파싱 (다중 관코드 지원: "GW-01, SN-02" 형태)
+    const rawKwan = String(row['관코드']||'공통').trim();
+    const kwanList = rawKwan.split(/[,，]/).map(k=>k.trim()).filter(Boolean);
+    const splitAmt = kwanList.length > 0 ? amt / kwanList.length : amt;
+
+    kwanList.forEach(kwan => {
+      if(!kwan) return;
+      if(!deptMap[kwan]) deptMap[kwan] = { code:kwan, name:kwan, rentalAmt:0, items:[] };
+      deptMap[kwan].rentalAmt += splitAmt;
+      deptMap[kwan].items.push({
+        ...row,
+        deptCode: kwan,
+        splitAmt: splitAmt,
+        origAmt: amt,
+        kwanCount: kwanList.length
+      });
+    });
+    totalAmt += amt;
+  });
+
+  costResult = Object.values(deptMap)
+    .map(d => ({...d, total: d.rentalAmt, pct: totalAmt>0 ? (d.rentalAmt/totalAmt*100).toFixed(1) : '0.0'}))
+    .sort((a,b) => b.total - a.total);
+
+  // KPI 카드 업데이트
+  const setEl = (id, html) => { const el = document.getElementById(id); if(el) el.innerHTML = html; };
+  setEl('ck-total',  fmt(totalAmt)+'<span class="kpi-u">원/월</span>');
+  setEl('ck-rental', rows.length+'<span class="kpi-u">건</span>');
+  setEl('ck-dept',   costResult.length+'<span class="kpi-u">개 관</span>');
+  const cats = [...new Set(rows.map(r => r['분류']||'기타').filter(Boolean))];
+  setEl('ck-cat', cats.length+'<span class="kpi-u">개</span>');
+
+  // 써머리 테이블 렌더
+  const colors = ['#1a1a1a','#3a6a3a','#c8a96e','#6a5a8a','#2a6a6a','#8a2a2a'];
+  const thead = document.getElementById('costSummaryHead');
+  const tbody = document.getElementById('costSummaryBody');
+  const tfoot = document.getElementById('costSummaryFoot');
+
+  if(thead) thead.innerHTML = `<tr style="background:var(--cream2);border-bottom:2px solid var(--text)">
+    <th style="padding:9px 14px;font-size:9px;letter-spacing:1px;color:var(--text3)">관코드</th>
+    <th style="padding:9px 14px;font-size:9px;letter-spacing:1px;color:var(--text3)">관 명</th>
+    <th style="padding:9px 14px;text-align:right;font-size:9px;letter-spacing:1px;color:var(--text3)">렌탈 비용</th>
+    <th style="padding:9px 14px;font-size:9px;letter-spacing:1px;color:var(--text3)">항목 수</th>
+    <th style="padding:9px 14px;font-size:9px;letter-spacing:1px;color:var(--text3)">비율</th>
+  </tr>`;
+
+  if(tbody) tbody.innerHTML = costResult.map((d,i) => `<tr style="border-bottom:1px solid var(--cream2)">
+    <td style="padding:10px 14px;font-family:var(--mono);font-weight:700;color:${colors[i%colors.length]}">${d.code}</td>
+    <td style="padding:10px 14px;font-weight:600">${d.name}</td>
+    <td style="padding:10px 14px;text-align:right;font-family:var(--mono);font-weight:700;color:${colors[i%colors.length]}">${fmt(Math.round(d.rentalAmt))}원</td>
+    <td style="padding:10px 14px;color:var(--text3)">${d.items.length}건</td>
+    <td style="padding:10px 14px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="flex:1;height:4px;background:var(--cream2)"><div style="width:${d.pct}%;height:100%;background:${colors[i%colors.length]}"></div></div>
+        <span style="font-family:var(--mono);font-size:11px;min-width:36px;text-align:right">${d.pct}%</span>
+      </div>
+    </td>
   </tr>`).join('');
-  document.getElementById('cft-lease').textContent=fmt(leaseT)+'원';
-  document.getElementById('cft-rental').textContent=fmt(rentT)+'원';
-  document.getElementById('cft-total').textContent=fmt(grand)+'원';
+
+  if(tfoot) tfoot.innerHTML = `<tr style="background:var(--cream2);border-top:2px solid var(--text)">
+    <td colspan="2" style="padding:10px 14px;font-weight:700">합계</td>
+    <td style="padding:10px 14px;text-align:right;font-family:var(--mono);font-weight:700">${fmt(Math.round(totalAmt))}원</td>
+    <td style="padding:10px 14px;font-weight:700">${rows.length}건</td>
+    <td style="padding:10px 14px;font-family:var(--mono);font-weight:700">100%</td>
+  </tr>`;
+
+  // 상세 내역 필터 옵션 업데이트
+  const filterSel = document.getElementById('costDetailFilter');
+  if(filterSel){
+    const cats2 = [...new Set(rows.map(r=>r['분류']||'').filter(Boolean))].sort();
+    filterSel.innerHTML = '<option value="">전체 분류</option>' + cats2.map(c=>`<option value="${c}">${c}</option>`).join('');
+  }
+
   renderCostDetail();
-  showToast('배분 계산 완료 — '+costResult.length+'개 관');
+  showToast(`✅ 배분 계산 완료 — ${costResult.length}개 관 · 총 ${fmt(Math.round(totalAmt))}원/월`);
 }
 
 function renderCostDetail(){
-  const f=document.getElementById('costDetailFilter').value;
-  const rows=costResult.flatMap(d=>d.items).filter(r=>!f||r.costType===f);
-  document.getElementById('costDetailBody').innerHTML=rows.length?rows.map(r=>`<tr>
-    <td class="code">${r.deptCode}</td>
-    <td><span class="tag ${r.costType==='lease'?'tg-lease':'tg-rental'}">${r.costType==='lease'?'임대차':'렌탈'}</span></td>
-    <td style="font-weight:500">${r.matched?.name||r.name}</td>
-    <td class="mt">${r.loc}</td>
-    <td class="r num">${fmt(r.amt)}원</td>
-    <td class="mt">${r.matched?.vendor||r.matched?.landlord||'—'}</td>
-    <td class="mt">${r.costType==='lease'?'임차료':'렌탈료'}</td>
-  </tr>`).join(''):'<tr><td colspan="7"><div class="empty" style="padding:20px"><div class="et">해당 항목 없음</div></div></td></tr>';
+  const f = document.getElementById('costDetailFilter')?.value || '';
+  const allItems = costResult.flatMap(d => d.items);
+  const filtered = f ? allItems.filter(r => (r['분류']||'') === f) : allItems;
+  const colors = ['#1a1a1a','#3a6a3a','#c8a96e','#6a5a8a','#2a6a6a','#8a2a2a'];
+
+  document.getElementById('costDetailBody').innerHTML = filtered.length
+    ? filtered.map((r,i) => `<tr style="border-bottom:1px solid var(--cream2)">
+        <td style="padding:9px 14px;font-family:var(--mono);font-size:10px;font-weight:700;color:${colors[i%colors.length]}">${r.deptCode}</td>
+        <td style="padding:9px 14px;color:var(--text3);font-size:11px">${r['지역법인명']||r['법인명']||'—'}</td>
+        <td style="padding:9px 14px;font-weight:600">${r['업체명']||'—'}</td>
+        <td style="padding:9px 14px"><span class="tag tg-rental">${r['분류']||'—'}</span></td>
+        <td style="padding:9px 14px;font-size:11px">${r['렌탈품목']||r['모델명']||'—'}</td>
+        <td style="padding:9px 14px;font-size:11px;color:var(--text3)">${r['캠퍼스명']||'—'}</td>
+        <td style="padding:9px 14px;font-size:11px;color:var(--text3)">${r['건물명']||'—'}</td>
+        <td style="padding:9px 14px;font-size:11px;color:var(--text3)">${r['층수']||'—'}</td>
+        <td style="padding:9px 14px;text-align:right;font-family:var(--mono)">${fmt(r['origAmt']||0)}원</td>
+        <td style="padding:9px 14px;font-family:var(--mono);font-size:11px">${r.deptCode}${r.kwanCount>1?` <span style="color:var(--text3);font-size:9px">(÷${r.kwanCount})</span>`:''}</td>
+        <td style="padding:9px 14px;text-align:right;font-family:var(--mono);font-weight:700;color:var(--green)">${fmt(Math.round(r.splitAmt||0))}원</td>
+      </tr>`).join('')
+    : '<tr><td colspan="11"><div class="empty" style="padding:20px"><div class="et">해당 항목 없음</div></div></td></tr>';
 }
 
 function exportCostExcel(){
