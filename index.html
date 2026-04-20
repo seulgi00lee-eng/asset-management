@@ -3366,7 +3366,7 @@ function openModal(id=null){
 function closeMo(id){document.getElementById(id).classList.remove('open');}
 function closeMoBg(e,id){if(e.target===document.getElementById(id))closeMo(id);}
 
-function saveItem(){
+async function saveItem(){
   const d=SAMPLE[curType];
   const isNew=!editId;
   const newRow={_id:editId||(Math.max(0,...d.rows.map(r=>r._id))+1)};
@@ -3379,28 +3379,48 @@ function saveItem(){
   const pf=document.getElementById('mf-photo')?.files?.[0];
   const worker=document.getElementById('uNm')?.textContent||'관리자';
 
-  const commit=photo=>{
+  const commit=async (photo)=>{
     if(editId){
       const idx=d.rows.findIndex(r=>r._id===editId);
       d.rows[idx]=newRow;
       const changed=d.headers.filter(h=>String(editOld[h])!==String(newRow[h]));
+
+      // ★ Supabase 업데이트 (핵심 수정)
+      if(d.dbTable && (newRow._rowId || newRow.id)) {
+        setLoading(true);
+        const saveObj = {};
+        d.headers.forEach(h => { saveObj[h] = newRow[h] || ''; });
+        const ok = await sbUpdate(d.dbTable, newRow._rowId || newRow.id, saveObj);
+        setLoading(false);
+        if(!ok) { showToast('❌ 저장 실패 — 다시 시도해 주세요'); return; }
+      }
+
       if(changed.length){
         changed.forEach(h=>addHist({assetType:d.label,assetName:newRow[d.headers[0]],assetCode:genCode(curType,newRow),field:h,from:editOld[h]||'—',to:newRow[h]||'—',worker,source:'대시보드',memo,photo:photo||null}));
       }
-      showToast('수정 완료 ✓');
+      showToast('✅ 수정 완료 — Supabase 반영됨');
     } else {
+      // ★ Supabase 신규 등록
+      if(d.dbTable) {
+        setLoading(true);
+        const saveObj = {};
+        d.headers.forEach(h => { saveObj[h] = newRow[h] || ''; });
+        const ok = await sbInsert(d.dbTable, saveObj);
+        setLoading(false);
+        if(!ok) { showToast('❌ 등록 실패 — 다시 시도해 주세요'); return; }
+      }
       d.rows.push(newRow);
       addHist({assetType:d.label,assetName:newRow[d.headers[0]],assetCode:genCode(curType,newRow),field:'신규등록',from:'—',to:'등록완료',worker,source:'대시보드',memo,photo:photo||null});
-      showToast('등록 완료 ✓');
+      showToast('✅ 등록 완료 — Supabase 반영됨');
       if(['tangible','rental'].includes(curType)) setTimeout(()=>openQR(newRow._id),350);
     }
     closeMo('moForm');
-    loadAsset(curType);
+    await loadAsset(curType);
     renderDashHist();
   };
 
   if(pf){const r=new FileReader();r.onload=e=>commit(e.target.result);r.readAsDataURL(pf);}
-  else commit(null);
+  else await commit(null);
 }
 
 async function delItem(id){
