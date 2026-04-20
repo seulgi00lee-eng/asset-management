@@ -356,6 +356,7 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
       <div class="nav-item" data-p="history" onclick="go('history')"><span class="nav-ico">▫</span>이동·변경 이력<span class="nav-bd nb-n" id="nb-history" style="display:none"></span></div>
       <div class="nav-sec" style="margin-top:10px">비용 관리</div>
       <div class="nav-item" data-p="cost" onclick="go('cost')"><span class="nav-ico">▫</span>비용 관별배분<span class="nb-new">NEW</span></div>
+      <div class="nav-item" data-p="cost-history" onclick="go('cost-history')"><span class="nav-ico">▫</span>비용 누적 관리<span class="nav-bd nb-n" id="nb-cost-history" style="display:none"></span></div>
       <div class="nav-sec" style="margin-top:10px">운영</div>
       <div class="nav-item" data-p="campus" onclick="go('campus')"><span class="nav-ico">▫</span>캠퍼스 전체 현황</div>
       <div class="nav-item" data-p="qrscan" onclick="go('qrscan')"><span class="nav-ico">▫</span>QR 현장 스캔</div>
@@ -670,6 +671,7 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
           <div class="ph-acts">
             <button class="btn btn-ghost btn-sm" onclick="openKwanMgr()">🏢 관 코드 설정</button>
             <button class="btn btn-ghost btn-sm" onclick="exportCostExcel()">⬇ 엑셀 다운로드</button>
+            <button class="btn btn-ghost btn-sm" onclick="closeCostMonth()" style="color:#2a6a6a;border-color:#a0c8c8">📌 월 마감</button>
             <button class="btn btn-navy" onclick="runCostCalc()">📊 배분 계산 실행</button>
           </div>
         </div>
@@ -742,6 +744,60 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
                 <tr><td colspan="11"><div class="empty" style="padding:24px"><div class="et">배분 계산 실행 버튼을 클릭하세요</div></div></td></tr>
               </tbody>
             </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- COST HISTORY PAGE -->
+      <div class="page" id="page-cost-history">
+        <div class="ph">
+          <div>
+            <div class="ph-ey">Cost Management · 누적 관리</div>
+            <div class="ph-t">비용 누적 관리</div>
+            <div class="ph-s">월별 마감 데이터 · 관코드별 비용 변동 추이</div>
+            <div class="ph-rule"></div>
+          </div>
+          <div class="ph-acts">
+            <button class="btn btn-ghost btn-sm" onclick="exportCostHistoryExcel()">⬇ 엑셀 다운로드</button>
+            <button class="btn btn-ghost btn-sm" onclick="loadCostHistory()" style="font-size:11px">↻ 새로고침</button>
+          </div>
+        </div>
+
+        <!-- 월별 요약 카드 -->
+        <div id="costHistoryKpi" style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);margin-bottom:16px"></div>
+
+        <!-- 누적 테이블 -->
+        <div class="sec">
+          <div class="sec-hd">
+            <div class="sec-t">월별 관코드 배분 이력
+              <span class="badge bd-navy" id="costHistoryCnt">0건</span>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <select id="costHistoryYearFilter" style="border:1px solid var(--border);padding:5px 10px;font-size:11px;font-family:var(--font);background:var(--cream);outline:none" onchange="renderCostHistoryTable()">
+                <option value="">전체 연도</option>
+              </select>
+              <select id="costHistoryKwanFilter" style="border:1px solid var(--border);padding:5px 10px;font-size:11px;font-family:var(--font);background:var(--cream);outline:none" onchange="renderCostHistoryTable()">
+                <option value="">전체 관코드</option>
+              </select>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:12px">
+              <thead id="costHistoryHead"></thead>
+              <tbody id="costHistoryBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 변동 이력 -->
+        <div class="sec" style="margin-top:12px">
+          <div class="sec-hd">
+            <div class="sec-t">렌탈자산 이동 변동 이력
+              <span class="badge bd-gold">관코드 기준</span>
+            </div>
+          </div>
+          <div id="costHistoryChanges">
+            <div class="empty"><div class="ei">📋</div><div class="et">마감 시 변동 이력이 자동으로 기록됩니다</div></div>
           </div>
         </div>
       </div>
@@ -1643,7 +1699,8 @@ let pageStack = [];
 const PAGE_LABELS = {
   dash:'전체 대시보드', lease:'임대차계약', tangible:'유형자산',
   intangible:'무형자산', rental:'렌탈자산', insurance:'보험',
-  history:'이동·변경 이력', cost:'비용 관별배분', qrscan:'QR 현장 스캔', campus:'캠퍼스 전체 현황'
+  history:'이동·변경 이력', cost:'비용 관별배분', 'cost-history':'비용 누적 관리',
+  qrscan:'QR 현장 스캔', campus:'캠퍼스 전체 현황'
 };
 
 function go(p, pushHistory=true){
@@ -1675,6 +1732,7 @@ function go(p, pushHistory=true){
   }
   else if(p==='history'){document.getElementById('page-history').classList.add('active');renderHPage();}
   else if(p==='cost'){document.getElementById('page-cost').classList.add('active');curType=null;initCostPage();}
+  else if(p==='cost-history'){document.getElementById('page-cost-history').classList.add('active');curType=null;loadCostHistory();}
   else if(p==='campus'){document.getElementById('page-campus').classList.add('active');curType=null;initCampusPage();}
   else if(p==='qrscan'){document.getElementById('page-qrscan').classList.add('active');curType=null;}
   else if(SAMPLE[p]){document.getElementById('page-asset').classList.add('active');curType=p;loadAsset(p);}
@@ -3705,6 +3763,227 @@ function closeNotif(){document.getElementById('notifPanel').classList.remove('op
 function openLB(src){document.getElementById('lbImg').src=src;document.getElementById('lb').classList.add('open');}
 function showToast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',2800);}
 document.addEventListener('click',e=>{if(!e.target.closest('#notifPanel')&&!e.target.closest('.tb-bell'))closeNotif();});
+
+// ═══════════════════════ 비용 월 마감 ═══════════════════════
+const FIXED_CATS_HIST = ['복합기','잉크젯','공기청정기','정수기','LMS','캡스','청소용역','청소용품'];
+let costHistoryData = [];
+
+async function closeCostMonth() {
+  if(!costResult.length){
+    showToast('먼저 배분 계산 실행 버튼을 눌러주세요');
+    return;
+  }
+  const now = new Date();
+  const ym = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+
+  // 같은 월 이미 마감됐는지 확인
+  const existing = await sbSelect('cost_history');
+  const alreadyClosed = existing.some(r => r['year_month'] === ym);
+  if(alreadyClosed) {
+    if(!confirm(`${ym} 월은 이미 마감됐습니다.\n덮어쓰시겠습니까?`)) return;
+    // 기존 데이터 삭제
+    for(const r of existing.filter(r=>r['year_month']===ym)){
+      await sbDelete('cost_history', r.id);
+    }
+  } else {
+    if(!confirm(`${ym} 월 비용을 마감하시겠습니까?\n총 ${costResult.length}개 관 데이터가 저장됩니다.`)) return;
+  }
+
+  setLoading(true);
+  let success = 0;
+  for(const d of costResult){
+    const row = {
+      year_month: ym,
+      관코드: d.code,
+      법인명: d.법인명||'—',
+      사업부: d.사업부||'—',
+      브랜드: d.브랜드||'—',
+      총비용: Math.round(d.총비용),
+      항목수: d.항목수
+    };
+    FIXED_CATS_HIST.forEach(c => {
+      const key = c === 'LMS' ? 'lms' : c;
+      row[key] = Math.round(d.catAmts[c]||0);
+    });
+    const ok = await sbInsert('cost_history', row);
+    if(ok) success++;
+  }
+  setLoading(false);
+
+  // 사이드바 배지 업데이트
+  const badge = document.getElementById('nb-cost-history');
+  if(badge){ badge.textContent='NEW'; badge.style.display='inline'; }
+
+  showToast(`✅ ${ym} 월 마감 완료 — ${success}개 관 저장됨`);
+}
+
+// ═══════════════════════ 비용 누적 관리 페이지 ═══════════════════════
+async function loadCostHistory() {
+  setLoading(true);
+  const data = await sbSelect('cost_history');
+  setLoading(false);
+  costHistoryData = data.sort((a,b) => b['year_month']?.localeCompare(a['year_month']));
+
+  // 필터 옵션 업데이트
+  const years = [...new Set(data.map(r => (r['year_month']||'').slice(0,4)))].sort().reverse();
+  const kwans = [...new Set(data.map(r => r['관코드']||''))].filter(Boolean).sort();
+
+  const yf = document.getElementById('costHistoryYearFilter');
+  const kf = document.getElementById('costHistoryKwanFilter');
+  if(yf) yf.innerHTML = '<option value="">전체 연도</option>' + years.map(y=>`<option value="${y}">${y}년</option>`).join('');
+  if(kf) kf.innerHTML = '<option value="">전체 관코드</option>' + kwans.map(k=>`<option value="${k}">${k}</option>`).join('');
+
+  // KPI 카드 (최근 마감월 vs 전월 비교)
+  const months = [...new Set(data.map(r=>r['year_month']))].sort().reverse();
+  const kpiEl = document.getElementById('costHistoryKpi');
+  if(kpiEl && months.length > 0){
+    const lastMonth = months[0];
+    const prevMonth = months[1];
+    const lastData = data.filter(r=>r['year_month']===lastMonth);
+    const prevData = data.filter(r=>r['year_month']===prevMonth);
+    const lastTotal = lastData.reduce((s,r)=>s+(r['총비용']||0),0);
+    const prevTotal = prevData.reduce((s,r)=>s+(r['총비용']||0),0);
+    const diff = lastTotal - prevTotal;
+    const diffHtml = prevTotal > 0
+      ? `<div style="font-size:11px;font-family:var(--mono);font-weight:700;margin-top:4px;color:${diff>0?'#8a2a2a':'#2a6a2a'}">${diff>0?'▲':'▼'} ${fmt(Math.abs(Math.round(diff)))}원</div>`
+      : '';
+    kpiEl.innerHTML = [
+      {lb:'최근 마감월', v:lastMonth, c:'#1a1a1a', sub:''},
+      {lb:'총 렌탈비용', v:fmt(Math.round(lastTotal))+'원', c:'#3a6a3a', sub:diffHtml},
+      {lb:'관 수', v:lastData.length+'개', c:'#c8a96e', sub:''},
+      {lb:'누적 마감 횟수', v:months.length+'회', c:'#6a5a8a', sub:''},
+    ].map(s=>`<div style="background:#fff;padding:16px 18px;position:relative">
+      <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:${s.c}"></div>
+      <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);margin-bottom:7px">${s.lb}</div>
+      <div style="font-family:var(--serif);font-size:22px;font-weight:700;color:${s.c}">${s.v}</div>
+      ${s.sub}
+    </div>`).join('');
+  }
+
+  renderCostHistoryTable();
+
+  // 변동 이력 (관코드 이동 감지)
+  renderCostHistoryChanges(data);
+
+  // 배지
+  const badge = document.getElementById('nb-cost-history');
+  if(badge && months.length > 0){ badge.textContent=months.length; badge.style.display='inline'; }
+
+  document.getElementById('costHistoryCnt').textContent = data.length+'건';
+}
+
+function renderCostHistoryTable() {
+  const yf = document.getElementById('costHistoryYearFilter')?.value || '';
+  const kf = document.getElementById('costHistoryKwanFilter')?.value || '';
+  let filtered = costHistoryData;
+  if(yf) filtered = filtered.filter(r=>(r['year_month']||'').startsWith(yf));
+  if(kf) filtered = filtered.filter(r=>r['관코드']===kf);
+
+  const thead = document.getElementById('costHistoryHead');
+  const tbody = document.getElementById('costHistoryBody');
+  const TH = (t,r=false)=>`<th style="padding:8px 10px;font-size:9px;letter-spacing:1px;color:var(--text3);white-space:nowrap;${r?'text-align:right':''}">${t}</th>`;
+  const TD = (t,o='')=>`<td style="padding:8px 10px;font-size:11px;white-space:nowrap;${o}">${t}</td>`;
+
+  if(thead) thead.innerHTML = `<tr style="background:var(--cream2);border-bottom:2px solid var(--text)">
+    ${TH('마감월')}${TH('법인명')}${TH('관코드')}${TH('사업부')}${TH('브랜드')}
+    ${FIXED_CATS_HIST.map(c=>TH(c,true)).join('')}
+    ${TH('총비용',true)}${TH('항목수')}
+  </tr>`;
+
+  const colors = ['#1a1a1a','#3a6a3a','#c8a96e','#6a5a8a','#2a6a6a','#8a2a2a'];
+  if(tbody) tbody.innerHTML = filtered.length
+    ? filtered.map((r,i) => {
+        const color = colors[i%colors.length];
+        return `<tr style="border-bottom:1px solid var(--cream2)">
+          ${TD(`<span style="font-family:var(--mono);font-weight:700;color:${color}">${r['year_month']||'—'}</span>`)}
+          ${TD(r['법인명']||'—')}
+          ${TD(`<span style="font-family:var(--mono);font-weight:600">${r['관코드']||'—'}</span>`)}
+          ${TD(r['사업부']||'—')}
+          ${TD(r['브랜드']||'—')}
+          ${FIXED_CATS_HIST.map(c => {
+            const key = c==='LMS'?'lms':c;
+            const v = r[key]||0;
+            return TD(v>0?fmt(v):'—', 'text-align:right;font-family:var(--mono);font-size:10px;');
+          }).join('')}
+          ${TD(fmt(r['총비용']||0), 'text-align:right;font-family:var(--mono);font-weight:700;')}
+          ${TD((r['항목수']||0)+'건', 'color:var(--text3);')}
+        </tr>`;
+      }).join('')
+    : `<tr><td colspan="15"><div class="empty"><div class="et">마감 데이터가 없습니다</div></div></td></tr>`;
+}
+
+function renderCostHistoryChanges(data) {
+  const el = document.getElementById('costHistoryChanges');
+  if(!el) return;
+
+  // 관코드별로 월별 총비용 비교 → 변동 감지
+  const kwanMonths = {};
+  data.forEach(r => {
+    const k = r['관코드'];
+    const m = r['year_month'];
+    if(!k||!m) return;
+    if(!kwanMonths[k]) kwanMonths[k] = {};
+    kwanMonths[k][m] = (kwanMonths[k][m]||0) + (r['총비용']||0);
+  });
+
+  const changes = [];
+  Object.entries(kwanMonths).forEach(([kwan, months]) => {
+    const sortedM = Object.keys(months).sort();
+    for(let i=1;i<sortedM.length;i++){
+      const prev = sortedM[i-1];
+      const curr = sortedM[i];
+      const diff = months[curr] - months[prev];
+      if(Math.abs(diff) > 0){
+        changes.push({ kwan, prev, curr, prevAmt:months[prev], currAmt:months[curr], diff });
+      }
+    }
+  });
+
+  if(!changes.length){
+    el.innerHTML = '<div class="empty"><div class="ei">📋</div><div class="et">마감 데이터가 2개월 이상이면 변동 이력이 표시됩니다</div></div>';
+    return;
+  }
+
+  el.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:var(--cream2);border-bottom:1px solid var(--border)">
+      <th style="padding:9px 14px;font-size:9px;color:var(--text3)">관코드</th>
+      <th style="padding:9px 14px;font-size:9px;color:var(--text3)">전월</th>
+      <th style="padding:9px 14px;font-size:9px;color:var(--text3)">당월</th>
+      <th style="padding:9px 14px;text-align:right;font-size:9px;color:var(--text3)">전월 비용</th>
+      <th style="padding:9px 14px;text-align:right;font-size:9px;color:var(--text3)">당월 비용</th>
+      <th style="padding:9px 14px;text-align:right;font-size:9px;color:var(--text3)">변동</th>
+    </tr></thead>
+    <tbody>${changes.sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff)).map(c=>`
+      <tr style="border-bottom:1px solid var(--cream2)">
+        <td style="padding:9px 14px;font-family:var(--mono);font-weight:700">${c.kwan}</td>
+        <td style="padding:9px 14px;color:var(--text3);font-family:var(--mono)">${c.prev}</td>
+        <td style="padding:9px 14px;font-family:var(--mono)">${c.curr}</td>
+        <td style="padding:9px 14px;text-align:right;font-family:var(--mono)">${fmt(Math.round(c.prevAmt))}원</td>
+        <td style="padding:9px 14px;text-align:right;font-family:var(--mono);font-weight:700">${fmt(Math.round(c.currAmt))}원</td>
+        <td style="padding:9px 14px;text-align:right;font-family:var(--mono);font-weight:700;color:${c.diff>0?'#8a2a2a':'#2a6a2a'}">
+          ${c.diff>0?'▲':'▼'} ${fmt(Math.abs(Math.round(c.diff)))}원
+        </td>
+      </tr>`).join('')}
+    </tbody>
+  </table></div>`;
+}
+
+function exportCostHistoryExcel() {
+  if(!costHistoryData.length){ showToast('데이터가 없습니다'); return; }
+  const wb = XLSX.utils.book_new();
+  const header = ['마감월','법인명','관코드','사업부','브랜드',...FIXED_CATS_HIST,'총비용','항목수'];
+  const rows = costHistoryData.map(r => [
+    r['year_month'], r['법인명'], r['관코드'], r['사업부'], r['브랜드'],
+    ...FIXED_CATS_HIST.map(c => r[c==='LMS'?'lms':c]||0),
+    r['총비용']||0, r['항목수']||0
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([header,...rows]);
+  ws['!cols'] = header.map((_,i)=>({wch: i<5?14:10}));
+  XLSX.utils.book_append_sheet(wb, ws, '비용누적관리');
+  XLSX.writeFile(wb, `비용누적관리_${new Date().toISOString().slice(0,7)}.xlsx`);
+  showToast('📥 엑셀 다운로드 완료');
+}
+
 </script>
 </body>
 </html>
