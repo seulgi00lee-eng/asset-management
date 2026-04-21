@@ -383,89 +383,6 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
           <span class="ab-cnt" id="alertCount"></span><span id="alertText"></span>
         </div>
 
-        <!-- ── 월 비용 요약 ── -->
-        <div class="sec" style="margin-bottom:12px">
-          <div class="sec-hd" style="border-bottom:1px solid var(--cream2)">
-            <div class="sec-t">월 운영비용 현황 <span style="font-family:var(--mono);font-size:11px;font-weight:400;color:var(--text3)">카테고리별 전월 대비</span></div>
-            <button class="btn btn-ghost btn-sm" onclick="openCostEditModal()" style="font-size:10px">📝 전월 금액 입력</button>
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border)">
-
-            <!-- 총 월비용 -->
-            <div style="background:#fff;padding:18px 22px;position:relative">
-              <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);font-weight:700;margin-bottom:8px">이번 달 총 비용</div>
-              <div style="font-family:var(--serif);font-size:26px;font-weight:700;color:var(--text);line-height:1;margin-bottom:6px" id="cost-total-monthly">—</div>
-              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">원 / 월</div>
-              <div id="cost-total-mom" style="font-size:11px;font-family:var(--mono);font-weight:700;min-height:16px"></div>
-              <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:#1a1a1a"></div>
-            </div>
-
-            <!-- 임대차 -->
-            <div style="background:#fff;padding:18px 22px;position:relative">
-              <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);font-weight:700;margin-bottom:8px">임대차 비용</div>
-              <div style="font-family:var(--serif);font-size:22px;font-weight:700;color:#1a1a1a;line-height:1;margin-bottom:4px" id="cost-lease-monthly">—</div>
-              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">월임차료 합산 · <span id="cost-lease-cnt" style="font-weight:700;color:var(--text2)">—건</span></div>
-              <div id="cost-lease-mom" style="font-size:11px;font-family:var(--mono);font-weight:700;min-height:16px"></div>
-              <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:#3a6a3a"></div>
-            </div>
-
-            <!-- 렌탈 -->
-            <div style="background:#fff;padding:18px 22px;position:relative">
-              <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);font-weight:700;margin-bottom:8px">렌탈 비용</div>
-              <div style="font-family:var(--serif);font-size:22px;font-weight:700;color:#1a1a1a;line-height:1;margin-bottom:4px" id="cost-rental-monthly">—</div>
-              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">월렌탈료 합산 · <span id="cost-rental-cnt" style="font-weight:700;color:var(--text2)">—건</span></div>
-              <div id="cost-rental-mom" style="font-size:11px;font-family:var(--mono);font-weight:700;min-height:16px"></div>
-              <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:#c8a96e"></div>
-            </div>
-
-            <!-- 보험 -->
-            <div style="background:#fff;padding:18px 22px;position:relative">
-              <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);font-weight:700;margin-bottom:8px">보험료 (월 환산)</div>
-              <div style="font-family:var(--serif);font-size:22px;font-weight:700;color:#1a1a1a;line-height:1;margin-bottom:4px" id="cost-insurance-monthly">—</div>
-              <div style="font-size:10px;color:var(--text3);margin-bottom:6px">연보험료 ÷ 12 · <span id="cost-insurance-cnt" style="font-weight:700;color:var(--text2)">—건</span></div>
-              <div id="cost-insurance-mom" style="font-size:11px;font-family:var(--mono);font-weight:700;min-height:16px"></div>
-              <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:#2a6a6a"></div>
-            </div>
-          </div>
-
-          <!-- 비용 비율 바 -->
-          <div style="padding:14px 22px 16px;background:#fff;border-top:1px solid var(--cream2)">
-            <div style="display:flex;gap:0;height:8px;overflow:hidden;margin-bottom:8px;border-radius:2px" id="cost-ratio-bar"></div>
-            <div style="display:flex;gap:16px;flex-wrap:wrap" id="cost-ratio-legend"></div>
-          </div>
-        </div>
-
-        <!-- 전월 비용 입력 모달 -->
-        <div class="mo" id="moCostEdit" onclick="closeMoBg(event,'moCostEdit')">
-          <div class="mo-box" style="width:460px">
-            <div class="mo-t">전월 비용 입력</div>
-            <div style="background:var(--cream2);padding:12px 14px;font-size:12px;color:var(--text2);margin-bottom:18px">
-              💡 카테고리별 전월 실제 지출 금액을 입력하면 이번 달과 비교합니다.<br>
-              <span style="color:var(--text3);font-size:11px">입력값은 브라우저에 저장되며 앱스크립트 연동 후 스프레드시트에서도 관리 가능합니다.</span>
-            </div>
-            <div class="fg-grid">
-              <div class="fg">
-                <label>전월 임대차 비용 (원)</label>
-                <input type="number" id="prev-lease" placeholder="예: 56000000">
-                <div style="font-size:10px;color:var(--text3);margin-top:3px" id="prev-lease-hint"></div>
-              </div>
-              <div class="fg">
-                <label>전월 렌탈 비용 (원)</label>
-                <input type="number" id="prev-rental" placeholder="예: 1405000">
-                <div style="font-size:10px;color:var(--text3);margin-top:3px" id="prev-rental-hint"></div>
-              </div>
-              <div class="fg full">
-                <label>전월 보험료 월환산 (원)</label>
-                <input type="number" id="prev-insurance" placeholder="예: 879167">
-                <div style="font-size:10px;color:var(--text3);margin-top:3px" id="prev-insurance-hint"></div>
-              </div>
-            </div>
-            <div class="mo-ft">
-              <button class="btn btn-ghost" onclick="closeMo('moCostEdit')">취소</button>
-              <button class="btn btn-navy" onclick="savePrevCost()">저장 및 비교</button>
-            </div>
-          </div>
-        </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px">
 
           <!-- 실물자산 사용정보 -->
@@ -565,8 +482,29 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
         <!-- ── ROW 3: 만료예정 테이블 + 이력 ── -->
         <div style="display:grid;grid-template-columns:3fr 2fr;gap:12px;margin-bottom:12px">
           <div class="sec" style="margin-bottom:0">
-            <div class="sec-hd"><div class="sec-t">만료 예정 항목 <span class="badge bd-red">주의</span></div><button class="btn btn-ghost btn-sm" onclick="toggleNotif()">🔔 알림 패널 →</button></div>
-            <div class="tbl-wrap"><table><thead><tr><th>유형</th><th>자산·계약명</th><th>만료일</th><th>D-day</th><th>담당자</th></tr></thead><tbody id="dashAlertTbl"></tbody></table></div>
+          <div class="sec" style="margin-bottom:0">
+            <div class="sec-hd">
+              <div class="sec-t">만료 예정 항목 <span class="badge bd-red">주의</span>
+                <span id="dashAlertD30Cnt" style="font-size:11px;color:var(--text3);font-weight:400;margin-left:6px"></span>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2);cursor:pointer">
+                  <input type="checkbox" id="dashAlertShowAll" onchange="renderDashAlertTbl()" style="accent-color:var(--gold)">
+                  90일 전체 보기
+                </label>
+                <button class="btn btn-ghost btn-sm" onclick="toggleDashAlert()">🔔 알림 패널 →</button>
+              </div>
+            </div>
+            <!-- 접기/펼치기 래퍼 -->
+            <div id="dashAlertCollapse">
+              <div class="tbl-wrap">
+                <table>
+                  <thead><tr><th>유형</th><th>자산·계약명</th><th>만료일</th><th>D-day</th><th>담당자</th></tr></thead>
+                  <tbody id="dashAlertTbl"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
           </div>
 
           <!-- 자산 상태 분포 -->
@@ -1361,14 +1299,8 @@ function initApp(){
         <div class="np-m"><span>${a.date}</span><span class="d-tag ${dCls(a.days)}">D-${a.days}</span></div></div>`).join('')
     : '<div style="padding:24px 18px;text-align:center;color:var(--text3);font-size:12px">90일 이내 만료 예정 항목이 없습니다 ✅</div>';
 
-  // 만료 테이블
-  document.getElementById('dashAlertTbl').innerHTML=ALERTS.map(a=>`<tr>
-    <td><span class="tag ${a.tc}">${a.type}</span></td>
-    <td style="font-weight:600">${a.name}</td>
-    <td class="dt">${a.date}</td>
-    <td><span class="d-tag ${dCls(a.days)}">D-${a.days}</span></td>
-    <td class="mt">${a.worker||'—'}</td></tr>`).join('') ||
-    '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text3);font-size:12px">90일 이내 만료 예정 항목이 없습니다</td></tr>';
+  // 만료 테이블 — renderDashAlertTbl() 함수로 위임
+  renderDashAlertTbl();
 
   // 사이드바 배지
   [{k:'intangible',v:ALERTS.filter(a=>a.type==='무형자산').length},{k:'rental',v:ALERTS.filter(a=>a.type==='렌탈자산').length},{k:'insurance',v:ALERTS.filter(a=>a.type==='보험').length}]
@@ -1773,16 +1705,7 @@ async function loadAlertsFromServer() {
     : '<div style="padding:24px 18px;text-align:center;color:var(--text3);font-size:12px">90일 이내 만료 예정 항목이 없습니다 ✅</div>';
 
   // 만료 테이블
-  const at = document.getElementById('dashAlertTbl');
-  if(at) at.innerHTML = ALERTS.length
-    ? ALERTS.map(a=>`<tr>
-        <td><span class="tag ${a.tc}">${a.type}</span></td>
-        <td style="font-weight:600">${a.name}</td>
-        <td class="dt">${a.date}</td>
-        <td><span class="d-tag ${dCls(a.days)}">D-${a.days}</span></td>
-        <td class="mt">${a.worker||'—'}</td></tr>`).join('')
-    : '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text3);font-size:12px">90일 이내 만료 예정 항목이 없습니다</td></tr>';
-
+  renderDashAlertTbl();
   renderVisuals();
 }
 
@@ -3917,6 +3840,48 @@ function hRowHTML(h){
     </div>
     <div class="hr-photo">${h.photo?`<img class="hr-img" src="${h.photo}" onclick="openLB('${h.photo}')" title="사진 클릭 시 확대">`:''}</div>
   </div>`;
+}
+
+// ═══════════════════════ 만료 예정 테이블 (D-30 기본) ═══════════════════════
+function renderDashAlertTbl() {
+  const at = document.getElementById('dashAlertTbl');
+  const cntEl = document.getElementById('dashAlertD30Cnt');
+  if(!at) return;
+
+  const showAll = document.getElementById('dashAlertShowAll')?.checked || false;
+  const d30 = ALERTS.filter(a => a.days <= 30);
+  const display = showAll ? ALERTS : d30;
+
+  // 카운트 표시
+  if(cntEl) {
+    if(!showAll && ALERTS.length > d30.length) {
+      cntEl.textContent = `D-30 이내 ${d30.length}건 표시 중 (전체 ${ALERTS.length}건)`;
+    } else {
+      cntEl.textContent = `총 ${ALERTS.length}건`;
+    }
+  }
+
+  if(!display.length) {
+    at.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text3);font-size:12px">
+      ${showAll ? '90일 이내 만료 예정 항목이 없습니다 ✅' : 'D-30 이내 만료 예정 항목이 없습니다 ✅'}
+    </td></tr>`;
+    return;
+  }
+
+  at.innerHTML = display.map(a => `<tr>
+    <td><span class="tag ${a.tc}">${a.type}</span></td>
+    <td style="font-weight:600">
+      ${a.name}
+      ${a.detail ? `<div style="font-size:10px;color:var(--text3);margin-top:1px">${a.detail}</div>` : ''}
+    </td>
+    <td class="dt">${a.date}</td>
+    <td><span class="d-tag ${dCls(a.days)}">D-${a.days}</span></td>
+    <td class="mt">${a.worker||'—'}</td>
+  </tr>`).join('');
+}
+
+function toggleDashAlert() {
+  toggleNotif();
 }
 
 function renderDashHist(){
