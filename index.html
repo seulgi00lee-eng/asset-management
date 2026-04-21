@@ -4562,7 +4562,7 @@ function openAddCostModal(kwan, cat, baseAmt) {
   }
 
   updateAddCostPreview();
-  openMo('moAddCost');
+  document.getElementById('moAddCost').classList.add('open');
   setTimeout(() => document.getElementById('moAddCostAmt').focus(), 100);
 }
 
