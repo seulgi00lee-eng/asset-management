@@ -2549,29 +2549,19 @@ function buildRow(row, d, today, DKW) {
       </td>`;
     }
 
-    // ── 확인여부 셀 → 인라인 드롭다운 ──
+    // ── 확인여부 셀 → 클릭 시 body 레이어 팝업 ──
     if(h === '확인여부') {
       const status = v || '미확인';
       const isOk = status === '확인';
-      const bg   = isOk ? '#d1fae5' : '#fee2e2';
-      const color= isOk ? '#065f46' : '#991b1b';
+      const bg    = isOk ? '#d1fae5' : '#fee2e2';
+      const color = isOk ? '#065f46' : '#991b1b';
       const border= isOk ? '#a7f3d0' : '#fca5a5';
-      return `<td style="padding:6px 10px;min-width:80px">
-        <div style="position:relative;display:inline-block">
-          <span id="yw-${row._id}"
-            style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border:1px solid ${border};background:${bg};color:${color};font-size:10px;font-weight:700;cursor:pointer;border-radius:3px;white-space:nowrap"
-            onclick="toggleYwDropdown(event,'${row._id}','${v||'미확인'}')">
-            ${isOk ? '✅' : '⬜'} ${status} ▾
-          </span>
-          <div id="yw-dd-${row._id}" style="display:none;position:absolute;top:100%;left:0;z-index:50;background:#fff;border:1px solid var(--border);box-shadow:0 4px 12px rgba(0,0,0,.1);min-width:100px;border-radius:4px;overflow:hidden">
-            <div onclick="saveYwStatus(${row._id},'확인')" style="padding:8px 14px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--cream2)" onmouseenter="this.style.background='#d1fae5'" onmouseleave="this.style.background=''">
-              ✅ <span style="color:#065f46;font-weight:600">확인</span>
-            </div>
-            <div onclick="saveYwStatus(${row._id},'미확인')" style="padding:8px 14px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:6px" onmouseenter="this.style.background='#fee2e2'" onmouseleave="this.style.background=''">
-              ⬜ <span style="color:#991b1b;font-weight:600">미확인</span>
-            </div>
-          </div>
-        </div>
+      return `<td style="padding:6px 10px;min-width:80px;white-space:nowrap">
+        <span id="yw-${row._id}"
+          style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border:1px solid ${border};background:${bg};color:${color};font-size:10px;font-weight:700;cursor:pointer;border-radius:3px;white-space:nowrap;user-select:none"
+          onclick="toggleYwDropdown(event,'${row._id}','${v||'미확인'}')">
+          ${isOk ? '✅' : '⬜'} ${status} ▾
+        </span>
       </td>`;
     }
 
@@ -4430,12 +4420,59 @@ function handleMemoSel(val) {
 }
 function toggleYwDropdown(e, rowId, curVal) {
   e.stopPropagation();
-  // 다른 드롭다운 모두 닫기
-  document.querySelectorAll('[id^="yw-dd-"]').forEach(el => {
-    if(el.id !== `yw-dd-${rowId}`) el.style.display = 'none';
+
+  // 기존 팝업 제거
+  const existing = document.getElementById('yw-global-dd');
+  if(existing) {
+    if(existing.dataset.rowid === String(rowId)) {
+      existing.remove();
+      return;
+    }
+    existing.remove();
+  }
+
+  // body 고정 레이어 생성
+  const rect = e.currentTarget.getBoundingClientRect();
+  const dd = document.createElement('div');
+  dd.id = 'yw-global-dd';
+  dd.dataset.rowid = String(rowId);
+  dd.style.cssText = `
+    position:fixed;
+    top:${rect.bottom + 4}px;
+    left:${rect.left}px;
+    z-index:9999;
+    background:#fff;
+    border:1px solid var(--border);
+    box-shadow:0 4px 16px rgba(0,0,0,.15);
+    min-width:110px;
+    border-radius:6px;
+    overflow:hidden;
+    animation:up .15s ease;
+  `;
+  dd.innerHTML = `
+    <div onclick="saveYwStatus(${rowId},'확인');document.getElementById('yw-global-dd')?.remove()"
+      style="padding:9px 16px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #f0fdf4"
+      onmouseenter="this.style.background='#d1fae5'" onmouseleave="this.style.background=''">
+      ✅ <span style="color:#065f46;font-weight:600">확인</span>
+    </div>
+    <div onclick="saveYwStatus(${rowId},'미확인');document.getElementById('yw-global-dd')?.remove()"
+      style="padding:9px 16px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:8px"
+      onmouseenter="this.style.background='#fee2e2'" onmouseleave="this.style.background=''">
+      ⬜ <span style="color:#991b1b;font-weight:600">미확인</span>
+    </div>
+  `;
+  document.body.appendChild(dd);
+
+  // 화면 밖으로 넘어가면 위쪽에 표시
+  requestAnimationFrame(() => {
+    const ddRect = dd.getBoundingClientRect();
+    if(ddRect.bottom > window.innerHeight) {
+      dd.style.top = (rect.top - ddRect.height - 4) + 'px';
+    }
+    if(ddRect.right > window.innerWidth) {
+      dd.style.left = (rect.right - ddRect.width) + 'px';
+    }
   });
-  const dd = document.getElementById(`yw-dd-${rowId}`);
-  if(dd) dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
 }
 
 async function saveYwStatus(rowId, status) {
@@ -4473,9 +4510,11 @@ async function saveYwStatus(rowId, status) {
   showToast(`✅ ${status}으로 변경됨`);
 }
 
-// 외부 클릭 시 드롭다운 닫기
-document.addEventListener('click', () => {
-  document.querySelectorAll('[id^="yw-dd-"]').forEach(el => el.style.display = 'none');
+// 외부 클릭 시 확인여부 드롭다운 닫기
+document.addEventListener('click', (e) => {
+  if(!e.target.closest('#yw-global-dd') && !e.target.id?.startsWith('yw-')) {
+    document.getElementById('yw-global-dd')?.remove();
+  }
 });
 
 document.addEventListener('click',e=>{if(!e.target.closest('#notifPanel')&&!e.target.closest('.tb-bell'))closeNotif();});
