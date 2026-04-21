@@ -1425,7 +1425,7 @@ function showLoginAlertPopup() {
           <span style="font-size:9px;font-weight:700;padding:2px 7px;background:#8a2a2a;color:#fff;font-family:var(--mono);flex-shrink:0">D-${a.days}</span>
           <div style="flex:1">
             <div style="font-size:12px;font-weight:600">${a.name}</div>
-            <div style="font-size:10px;color:var(--text3)">${a.type} · 만료일: ${a.date}</div>
+            <div style="font-size:10px;color:var(--text3)">${a.type}${a.detail?' · '+a.detail:''} · 만료일: ${a.date}</div>
           </div>
         </div>`).join('')}
     </div>` : ''}
@@ -1440,7 +1440,7 @@ function showLoginAlertPopup() {
           <span style="font-size:9px;font-weight:700;padding:2px 7px;background:#c8a96e;color:#1a1a1a;font-family:var(--mono);flex-shrink:0">D-${a.days}</span>
           <div style="flex:1">
             <div style="font-size:12px;font-weight:600">${a.name}</div>
-            <div style="font-size:10px;color:var(--text3)">${a.type} · 만료일: ${a.date}</div>
+            <div style="font-size:10px;color:var(--text3)">${a.type}${a.detail?' · '+a.detail:''} · 만료일: ${a.date}</div>
           </div>
         </div>`).join('')}
     </div>` : ''}
@@ -1455,7 +1455,7 @@ function showLoginAlertPopup() {
           <span style="font-size:9px;font-weight:700;padding:2px 7px;background:var(--border2);color:var(--text);font-family:var(--mono);flex-shrink:0">D-${a.days}</span>
           <div style="flex:1">
             <div style="font-size:12px;font-weight:600">${a.name}</div>
-            <div style="font-size:10px;color:var(--text3)">${a.type} · 만료일: ${a.date}</div>
+            <div style="font-size:10px;color:var(--text3)">${a.type}${a.detail?' · '+a.detail:''} · 만료일: ${a.date}</div>
           </div>
         </div>`).join('')}
     </div>` : ''}
@@ -1699,10 +1699,10 @@ async function loadAlertsFromServer() {
   if(typeof sbSelect !== 'function') return;
   const today = new Date();
   const checks = [
-    { table:'lease',      nameCol:'건물명',     dateCol:'계약종료일', label:'임대차계약', tc:'tg-lease' },
-    { table:'rental',     nameCol:'렌탈품목',   dateCol:'계약종료일', label:'렌탈자산',   tc:'tg-rental' },
-    { table:'intangible', nameCol:'상품명',     dateCol:'만료일',     label:'무형자산',   tc:'tg-intangible' },
-    { table:'insurance',  nameCol:'보험사',     dateCol:'만기일',     label:'보험',       tc:'tg-insurance' },
+    { table:'lease',      nameCol:'건물명',   dateCol:'계약종료일', label:'임대차계약', tc:'tg-lease' },
+    { table:'rental',     nameCol:'렌탈품목', dateCol:'계약종료일', label:'렌탈자산',   tc:'tg-rental' },
+    { table:'intangible', nameCol:'상품명',   dateCol:'만료일',     label:'무형자산',   tc:'tg-intangible' },
+    { table:'insurance',  nameCol:'보험사',   dateCol:'만기일',     label:'보험',       tc:'tg-insurance' },
   ];
   ALERTS.length = 0;
   for(const c of checks){
@@ -1715,7 +1715,32 @@ async function loadAlertsFromServer() {
         if(isNaN(exp)) return;
         const diff = Math.ceil((exp - today) / 86400000);
         if(diff >= 0 && diff <= 90){
-          ALERTS.push({ type:c.label, tc:c.tc, name:r[c.nameCol]||'—', date:d, days:diff });
+          // ── 자산 유형별 상세 정보 구성 ──
+          let detail = '';
+          if(c.table === 'rental') {
+            const parts = [r['분류'], r['건물명']||r['위치']||r['캠퍼스명']].filter(Boolean);
+            detail = parts.join(' · ');
+          } else if(c.table === 'intangible') {
+            const parts = [r['분류'], r['캠퍼스명']||r['위치']].filter(Boolean);
+            detail = parts.join(' · ');
+          } else if(c.table === 'lease') {
+            const parts = [r['층수'], r['지역'], r['법인명']].filter(Boolean);
+            detail = parts.join(' · ');
+          } else if(c.table === 'insurance') {
+            const parts = [r['종류'], r['학원명']||r['캠퍼스명']].filter(Boolean);
+            detail = parts.join(' · ');
+          }
+          ALERTS.push({
+            type: c.label, tc: c.tc,
+            name: r[c.nameCol] || '—',
+            detail,
+            date: d, days: diff,
+            // 추가 필드 보존
+            분류: r['분류'] || '',
+            건물명: r['건물명'] || '',
+            위치: r['위치'] || r['캠퍼스명'] || '',
+            층수: r['층수'] || '',
+          });
         }
       });
     } catch(e) { console.warn('알림 로드 오류:', c.table, e); }
@@ -1740,7 +1765,8 @@ async function loadAlertsFromServer() {
   if(ni) ni.innerHTML = ALERTS.length
     ? ALERTS.map(a=>`
         <div class="np-it">
-          <div class="np-n"><span class="tag ${a.tc}" style="margin-right:6px">${a.type}</span>${a.name}</div>
+          <div class="np-n"><span class="tag ${a.tc}" style="margin-right:6px">${a.type}</span><span style="font-weight:600">${a.name}</span></div>
+          ${a.detail ? `<div style="font-size:10px;color:var(--text2);margin:2px 0 1px;padding-left:2px">${a.detail}</div>` : ''}
           <div class="np-m"><span>${a.date}</span><span class="d-tag ${dCls(a.days)}">D-${a.days}</span></div>
         </div>`).join('')
     : '<div style="padding:24px 18px;text-align:center;color:var(--text3);font-size:12px">90일 이내 만료 예정 항목이 없습니다 ✅</div>';
