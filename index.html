@@ -1954,16 +1954,21 @@ async function runCostCalc(){
     ? SAMPLE.rental.rows
     : await sbSelect('rental');
 
-  // 캠퍼스 데이터 로드 (법인명/사업부/브랜드 조인용)
-  const campusRows = CAMPUS_ROWS.length > 0
-    ? CAMPUS_ROWS
-    : await sbSelect('campus');
+  // 캠퍼스 데이터 로드
+  if(!CAMPUS_ROWS.length) {
+    const campusData = await sbSelect('campus');
+    CAMPUS_ROWS = campusData.map(r => ({ _id: r.id, _rowId: r.id, ...r }));
+  }
+  const campusRows = CAMPUS_ROWS;
   setLoading(false);
 
   if(!rows.length){
     showToast('렌탈자산 데이터가 없습니다.');
     return;
   }
+
+  // ── 관코드 자동 매핑 적용 (Supabase 직접 조회 행에도 적용) ──
+  autoMapRentalKwan(rows);
 
   // 캠퍼스 데이터를 관코드 기준으로 맵핑
   const campusMap = {};
