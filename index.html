@@ -1550,20 +1550,23 @@ function calcMonthlyCost() {
 }
 
 function renderMonthlyCost() {
+  // DOM이 없으면 (섹션 삭제됨) 조용히 스킵
+  if(!document.getElementById('cost-total-monthly')) return;
+
   const c = calcMonthlyCost();
   const fmtW = n => n > 0 ? Math.round(n).toLocaleString('ko-KR') : '—';
+  const setTxt = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
+  const setHtml = (id, val) => { const el = document.getElementById(id); if(el) el.innerHTML = val; };
 
-  document.getElementById('cost-total-monthly').textContent     = c.total > 0 ? Math.round(c.total).toLocaleString('ko-KR') : '—';
-  document.getElementById('cost-lease-monthly').textContent     = fmtW(c.leaseAmt);
-  document.getElementById('cost-rental-monthly').textContent    = fmtW(c.rentalAmt);
-  document.getElementById('cost-insurance-monthly').textContent = fmtW(c.insuranceAmt);
-  document.getElementById('cost-lease-cnt').textContent         = SAMPLE.lease.rows.length + '건';
-  document.getElementById('cost-rental-cnt').textContent        = SAMPLE.rental.rows.length + '건';
-  document.getElementById('cost-insurance-cnt').textContent     = SAMPLE.insurance.rows.length + '건';
+  setTxt('cost-total-monthly', c.total > 0 ? Math.round(c.total).toLocaleString('ko-KR') : '—');
+  setTxt('cost-lease-monthly', fmtW(c.leaseAmt));
+  setTxt('cost-rental-monthly', fmtW(c.rentalAmt));
+  setTxt('cost-insurance-monthly', fmtW(c.insuranceAmt));
+  setTxt('cost-lease-cnt', SAMPLE.lease.rows.length + '건');
+  setTxt('cost-rental-cnt', SAMPLE.rental.rows.length + '건');
+  setTxt('cost-insurance-cnt', SAMPLE.insurance.rows.length + '건');
 
-  // ── 카테고리별 전월 대비 ──
   const prev = JSON.parse(localStorage.getItem('prevCost') || 'null');
-
   function momHtml(current, prevVal) {
     if (!prev || prevVal === undefined || prevVal === null) return '<span style="color:var(--text3);font-size:10px">전월 미입력</span>';
     const diff = current - prevVal;
@@ -1573,24 +1576,20 @@ function renderMonthlyCost() {
     if (diff < 0)  return `<span style="color:#2a5a2a">▼ ${absDiff}원&nbsp;<span style="font-size:10px">(${pct}%)</span></span>`;
     return `<span style="color:var(--text3)">― 전월 동일</span>`;
   }
-
   const prevTotal = prev ? (prev.lease||0)+(prev.rental||0)+(prev.insurance||0) : null;
-  document.getElementById('cost-total-mom').innerHTML     = momHtml(c.total,         prevTotal);
-  document.getElementById('cost-lease-mom').innerHTML     = momHtml(c.leaseAmt,     prev?.lease);
-  document.getElementById('cost-rental-mom').innerHTML    = momHtml(c.rentalAmt,    prev?.rental);
-  document.getElementById('cost-insurance-mom').innerHTML = momHtml(c.insuranceAmt, prev?.insurance);
+  setHtml('cost-total-mom',     momHtml(c.total, prevTotal));
+  setHtml('cost-lease-mom',     momHtml(c.leaseAmt, prev?.lease));
+  setHtml('cost-rental-mom',    momHtml(c.rentalAmt, prev?.rental));
+  setHtml('cost-insurance-mom', momHtml(c.insuranceAmt, prev?.insurance));
 
-  // 비율 바
   if (c.total > 0) {
     const items = [
       { label:'임대차', amt:c.leaseAmt,     color:'#1a1a1a' },
       { label:'렌탈',   amt:c.rentalAmt,    color:'#c8a96e' },
       { label:'보험',   amt:c.insuranceAmt, color:'#2a6a6a' },
     ].filter(i => i.amt > 0);
-    document.getElementById('cost-ratio-bar').innerHTML = items.map(i =>
-      `<div style="flex:${i.amt};background:${i.color}"></div>`
-    ).join('');
-    document.getElementById('cost-ratio-legend').innerHTML = items.map(i => {
+    setHtml('cost-ratio-bar', items.map(i => `<div style="flex:${i.amt};background:${i.color}"></div>`).join(''));
+    setHtml('cost-ratio-legend', items.map(i => {
       const pct = Math.round(i.amt / c.total * 100);
       return `<div style="display:flex;align-items:center;gap:5px;font-size:11px">
         <div style="width:8px;height:8px;background:${i.color};flex-shrink:0"></div>
@@ -1598,7 +1597,7 @@ function renderMonthlyCost() {
         <span style="font-family:var(--mono);font-weight:600">${Math.round(i.amt).toLocaleString('ko-KR')}원</span>
         <span style="color:var(--text3)">(${pct}%)</span>
       </div>`;
-    }).join('');
+    }).join(''));
   }
 }
 
