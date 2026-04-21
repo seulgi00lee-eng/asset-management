@@ -3956,7 +3956,11 @@ function filterKwanBulk() {
 
 function renderKwanBulkTable(type, d) {
   const nameCol = {rental:'렌탈품목', lease:'건물명', tangible:'자산명', intangible:'상품명', insurance:'보험사'}[type] || '자산명';
-  const cols = [nameCol, '관코드', '캠퍼스명', '지역', '법인명'].filter(c => c);
+  // 임대차/렌탈은 건물명 옆에 층수 추가
+  const hasFl = ['lease','rental','tangible','intangible'].includes(type);
+  const cols = hasFl
+    ? [nameCol, '층수', '관코드', '캠퍼스명', '지역', '법인명'].filter(c=>c)
+    : [nameCol, '관코드', '캠퍼스명', '지역', '법인명'].filter(c=>c);
 
   const head = document.getElementById('kwanBulkHead');
   const body = document.getElementById('kwanBulkBody');
