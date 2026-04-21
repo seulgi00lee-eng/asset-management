@@ -683,6 +683,42 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
         </div>
       </div>
 
+      <!-- 추가비용 입력 모달 -->
+      <div class="mo" id="moAddCost" onclick="closeMoBg(event,'moAddCost')">
+        <div class="mo-box" style="width:420px">
+          <div class="mo-t">추가비용 입력
+            <span id="moAddCostLabel" style="font-size:12px;color:var(--text3);font-weight:400;margin-left:8px"></span>
+          </div>
+          <div class="fg-grid">
+            <div class="fg full">
+              <label>관코드 · 분류</label>
+              <div id="moAddCostInfo" style="padding:9px 12px;background:var(--cream2);border:1px solid var(--border);font-size:12px;font-family:var(--mono);font-weight:600;color:var(--text)"></div>
+            </div>
+            <div class="fg full">
+              <label>추가 금액 (원)</label>
+              <input type="number" id="moAddCostAmt" placeholder="예: 35000" style="font-family:var(--mono)" oninput="updateAddCostPreview()">
+            </div>
+            <div class="fg full">
+              <label>사유</label>
+              <input type="text" id="moAddCostReason" placeholder="예: 수리비 발생, 소모품 추가 구매 등">
+            </div>
+            <div class="fg full" id="moAddCostPreviewWrap" style="display:none">
+              <label>반영 후 금액</label>
+              <div id="moAddCostPreview" style="padding:9px 12px;background:#f0fdf4;border:1px solid #a7f3d0;font-size:13px;font-family:var(--mono);font-weight:700;color:#065f46"></div>
+            </div>
+          </div>
+          <!-- 기존 추가비용 목록 -->
+          <div id="moAddCostExisting" style="display:none;margin-top:12px">
+            <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:1px;margin-bottom:6px">이미 입력된 추가비용</div>
+            <div id="moAddCostExistingList" style="font-size:12px"></div>
+          </div>
+          <div class="mo-ft">
+            <button class="btn btn-ghost" onclick="closeMo('moAddCost')">취소</button>
+            <button class="btn btn-navy" onclick="saveAddCost()">추가 반영</button>
+          </div>
+        </div>
+      </div>
+
       <!-- COST HISTORY PAGE -->
       <div class="page" id="page-cost-history">
         <div class="ph">
@@ -1791,7 +1827,6 @@ const COST_MAP={
 };
 
 function initCostPage(){
-  // costPeriodType/costPeriod/costPeriodBadge DOM이 있을 때만 실행
   const typeEl = document.getElementById('costPeriodType');
   const selEl  = document.getElementById('costPeriod');
   const bdgEl  = document.getElementById('costPeriodBadge');
@@ -1801,11 +1836,12 @@ function initCostPage(){
       bdgEl.textContent = selEl.options[0].text || '';
     }
   }
-  // 비용 페이지 KPI 초기화 (데이터 없을 때 기본 표시)
   ['ck-total','ck-rental','ck-dept','ck-cat'].forEach(id => {
     const el = document.getElementById(id);
     if(el && el.textContent === '—') el.textContent = '—';
   });
+  // 추가비용 Supabase에서 로드
+  loadAdditionalCostMap();
 }
 
 function initCostPeriod(){
@@ -1977,6 +2013,26 @@ async function runCostCalc(){
     totalAmt += amt;
   });
 
+  // ── 추가비용 합산 (셀 직접 입력) ──
+  Object.entries(additionalCostMap).forEach(([kwan, cats]) => {
+    if(!deptMap[kwan]) {
+      const campus = campusMap[kwan] || {};
+      deptMap[kwan] = {
+        code: kwan,
+        법인명: campus['법인명'] || '—',
+        사업부: campus['사업부'] || '—',
+        브랜드: campus['브랜드'] || '—',
+        catAmts: {}, 총비용: 0, 항목수: 0, items: []
+      };
+      FIXED_CATS.forEach(c => deptMap[kwan].catAmts[c] = 0);
+    }
+    Object.entries(cats).forEach(([cat, entry]) => {
+      deptMap[kwan].catAmts[cat] = (deptMap[kwan].catAmts[cat]||0) + entry.amt;
+      deptMap[kwan].총비용 += entry.amt;
+      totalAmt += entry.amt;
+    });
+  });
+
   costResult = Object.values(deptMap)
     .sort((a,b) => b.총비용 - a.총비용);
 
@@ -1993,11 +2049,24 @@ async function runCostCalc(){
   const tfoot = document.getElementById('costSummaryFoot');
   const TH = (txt, right=false) => `<th style="padding:8px 10px;font-size:9px;letter-spacing:1px;color:var(--text3);white-space:nowrap;${right?'text-align:right':''}">${txt}</th>`;
   const TD = (txt, opts='') => `<td style="padding:8px 10px;font-size:11px;white-space:nowrap;${opts}">${txt}</td>`;
-  const TDN = (n) => TD(n>0?fmt(Math.round(n)):'—', 'text-align:right;font-family:var(--mono);font-size:10px;');
+  // 금액 셀 — 클릭 시 추가비용 입력 모달
+  const TDN = (n, kwan, cat) => {
+    const extra = additionalCostMap[kwan]?.[cat];
+    const hasExtra = extra && extra.amt > 0;
+    const extraTag = hasExtra
+      ? `<span title="${extra.reason||''}" style="margin-left:3px;font-size:9px;padding:0 4px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:2px;cursor:pointer">+${fmt(Math.round(extra.amt))}</span>`
+      : '';
+    const base = n > 0 ? fmt(Math.round(n)) : '—';
+    return `<td style="padding:8px 10px;text-align:right;font-family:var(--mono);font-size:10px;white-space:nowrap;cursor:pointer;transition:background .15s"
+      onclick="openAddCostModal('${kwan}','${cat}',${n})"
+      onmouseenter="this.style.background='rgba(200,169,110,.12)'"
+      onmouseleave="this.style.background=''"
+      title="클릭하여 추가비용 입력">${base}${extraTag}</td>`;
+  };
 
   if(thead) thead.innerHTML = `<tr style="background:var(--cream2);border-bottom:2px solid var(--text)">
     ${TH('법인명')}${TH('관코드')}${TH('사업부')}${TH('브랜드')}
-    ${FIXED_CATS.map(c=>TH(c,true)).join('')}
+    ${FIXED_CATS.map(c=>TH(c+'✎',true)).join('')}
     ${TH('비용합계',true)}${TH('항목수')}${TH('비율')}
   </tr>`;
 
@@ -2010,7 +2079,7 @@ async function runCostCalc(){
       ${TD(`<span style="font-family:var(--mono);font-weight:700;color:${color}">${d.code}</span>`)}
       ${TD(d.사업부)}
       ${TD(d.브랜드)}
-      ${FIXED_CATS.map(c=>TDN(d.catAmts[c]||0)).join('')}
+      ${FIXED_CATS.map(c=>TDN(d.catAmts[c]||0, d.code, c)).join('')}
       ${TD(fmt(Math.round(d.총비용)), `text-align:right;font-family:var(--mono);font-weight:700;color:${color};`)}
       ${TD(d.항목수+'건', 'color:var(--text3);')}
       <td style="padding:8px 10px;min-width:100px">
@@ -4438,6 +4507,122 @@ function autoMapRentalKwan(rows) {
       if(campusNames.length > 0) row['캠퍼스명'] = campusNames.join(' / ');
     }
   });
+}
+
+// ═══════════════════════ 비용 관별배분 추가비용 ═══════════════════════
+// { 관코드: { 분류: { amt, reason, id } } }  ← id는 Supabase row id
+let additionalCostMap = {};
+
+function getCurYearMonth() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+}
+
+async function loadAdditionalCostMap() {
+  try {
+    const ym = getCurYearMonth();
+    const { data, error } = await _supa.from('cost_extra').select('*').eq('year_month', ym);
+    if(error) throw error;
+    additionalCostMap = {};
+    (data||[]).forEach(r => {
+      if(!additionalCostMap[r['관코드']]) additionalCostMap[r['관코드']] = {};
+      additionalCostMap[r['관코드']][r['분류']] = { amt: r['금액'], reason: r['사유']||'', id: r.id };
+    });
+    if(costResult.length) runCostCalc();
+  } catch(e) { console.warn('추가비용 로드 오류:', e); }
+}
+
+function openAddCostModal(kwan, cat, baseAmt) {
+  const existing = additionalCostMap[kwan]?.[cat];
+
+  document.getElementById('moAddCostInfo').textContent = `${kwan}  ·  ${cat}`;
+  document.getElementById('moAddCostLabel').textContent = `기본료: ${fmt(Math.round(baseAmt))}원`;
+  document.getElementById('moAddCostAmt').value = existing ? existing.amt : '';
+  document.getElementById('moAddCostReason').value = existing ? existing.reason : '';
+  document.getElementById('moAddCostAmt').dataset.kwan = kwan;
+  document.getElementById('moAddCostAmt').dataset.cat  = cat;
+  document.getElementById('moAddCostAmt').dataset.base = baseAmt;
+
+  // 기존 입력된 항목 표시
+  const allExtras = Object.entries(additionalCostMap[kwan]||{});
+  const existEl  = document.getElementById('moAddCostExisting');
+  const listEl   = document.getElementById('moAddCostExistingList');
+  if(allExtras.length) {
+    listEl.innerHTML = allExtras.map(([c, e]) =>
+      `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--cream2)">
+        <span style="color:var(--text2)">${c}</span>
+        <span style="font-family:var(--mono);font-weight:600">+${fmt(e.amt)}원
+          ${e.reason?`<span style="font-weight:400;color:var(--text3);font-size:10px"> (${e.reason})</span>`:''}
+          <button onclick="removeAddCost('${kwan}','${c}')" style="border:none;background:none;cursor:pointer;color:#991b1b;font-size:11px;margin-left:6px">✕</button>
+        </span>
+      </div>`).join('');
+    existEl.style.display = 'block';
+  } else {
+    existEl.style.display = 'none';
+  }
+
+  updateAddCostPreview();
+  openMo('moAddCost');
+  setTimeout(() => document.getElementById('moAddCostAmt').focus(), 100);
+}
+
+function updateAddCostPreview() {
+  const amt  = Number(document.getElementById('moAddCostAmt')?.value) || 0;
+  const base = Number(document.getElementById('moAddCostAmt')?.dataset.base) || 0;
+  const wrap = document.getElementById('moAddCostPreviewWrap');
+  const prev = document.getElementById('moAddCostPreview');
+  if(amt > 0) {
+    wrap.style.display = 'block';
+    prev.textContent   = `${fmt(Math.round(base))}원 + ${fmt(Math.round(amt))}원 = ${fmt(Math.round(base+amt))}원`;
+  } else {
+    wrap.style.display = 'none';
+  }
+}
+
+async function saveAddCost() {
+  const amt    = Number(document.getElementById('moAddCostAmt').value) || 0;
+  const reason = document.getElementById('moAddCostReason').value.trim();
+  const kwan   = document.getElementById('moAddCostAmt').dataset.kwan;
+  const cat    = document.getElementById('moAddCostAmt').dataset.cat;
+
+  if(!amt) { showToast('금액을 입력해 주세요'); return; }
+  if(!kwan || !cat) { showToast('오류: 관코드/분류 정보 없음'); return; }
+
+  const ym = getCurYearMonth();
+  const existing = additionalCostMap[kwan]?.[cat];
+
+  setLoading(true);
+  let error;
+  if(existing?.id) {
+    ({ error } = await _supa.from('cost_extra')
+      .update({ 금액: amt, 사유: reason })
+      .eq('id', existing.id));
+  } else {
+    ({ error } = await _supa.from('cost_extra')
+      .insert([{ year_month: ym, 관코드: kwan, 분류: cat, 금액: amt, 사유: reason }]));
+  }
+  setLoading(false);
+
+  if(error) { showToast('❌ 저장 실패: ' + error.message); return; }
+
+  await loadAdditionalCostMap();
+  closeMo('moAddCost');
+  showToast(`✅ ${kwan} · ${cat} 추가비용 ${fmt(amt)}원 저장됨`);
+}
+
+async function removeAddCost(kwan, cat) {
+  const existing = additionalCostMap[kwan]?.[cat];
+  if(!existing?.id) return;
+
+  setLoading(true);
+  const { error } = await _supa.from('cost_extra').delete().eq('id', existing.id);
+  setLoading(false);
+
+  if(error) { showToast('❌ 삭제 실패'); return; }
+
+  await loadAdditionalCostMap();
+  closeMo('moAddCost');
+  showToast(`${kwan} · ${cat} 추가비용 삭제됨`);
 }
 
 function handleMemoSel(val) {
