@@ -2388,24 +2388,61 @@ function renderATable(d, rows, groupByCat=false) {
   const DKW = ['만료','종료','갱신','반납','만기'];
   const today = new Date();
 
+  // ── 저장된 컬럼 너비 불러오기 ──
+  const savedWidths = (() => {
+    const all = JSON.parse(localStorage.getItem(COL_WIDTHS_KEY)||'{}');
+    return all[d.label] || {};
+  })();
+  const defW = (h) => savedWidths[h] || 'auto';
+
+  // ── colgroup 생성 (table-layout:fixed에서 너비 제어) ──
+  const tblWrap = document.querySelector('#page-asset .tbl-wrap');
+  if(tblWrap) {
+    const tbl = tblWrap.querySelector('table');
+    if(tbl) {
+      tbl.style.tableLayout = 'fixed';
+      // 기존 colgroup 제거 후 재생성
+      tbl.querySelectorAll('colgroup').forEach(c=>c.remove());
+      const cg = document.createElement('colgroup');
+      // 체크박스 col
+      const c0 = document.createElement('col');
+      c0.style.width = '36px';
+      cg.appendChild(c0);
+      // 데이터 col들
+      d.headers.forEach(h => {
+        const col = document.createElement('col');
+        const w = savedWidths[h];
+        if(w) col.style.width = w + 'px';
+        cg.appendChild(col);
+      });
+      // 관리 col
+      const cLast = document.createElement('col');
+      cLast.style.width = '110px';
+      cg.appendChild(cLast);
+      tbl.insertBefore(cg, tbl.firstChild);
+    }
+  }
+
   // ── 헤더 렌더 (정렬 + 리사이즈 핸들) ──
   document.getElementById('aHead').innerHTML =
-    `<th style="width:32px;padding:8px 10px;position:relative;">
+    `<th style="width:36px;padding:8px 10px;position:relative;">
       <input type="checkbox" id="chkAll" onchange="toggleAllRows(this.checked)" style="accent-color:var(--gold);cursor:pointer">
     </th>` +
     d.headers.map((h, idx) => {
       const isSorted = sortState.col === h;
-      const arrow = isSorted ? (sortState.asc ? '↑' : '↓') : '';
-      const arrowColor = isSorted ? 'var(--gold)' : 'transparent';
-      return `<th data-col="${h}" style="position:relative;cursor:pointer;user-select:none;white-space:nowrap;min-width:60px;padding:9px 20px 9px 10px;"
+      const arrow = isSorted ? (sortState.asc ? '↑' : '↓') : '↕';
+      const arrowColor = isSorted ? 'var(--gold)' : 'var(--border2)';
+      return `<th data-col="${h}" style="position:relative;cursor:pointer;user-select:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:9px 22px 9px 10px;"
         onclick="sortByCol('${h}')">
-        <span>${h}</span>
-        <span style="font-size:10px;color:${arrowColor};font-weight:700;margin-left:4px">${arrow||'↕'}</span>
+        <span style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3)">${h}</span>
+        <span style="font-size:10px;color:${arrowColor};font-weight:700;margin-left:3px">${arrow}</span>
         <span class="col-resizer" data-idx="${idx}"
-          style="position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;background:transparent;z-index:1;"
-          onmousedown="initColResize(event,this)" onclick="event.stopPropagation()"></span>
+          style="position:absolute;right:0;top:0;bottom:0;width:6px;cursor:col-resize;background:transparent;border-right:2px solid transparent;transition:border-color .15s;"
+          onmousedown="initColResize(event,this)" onclick="event.stopPropagation()"
+          onmouseenter="this.style.borderRightColor='var(--gold)'"
+          onmouseleave="this.style.borderRightColor='transparent'"></span>
       </th>`;
-    }).join('') + '<th style="white-space:nowrap;padding:9px 14px">관리</th>';
+    }).join('') + '<th style="white-space:nowrap;padding:9px 14px;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3)">관리</th>';
 
   // ── 컬럼 너비 복원 ──
   restoreColWidths(d.label);
@@ -4222,8 +4259,21 @@ function restoreColWidths(label) {
   const ths = document.querySelectorAll('#aHead th[data-col]');
   ths.forEach(th => {
     const w = widths[th.dataset.col];
-    if(w) { th.style.width = w + 'px'; th.style.minWidth = w + 'px'; }
+    if(w) {
+      th.style.width = w + 'px';
+      th.style.minWidth = w + 'px';
+      th.style.maxWidth = w + 'px';
+    }
   });
+  // colgroup도 동기화
+  const tbl = document.querySelector('#page-asset .tbl-wrap table');
+  if(tbl) {
+    const cols = tbl.querySelectorAll('colgroup col');
+    ths.forEach((th, i) => {
+      const w = widths[th.dataset.col];
+      if(w && cols[i+1]) cols[i+1].style.width = w + 'px';
+    });
+  }
 }
 
 // ── 컬럼 리사이즈 드래그 ─────────────────────────────────────
@@ -4231,23 +4281,45 @@ let _resizeTh = null, _resizeStartX = 0, _resizeStartW = 0;
 
 function initColResize(e, handle) {
   e.preventDefault();
+  e.stopPropagation();
+
   _resizeTh = handle.closest('th');
   _resizeStartX = e.clientX;
-  _resizeStartW = _resizeTh.offsetWidth;
-  _resizeTh.style.userSelect = 'none';
+  _resizeStartW = _resizeTh.getBoundingClientRect().width;
+
+  // 드래그 중 전체 선택 방지
+  document.body.style.userSelect = 'none';
+  document.body.style.cursor = 'col-resize';
+
+  // 드래그 중 리사이저 강조
+  handle.style.background = 'var(--gold)';
+  handle.style.opacity = '1';
+
+  const table = _resizeTh.closest('table');
 
   const onMove = (ev) => {
     const delta = ev.clientX - _resizeStartX;
-    const newW = Math.max(50, _resizeStartW + delta);
+    const newW = Math.max(50, Math.round(_resizeStartW + delta));
     _resizeTh.style.width = newW + 'px';
     _resizeTh.style.minWidth = newW + 'px';
+    _resizeTh.style.maxWidth = newW + 'px';
+
+    // colgroup 동기화
+    if(table) {
+      const idx = Array.from(_resizeTh.parentElement.children).indexOf(_resizeTh);
+      const col = table.querySelector(`colgroup col:nth-child(${idx+1})`);
+      if(col) col.style.width = newW + 'px';
+    }
   };
 
   const onUp = () => {
     document.removeEventListener('mousemove', onMove);
     document.removeEventListener('mouseup', onUp);
-    if(_resizeTh) _resizeTh.style.userSelect = '';
-    // 현재 자산의 컬럼 너비 저장
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+    handle.style.background = '';
+    handle.style.opacity = '';
+
     const d = SAMPLE[curType];
     if(d) saveColWidths(d.label);
   };
