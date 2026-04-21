@@ -483,20 +483,22 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
         <div style="display:grid;grid-template-columns:3fr 2fr;gap:12px;margin-bottom:12px">
           <div class="sec" style="margin-bottom:0">
           <div class="sec" style="margin-bottom:0">
-            <div class="sec-hd">
+            <div class="sec-hd" style="cursor:pointer" onclick="toggleDashAlertCollapse()">
               <div class="sec-t">만료 예정 항목 <span class="badge bd-red">주의</span>
                 <span id="dashAlertD30Cnt" style="font-size:11px;color:var(--text3);font-weight:400;margin-left:6px"></span>
               </div>
-              <div style="display:flex;gap:8px;align-items:center">
+              <div style="display:flex;gap:8px;align-items:center" onclick="event.stopPropagation()">
                 <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2);cursor:pointer">
                   <input type="checkbox" id="dashAlertShowAll" onchange="renderDashAlertTbl()" style="accent-color:var(--gold)">
                   90일 전체 보기
                 </label>
                 <button class="btn btn-ghost btn-sm" onclick="toggleDashAlert()">🔔 알림 패널 →</button>
+                <button id="dashAlertToggleBtn" onclick="toggleDashAlertCollapse()"
+                  style="border:none;background:none;cursor:pointer;font-size:16px;color:var(--text3);padding:2px 6px;line-height:1">▲</button>
               </div>
             </div>
             <!-- 접기/펼치기 래퍼 -->
-            <div id="dashAlertCollapse">
+            <div id="dashAlertCollapse" style="overflow:hidden;transition:max-height .25s ease">
               <div class="tbl-wrap">
                 <table>
                   <thead><tr><th>유형</th><th>자산·계약명</th><th>만료일</th><th>D-day</th><th>담당자</th></tr></thead>
@@ -3867,10 +3869,31 @@ function renderDashAlertTbl() {
     <td><span class="d-tag ${dCls(a.days)}">D-${a.days}</span></td>
     <td class="mt">${a.worker||'—'}</td>
   </tr>`).join('');
+
+  // 펼쳐진 상태면 높이 재계산
+  const collapse = document.getElementById('dashAlertCollapse');
+  if(collapse && _dashAlertOpen) collapse.style.maxHeight = 'none';
 }
 
 function toggleDashAlert() {
   toggleNotif();
+}
+
+let _dashAlertOpen = true;
+function toggleDashAlertCollapse() {
+  const collapse = document.getElementById('dashAlertCollapse');
+  const btn = document.getElementById('dashAlertToggleBtn');
+  if(!collapse) return;
+  _dashAlertOpen = !_dashAlertOpen;
+  if(_dashAlertOpen) {
+    collapse.style.maxHeight = collapse.scrollHeight + 'px';
+    setTimeout(() => { collapse.style.maxHeight = 'none'; }, 260);
+    if(btn) btn.textContent = '▲';
+  } else {
+    collapse.style.maxHeight = collapse.scrollHeight + 'px';
+    requestAnimationFrame(() => { collapse.style.maxHeight = '0px'; });
+    if(btn) btn.textContent = '▼';
+  }
 }
 
 function renderDashHist(){
