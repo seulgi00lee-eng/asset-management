@@ -155,6 +155,7 @@ tbody tr{transition:background .1s}
 tbody tr:hover{background:var(--cream)}
 .tr-critical td:first-child{border-left:3px solid #8a2a2a}
 .tr-warn td:first-child{border-left:3px solid var(--gold)}
+.col-resizer:hover{background:var(--gold)!important;opacity:.6}
 tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2px solid var(--text)}
 
 .code{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--text)}
@@ -1254,16 +1255,16 @@ const SAMPLE={
     headers:['no','지역','법인명','건물명','층수','상세주소','계약시작일','계약종료일','보증금','전용평수','임차료','임대인','관코드','비고'],
     rows:[]},
   tangible:{label:'유형자산',tc:'tg-tangible',icon:'🖥️',color:'#1a6a3a',dbTable:'tangible',
-    headers:['no','법인명','품목명','자산명','모델명','sn','관코드','캠퍼스명','위치','운용상태','자산코드','비고'],
+    headers:['no','법인명','품목명','자산명','모델명','sn','관코드','캠퍼스명','건물명','층수','운용상태','자산코드','비고'],
     rows:[]},
   intangible:{label:'무형자산',tc:'tg-intangible',icon:'💿',color:'#7a5a00',dbTable:'intangible',
-    headers:['no','분류','상품명','회선서비스번호','관리번호','월청구금액','계약시작일','만료일','약정개월수','지역','법인명','관코드','캠퍼스명','위치','운용상태','비고'],
+    headers:['no','분류','상품명','회선서비스번호','관리번호','월청구금액','계약시작일','만료일','약정개월수','지역','법인명','관코드','캠퍼스명','건물명','층수','운용상태','비고'],
     rows:[]},
   rental:{label:'렌탈자산',tc:'tg-rental',icon:'📦',color:'#5a1a8a',dbTable:'rental',
-    headers:['no','렌탈품목','분류','업체명','모델명','sn','월렌탈료','계약시작일','계약종료일','약정개월수','지역','법인명','관코드','캠퍼스명','위치','운용상태','자산코드','비고'],
+    headers:['no','렌탈품목','분류','업체명','모델명','sn','월렌탈료','계약시작일','계약종료일','약정개월수','지역','법인명','관코드','캠퍼스명','건물명','층수','운용상태','자산코드','비고'],
     rows:[]},
   insurance:{label:'보험',tc:'tg-insurance',icon:'🛡️',color:'#0a4a5a',dbTable:'insurance',
-    headers:['no','보험사','종류','증권번호','mu_code','보험료','계약시작일','만기일','지역','법인명','학원명','캠퍼스명','위치','운용상태','비고'],
+    headers:['no','보험사','종류','증권번호','mu_code','보험료','계약시작일','만기일','지역','법인명','학원명','캠퍼스명','건물명','층수','운용상태','비고'],
     rows:[]}
 };
 
@@ -2386,13 +2387,28 @@ function setRentalCatFilter(cat) {
 function renderATable(d, rows, groupByCat=false) {
   const DKW = ['만료','종료','갱신','반납','만기'];
   const today = new Date();
-  // 정렬 상태 표시
+
+  // ── 헤더 렌더 (정렬 + 리사이즈 핸들) ──
   document.getElementById('aHead').innerHTML =
-    `<th style="width:32px;padding:8px 10px"><input type="checkbox" id="chkAll" onchange="toggleAllRows(this.checked)" style="accent-color:var(--gold);cursor:pointer"></th>` +
-    d.headers.map(h=>{
-      const arrow = sortState.col===h ? (sortState.asc?'▲':'▼') : '';
-      return `<th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortByCol('${h}')">${h} <span style="font-size:9px;color:var(--gold)">${arrow}</span></th>`;
-    }).join('') + '<th>관리</th>';
+    `<th style="width:32px;padding:8px 10px;position:relative;">
+      <input type="checkbox" id="chkAll" onchange="toggleAllRows(this.checked)" style="accent-color:var(--gold);cursor:pointer">
+    </th>` +
+    d.headers.map((h, idx) => {
+      const isSorted = sortState.col === h;
+      const arrow = isSorted ? (sortState.asc ? '↑' : '↓') : '';
+      const arrowColor = isSorted ? 'var(--gold)' : 'transparent';
+      return `<th data-col="${h}" style="position:relative;cursor:pointer;user-select:none;white-space:nowrap;min-width:60px;padding:9px 20px 9px 10px;"
+        onclick="sortByCol('${h}')">
+        <span>${h}</span>
+        <span style="font-size:10px;color:${arrowColor};font-weight:700;margin-left:4px">${arrow||'↕'}</span>
+        <span class="col-resizer" data-idx="${idx}"
+          style="position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;background:transparent;z-index:1;"
+          onmousedown="initColResize(event,this)" onclick="event.stopPropagation()"></span>
+      </th>`;
+    }).join('') + '<th style="white-space:nowrap;padding:9px 14px">관리</th>';
+
+  // ── 컬럼 너비 복원 ──
+  restoreColWidths(d.label);
 
   if (!rows.length) {
     document.getElementById('aBody').innerHTML = `<tr><td colspan="${d.headers.length+2}"><div class="empty"><div class="ei">📂</div><div class="et">등록된 항목 없음</div></div></td></tr>`;
@@ -4184,6 +4200,60 @@ async function applyKwanBulkChange() {
   await loadKwanBulkData();
 
   showToast(`✅ ${success}건 관코드 → ${newKwan} 변경 완료${fail>0?' (실패 '+fail+'건)':''}`);
+}
+
+// ── 컬럼 너비 저장/복원 ──────────────────────────────────────
+const COL_WIDTHS_KEY = 'assetColWidths';
+
+function saveColWidths(label) {
+  const ths = document.querySelectorAll('#aHead th[data-col]');
+  if(!ths.length) return;
+  const widths = {};
+  ths.forEach(th => { widths[th.dataset.col] = th.offsetWidth; });
+  const all = JSON.parse(localStorage.getItem(COL_WIDTHS_KEY) || '{}');
+  all[label] = widths;
+  localStorage.setItem(COL_WIDTHS_KEY, JSON.stringify(all));
+}
+
+function restoreColWidths(label) {
+  const all = JSON.parse(localStorage.getItem(COL_WIDTHS_KEY) || '{}');
+  const widths = all[label];
+  if(!widths) return;
+  const ths = document.querySelectorAll('#aHead th[data-col]');
+  ths.forEach(th => {
+    const w = widths[th.dataset.col];
+    if(w) { th.style.width = w + 'px'; th.style.minWidth = w + 'px'; }
+  });
+}
+
+// ── 컬럼 리사이즈 드래그 ─────────────────────────────────────
+let _resizeTh = null, _resizeStartX = 0, _resizeStartW = 0;
+
+function initColResize(e, handle) {
+  e.preventDefault();
+  _resizeTh = handle.closest('th');
+  _resizeStartX = e.clientX;
+  _resizeStartW = _resizeTh.offsetWidth;
+  _resizeTh.style.userSelect = 'none';
+
+  const onMove = (ev) => {
+    const delta = ev.clientX - _resizeStartX;
+    const newW = Math.max(50, _resizeStartW + delta);
+    _resizeTh.style.width = newW + 'px';
+    _resizeTh.style.minWidth = newW + 'px';
+  };
+
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    if(_resizeTh) _resizeTh.style.userSelect = '';
+    // 현재 자산의 컬럼 너비 저장
+    const d = SAMPLE[curType];
+    if(d) saveColWidths(d.label);
+  };
+
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
 }
 
 function handleMemoSel(val) {
