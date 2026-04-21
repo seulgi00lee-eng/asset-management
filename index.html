@@ -2402,22 +2402,29 @@ function buildRow(row, d, today, DKW) {
 
   // ── 렌탈자산: 관코드/캠퍼스명 자동 매핑 ──
   if(curType === 'rental' && CAMPUS_ROWS.length) {
-    // 캠퍼스 마스터 기준 자동 매핑 (건물명+층수 일치)
     if(!row['관코드'] && row['건물명']) {
-      const match = CAMPUS_ROWS.find(c =>
-        c['건물명'] && row['건물명'] && c['건물명'].includes(row['건물명']) &&
+      const matches = CAMPUS_ROWS.filter(c =>
+        c['건물명'] && row['건물명'] &&
+        (c['건물명'].includes(row['건물명']) || row['건물명'].includes(c['건물명'])) &&
         (!row['층수'] || c['층수'] === row['층수'])
       );
-      if(match) row['관코드'] = match['관코드'] || '';
-    }
-    // 캠퍼스명 자동 생성: 지역+사업부+브랜드
-    if(row['관코드'] && (!row['캠퍼스명'] || row['캠퍼스명'] === '—')) {
-      const kwanCode = String(row['관코드']).split(',')[0].trim();
-      const campusMatch = CAMPUS_ROWS.find(c => c['관코드'] === kwanCode);
-      if(campusMatch) {
-        const parts = [campusMatch['지역'], campusMatch['사업부'], campusMatch['브랜드']].filter(Boolean);
-        row['캠퍼스명'] = parts.join(' ');
+      if(matches.length > 0) {
+        const codes = [...new Set(matches.map(c=>c['관코드']).filter(Boolean))];
+        row['관코드'] = codes.join(', ');
       }
+    }
+    if(row['관코드'] && (!row['캠퍼스명'] || row['캠퍼스명'] === '—')) {
+      const codes = String(row['관코드']).split(',').map(k=>k.trim()).filter(Boolean);
+      const names = [];
+      const seen = new Set();
+      codes.forEach(code => {
+        const c = CAMPUS_ROWS.find(c => c['관코드'] === code);
+        if(c) {
+          const name = [c['지역'],c['사업부'],c['브랜드']].filter(Boolean).join(' ');
+          if(name && !seen.has(name)){ seen.add(name); names.push(name); }
+        }
+      });
+      if(names.length) row['캠퍼스명'] = names.join(' / ');
     }
   }
 
@@ -4320,26 +4327,41 @@ function initColResize(e, handle) {
 // ═══════════════════════ 렌탈자산 자동 매핑 ═══════════════════════
 function autoMapRentalKwan(rows) {
   rows.forEach(row => {
-    // 1. 관코드 자동 매핑 (미지정인 경우만)
+    // 1. 관코드 자동 매핑 — 같은 건물+층수에 해당하는 모든 관코드 수집
     if(!row['관코드'] && row['건물명']) {
-      const match = CAMPUS_ROWS.find(c => {
+      const matches = CAMPUS_ROWS.filter(c => {
         if(!c['건물명']) return false;
         const bMatch = String(c['건물명']).includes(String(row['건물명'])) ||
                        String(row['건물명']).includes(String(c['건물명']));
         const fMatch = !row['층수'] || c['층수'] === row['층수'];
         return bMatch && fMatch;
       });
-      if(match && match['관코드']) row['관코드'] = match['관코드'];
+
+      if(matches.length > 0) {
+        // 중복 제거 후 쉼표 연결
+        const kwanCodes = [...new Set(matches.map(c => c['관코드']).filter(Boolean))];
+        row['관코드'] = kwanCodes.join(', ');
+      }
     }
 
-    // 2. 캠퍼스명 자동 생성 (지역+사업부+브랜드)
-    const kwanCode = String(row['관코드']||'').split(',')[0].trim();
-    if(kwanCode) {
-      const campusMatch = CAMPUS_ROWS.find(c => c['관코드'] === kwanCode);
-      if(campusMatch) {
-        const parts = [campusMatch['지역'], campusMatch['사업부'], campusMatch['브랜드']].filter(Boolean);
-        if(parts.length) row['캠퍼스명'] = parts.join(' ');
-      }
+    // 2. 캠퍼스명 자동 생성 — 모든 관코드 기준으로 지역+사업부+브랜드 조합
+    const kwanCodes = String(row['관코드']||'').split(',').map(k=>k.trim()).filter(Boolean);
+    if(kwanCodes.length > 0) {
+      // 각 관코드의 캠퍼스명 수집 (중복 제거)
+      const campusNames = [];
+      const seen = new Set();
+      kwanCodes.forEach(code => {
+        const campusMatch = CAMPUS_ROWS.find(c => c['관코드'] === code);
+        if(campusMatch) {
+          const parts = [campusMatch['지역'], campusMatch['사업부'], campusMatch['브랜드']].filter(Boolean);
+          const name = parts.join(' ');
+          if(name && !seen.has(name)) {
+            seen.add(name);
+            campusNames.push(name);
+          }
+        }
+      });
+      if(campusNames.length > 0) row['캠퍼스명'] = campusNames.join(' / ');
     }
   });
 }
