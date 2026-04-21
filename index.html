@@ -2416,8 +2416,8 @@ function buildRow(row, d, today, DKW) {
     if(!row['관코드'] && row['건물명']) {
       const matches = CAMPUS_ROWS.filter(c =>
         c['건물명'] && row['건물명'] &&
-        (c['건물명'].includes(row['건물명']) || row['건물명'].includes(c['건물명'])) &&
-        (!row['층수'] || c['층수'] === row['층수'])
+        buildingMatch(c['건물명'], row['건물명']) &&
+        floorMatch(c['층수'], row['층수'])
       );
       if(matches.length > 0) {
         const codes = [...new Set(matches.map(c=>c['관코드']).filter(Boolean))];
@@ -4357,15 +4357,57 @@ function initColResize(e, handle) {
 }
 
 // ═══════════════════════ 렌탈자산 자동 매핑 ═══════════════════════
+// ── 건물명 매칭 헬퍼 ────────────────────────────────────────
+// "시그마타워/백궁프라자" 처럼 /로 구분된 경우도 각각 매칭
+function buildingMatch(campusBuilding, assetBuilding) {
+  if(!campusBuilding || !assetBuilding) return false;
+  const cb = String(campusBuilding).trim();
+  const ab = String(assetBuilding).trim();
+
+  // 캠퍼스 건물명을 /로 분리 (예: "시그마타워/백궁프라자" → ["시그마타워","백궁프라자"])
+  const campusParts = cb.split(/[\/,·]/).map(s=>s.trim()).filter(Boolean);
+  // 렌탈자산 건물명도 /로 분리
+  const assetParts  = ab.split(/[\/,·]/).map(s=>s.trim()).filter(Boolean);
+
+  // 어느 쪽이든 하나라도 포함 관계이면 매칭
+  for(const cp of campusParts) {
+    for(const ap of assetParts) {
+      if(cp === ap) return true;
+      if(cp.includes(ap) || ap.includes(cp)) return true;
+    }
+  }
+  return false;
+}
+
+// ── 층수 매칭 헬퍼 ─────────────────────────────────────────
+// 캠퍼스의 층수(예: "8층")가 렌탈자산의 층수 텍스트에 포함되는지 확인
+// 렌탈자산 층수가 "8층 수아층등관, 8층 수아층등록관" 처럼 기재된 경우도 처리
+function floorMatch(campusFloor, assetFloor) {
+  if(!assetFloor) return true;   // 층수 미기재 → 전체 매칭
+  if(!campusFloor) return false;
+  const cf = String(campusFloor).trim();
+  const af = String(assetFloor).trim();
+  // 완전 일치
+  if(cf === af) return true;
+  // 렌탈자산 층수가 캠퍼스 층수를 포함 (예: "8층 수아..." ← "8층")
+  if(af.includes(cf)) return true;
+  // 캠퍼스 층수가 렌탈자산 층수를 포함 (예: "3층/4층" ← "3층")
+  if(cf.includes(af)) return true;
+  // 숫자만 추출해서 비교 (예: "8층" ↔ "8")
+  const cn = cf.replace(/[^0-9]/g,'');
+  const an = af.replace(/[^0-9]/g,'');
+  if(cn && an && cn === an) return true;
+  return false;
+}
+
 function autoMapRentalKwan(rows) {
   rows.forEach(row => {
     // 1. 관코드 자동 매핑 — 같은 건물+층수에 해당하는 모든 관코드 수집
     if(!row['관코드'] && row['건물명']) {
       const matches = CAMPUS_ROWS.filter(c => {
         if(!c['건물명']) return false;
-        const bMatch = String(c['건물명']).includes(String(row['건물명'])) ||
-                       String(row['건물명']).includes(String(c['건물명']));
-        const fMatch = !row['층수'] || c['층수'] === row['층수'];
+        const bMatch = buildingMatch(c['건물명'], row['건물명']);
+        const fMatch = !row['층수'] || floorMatch(c['층수'], row['층수']);
         return bMatch && fMatch;
       });
 
