@@ -2232,11 +2232,20 @@ async function loadAsset(type){
   const cfp = document.getElementById('colFilterPanel');
   if(cfp) cfp.style.display='none';
   updateColFilterBadge();
-  syncKwanFromCampus(); // 관코드 최신화
 
   // ── 렌탈자산: 관코드/캠퍼스명 자동 매핑 ──
-  if(type === 'rental' && CAMPUS_ROWS.length) {
-    autoMapRentalKwan(d.rows);
+  if(type === 'rental') {
+    // 캠퍼스 데이터가 없으면 먼저 로드
+    if(!CAMPUS_ROWS.length) {
+      try {
+        const campusData = await sbSelect('campus');
+        CAMPUS_ROWS = campusData.map(r => ({ _id: r.id, _rowId: r.id, ...r }));
+      } catch(e) { console.warn('캠퍼스 로드 오류:', e); }
+    }
+    syncKwanFromCampus();
+    if(CAMPUS_ROWS.length) autoMapRentalKwan(d.rows);
+  } else {
+    syncKwanFromCampus();
   }
 
   const catSection = document.getElementById('rentalCatSection');
