@@ -2598,12 +2598,20 @@ function filterAsset(){
       filtered = [...filtered].sort((a, b) => {
         const da = new Date(fmtDate(a[dk]||''));
         const db = new Date(fmtDate(b[dk]||''));
-        const diffA = isNaN(da) ? 99999 : Math.ceil((da-today)/86400000);
-        const diffB = isNaN(db) ? 99999 : Math.ceil((db-today)/86400000);
-        // 만료 임박(양수 작은값) 먼저, 그 다음 일반 순
-        const scoreA = diffA >= 0 ? diffA : 99999;
-        const scoreB = diffB >= 0 ? diffB : 99999;
-        return scoreA - scoreB;
+        const diffA = isNaN(da) ? null : Math.ceil((da-today)/86400000);
+        const diffB = isNaN(db) ? null : Math.ceil((db-today)/86400000);
+
+        // D-day 있는 항목(0~90일) → 최상단, 오름차순
+        const inRangeA = diffA !== null && diffA >= 0 && diffA <= 90;
+        const inRangeB = diffB !== null && diffB >= 0 && diffB <= 90;
+
+        if(inRangeA && inRangeB) return diffA - diffB;   // 둘 다 임박 → 일수 오름차순
+        if(inRangeA && !inRangeB) return -1;              // A만 임박 → A 위로
+        if(!inRangeA && inRangeB) return 1;               // B만 임박 → B 위로
+        // 둘 다 임박 아님 → 원래 NO 순서 유지
+        const noA = Number(a['no']||a['NO']||9999);
+        const noB = Number(b['no']||b['NO']||9999);
+        return noA - noB;
       });
     }
   } else {
