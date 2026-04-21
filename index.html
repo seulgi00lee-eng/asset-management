@@ -1261,7 +1261,7 @@ const SAMPLE={
     headers:['no','분류','상품명','회선서비스번호','관리번호','월청구금액','계약시작일','만료일','약정개월수','지역','법인명','관코드','캠퍼스명','건물명','층수','운용상태','비고'],
     rows:[]},
   rental:{label:'렌탈자산',tc:'tg-rental',icon:'📦',color:'#5a1a8a',dbTable:'rental',
-    headers:['no','렌탈품목','분류','업체명','모델명','sn','월렌탈료','계약시작일','계약종료일','약정개월수','지역','법인명','관코드','캠퍼스명','건물명','층수','운용상태','자산코드','비고'],
+    headers:['no','렌탈품목','분류','업체명','모델명','옵션','계약번호','sn','월렌탈료','계약시작일','계약종료일','지역','법인명','관코드','캠퍼스명','건물명','층수','운용상태','자산코드','비고','확인여부'],
     rows:[]},
   insurance:{label:'보험',tc:'tg-insurance',icon:'🛡️',color:'#0a4a5a',dbTable:'insurance',
     headers:['no','보험사','종류','증권번호','mu_code','보험료','계약시작일','만기일','지역','법인명','학원명','캠퍼스명','건물명','층수','운용상태','비고'],
@@ -2317,6 +2317,12 @@ async function loadAsset(type){
   if(cfp) cfp.style.display='none';
   updateColFilterBadge();
   syncKwanFromCampus(); // 관코드 최신화
+
+  // ── 렌탈자산: 관코드/캠퍼스명 자동 매핑 ──
+  if(type === 'rental' && CAMPUS_ROWS.length) {
+    autoMapRentalKwan(d.rows);
+  }
+
   const catSection = document.getElementById('rentalCatSection');
   if (type === 'rental') {
     catSection.style.display = 'block';
@@ -2498,6 +2504,27 @@ function buildRow(row, d, today, DKW) {
   const rc   = diff>=0&&diff<=7 ? 'tr-critical' : diff>=0&&diff<=30 ? 'tr-critical' : diff>=0&&diff<=60 ? 'tr-warn' : diff>=0&&diff<=90 ? 'tr-warn' : '';
   const isKwanType = (curType === 'rental' || curType === 'lease');
 
+  // ── 렌탈자산: 관코드/캠퍼스명 자동 매핑 ──
+  if(curType === 'rental' && CAMPUS_ROWS.length) {
+    // 캠퍼스 마스터 기준 자동 매핑 (건물명+층수 일치)
+    if(!row['관코드'] && row['건물명']) {
+      const match = CAMPUS_ROWS.find(c =>
+        c['건물명'] && row['건물명'] && c['건물명'].includes(row['건물명']) &&
+        (!row['층수'] || c['층수'] === row['층수'])
+      );
+      if(match) row['관코드'] = match['관코드'] || '';
+    }
+    // 캠퍼스명 자동 생성: 지역+사업부+브랜드
+    if(row['관코드'] && (!row['캠퍼스명'] || row['캠퍼스명'] === '—')) {
+      const kwanCode = String(row['관코드']).split(',')[0].trim();
+      const campusMatch = CAMPUS_ROWS.find(c => c['관코드'] === kwanCode);
+      if(campusMatch) {
+        const parts = [campusMatch['지역'], campusMatch['사업부'], campusMatch['브랜드']].filter(Boolean);
+        row['캠퍼스명'] = parts.join(' ');
+      }
+    }
+  }
+
   return `<tr class="${rc}" data-rowid="${row._id}">
     <td style="width:32px;padding:8px 10px;text-align:center">
       <input type="checkbox" class="rowChk" data-id="${row._id}" onchange="updateSelCount()" style="accent-color:var(--gold);cursor:pointer">
@@ -2513,11 +2540,37 @@ function buildRow(row, d, today, DKW) {
       const codes = v ? v.split(',').map(c=>c.trim()).filter(Boolean) : [];
       const badgeHtml = codes.length
         ? codes.map(c=>`<span style="display:inline-block;margin:1px 2px;padding:1px 6px;background:var(--cream2);border:1px solid var(--border);font-family:var(--mono);font-size:10px;font-weight:600;color:var(--text)">${c}</span>`).join('')
-        : `<span style="font-size:11px;color:var(--text3)">— 미지정 —</span>`;
-      return `<td style="padding:6px 10px;min-width:120px">
+        : `<span style="font-size:11px;color:#8a2a2a;font-weight:600">— 미지정 —</span>`;
+      return `<td style="padding:6px 10px;min-width:100px">
         <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;cursor:pointer" onclick="openKwanPicker(${row._id},'${v||''}')">
           ${badgeHtml}
           <span style="font-size:10px;color:var(--gold);margin-left:2px">✎</span>
+        </div>
+      </td>`;
+    }
+
+    // ── 확인여부 셀 → 인라인 드롭다운 ──
+    if(h === '확인여부') {
+      const status = v || '미확인';
+      const isOk = status === '확인';
+      const bg   = isOk ? '#d1fae5' : '#fee2e2';
+      const color= isOk ? '#065f46' : '#991b1b';
+      const border= isOk ? '#a7f3d0' : '#fca5a5';
+      return `<td style="padding:6px 10px;min-width:80px">
+        <div style="position:relative;display:inline-block">
+          <span id="yw-${row._id}"
+            style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border:1px solid ${border};background:${bg};color:${color};font-size:10px;font-weight:700;cursor:pointer;border-radius:3px;white-space:nowrap"
+            onclick="toggleYwDropdown(event,'${row._id}','${v||'미확인'}')">
+            ${isOk ? '✅' : '⬜'} ${status} ▾
+          </span>
+          <div id="yw-dd-${row._id}" style="display:none;position:absolute;top:100%;left:0;z-index:50;background:#fff;border:1px solid var(--border);box-shadow:0 4px 12px rgba(0,0,0,.1);min-width:100px;border-radius:4px;overflow:hidden">
+            <div onclick="saveYwStatus(${row._id},'확인')" style="padding:8px 14px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--cream2)" onmouseenter="this.style.background='#d1fae5'" onmouseleave="this.style.background=''">
+              ✅ <span style="color:#065f46;font-weight:600">확인</span>
+            </div>
+            <div onclick="saveYwStatus(${row._id},'미확인')" style="padding:8px 14px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:6px" onmouseenter="this.style.background='#fee2e2'" onmouseleave="this.style.background=''">
+              ⬜ <span style="color:#991b1b;font-weight:600">미확인</span>
+            </div>
+          </div>
         </div>
       </td>`;
     }
@@ -4336,6 +4389,33 @@ function initColResize(e, handle) {
   document.addEventListener('mouseup', onUp);
 }
 
+// ═══════════════════════ 렌탈자산 자동 매핑 ═══════════════════════
+function autoMapRentalKwan(rows) {
+  rows.forEach(row => {
+    // 1. 관코드 자동 매핑 (미지정인 경우만)
+    if(!row['관코드'] && row['건물명']) {
+      const match = CAMPUS_ROWS.find(c => {
+        if(!c['건물명']) return false;
+        const bMatch = String(c['건물명']).includes(String(row['건물명'])) ||
+                       String(row['건물명']).includes(String(c['건물명']));
+        const fMatch = !row['층수'] || c['층수'] === row['층수'];
+        return bMatch && fMatch;
+      });
+      if(match && match['관코드']) row['관코드'] = match['관코드'];
+    }
+
+    // 2. 캠퍼스명 자동 생성 (지역+사업부+브랜드)
+    const kwanCode = String(row['관코드']||'').split(',')[0].trim();
+    if(kwanCode) {
+      const campusMatch = CAMPUS_ROWS.find(c => c['관코드'] === kwanCode);
+      if(campusMatch) {
+        const parts = [campusMatch['지역'], campusMatch['사업부'], campusMatch['브랜드']].filter(Boolean);
+        if(parts.length) row['캠퍼스명'] = parts.join(' ');
+      }
+    }
+  });
+}
+
 function handleMemoSel(val) {
   const ta = document.getElementById('mf-memo');
   if(!ta) return;
@@ -4345,9 +4425,59 @@ function handleMemoSel(val) {
     ta.value = '';
   } else {
     ta.style.display = 'none';
-    ta.value = val; // 선택값을 textarea에도 저장 (saveItem에서 읽음)
+    ta.value = val;
   }
 }
+function toggleYwDropdown(e, rowId, curVal) {
+  e.stopPropagation();
+  // 다른 드롭다운 모두 닫기
+  document.querySelectorAll('[id^="yw-dd-"]').forEach(el => {
+    if(el.id !== `yw-dd-${rowId}`) el.style.display = 'none';
+  });
+  const dd = document.getElementById(`yw-dd-${rowId}`);
+  if(dd) dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+}
+
+async function saveYwStatus(rowId, status) {
+  // 드롭다운 닫기
+  const dd = document.getElementById(`yw-dd-${rowId}`);
+  if(dd) dd.style.display = 'none';
+
+  const d = SAMPLE['rental'];
+  const row = d?.rows.find(r => r._id === rowId);
+  if(!row) return;
+
+  const oldStatus = row['확인여부'] || '미확인';
+  if(oldStatus === status) return;
+
+  // Supabase 저장
+  const { error } = await _supa.from('rental').update({ '확인여부': status }).eq('id', row._rowId || row.id);
+  if(error) { showToast('❌ 저장 실패: ' + error.message); return; }
+
+  // 메모리 업데이트
+  row['확인여부'] = status;
+
+  // 셀 즉시 업데이트 (리렌더 없이)
+  const cell = document.getElementById(`yw-${rowId}`);
+  if(cell) {
+    const isOk = status === '확인';
+    const bg   = isOk ? '#d1fae5' : '#fee2e2';
+    const color= isOk ? '#065f46' : '#991b1b';
+    const border= isOk ? '#a7f3d0' : '#fca5a5';
+    cell.style.background = bg;
+    cell.style.color = color;
+    cell.style.borderColor = border;
+    cell.innerHTML = `${isOk?'✅':'⬜'} ${status} ▾`;
+  }
+
+  showToast(`✅ ${status}으로 변경됨`);
+}
+
+// 외부 클릭 시 드롭다운 닫기
+document.addEventListener('click', () => {
+  document.querySelectorAll('[id^="yw-dd-"]').forEach(el => el.style.display = 'none');
+});
+
 document.addEventListener('click',e=>{if(!e.target.closest('#notifPanel')&&!e.target.closest('.tb-bell'))closeNotif();});
 
 // ═══════════════════════ 비용 월 마감 ═══════════════════════
