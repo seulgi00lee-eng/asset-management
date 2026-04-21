@@ -538,18 +538,12 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
         <!-- 통계 카드 -->
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);margin-bottom:16px" id="aStats"></div>
 
-        <!-- 렌탈자산 전용: 카테고리 요약 카드 (렌탈일 때만 표시) -->
-        <div id="rentalCatSection" style="display:none;margin-bottom:14px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-            <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);font-weight:700">카테고리별 현황</div>
-            <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:4px 10px" onclick="openCatMgr()">⚙️ 카테고리 관리</button>
-          </div>
-          <div id="rentalCatCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:14px"></div>
-
-          <!-- 카테고리 필터 버튼 -->
-          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:2px">
-            <span style="font-size:10px;color:var(--text3);margin-right:4px">필터</span>
+        <!-- 렌탈자산 전용: 카테고리 필터 (렌탈일 때만 표시) -->
+        <div id="rentalCatSection" style="display:none;margin-bottom:10px">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <span style="font-size:10px;color:var(--text3);letter-spacing:1px;font-weight:700">카테고리</span>
             <div id="rentalCatFilters" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+            <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 8px;margin-left:auto" onclick="openCatMgr()">⚙️</button>
           </div>
         </div>
 
@@ -2262,7 +2256,6 @@ async function loadAsset(type){
 }
 
 function renderRentalCats(rows) {
-  // 카테고리별 집계
   const catMap = {};
   rows.forEach(r => {
     const cat = getCatForRow(r);
@@ -2272,31 +2265,9 @@ function renderRentalCats(rows) {
     catMap[cat].amt += amt;
     catMap[cat].rows.push(r);
   });
-
   const cats = Object.entries(catMap).sort((a,b) => b[1].amt - a[1].amt);
-  const totalAmt = rows.reduce((s,r) => s + (Number(String(r['월렌탈료']||'0').replace(/[^0-9]/g,''))||0), 0);
 
-  // 카테고리 요약 카드
-  const allCard = `<div class="rcat-card ${rentalCatFilter==='전체'?'active':''}" style="--rc:#1a1a1a" onclick="setRentalCatFilter('전체')">
-    <div class="rcat-label">전체</div>
-    <div class="rcat-count">${rows.length}<span style="font-size:13px;font-weight:400;color:var(--text3)">건</span></div>
-    <div class="rcat-amt">${totalAmt>0?totalAmt.toLocaleString('ko-KR')+'원/월':'—'}</div>
-  </div>`;
-
-  const catCards = cats.map(([cat, info]) => {
-    const found = RENTAL_CATS.find(c => c.key === cat);
-    const icon  = found?.icon || '📦';
-    const color = found?.color || '#8a6a20';
-    return `<div class="rcat-card ${rentalCatFilter===cat?'active':''}" style="--rc:${color}" onclick="setRentalCatFilter('${cat}')">
-      <div class="rcat-label">${icon} ${cat}</div>
-      <div class="rcat-count">${info.count}<span style="font-size:13px;font-weight:400;color:var(--text3)">건</span></div>
-      <div class="rcat-amt">${info.amt>0?info.amt.toLocaleString('ko-KR')+'원/월':'—'}</div>
-    </div>`;
-  }).join('');
-
-  document.getElementById('rentalCatCards').innerHTML = allCard + catCards;
-
-  // 필터 버튼
+  // 필터 버튼만 렌더 (카드 삭제)
   const filterBtns = ['전체', ...cats.map(([k])=>k)].map(k =>
     `<button class="rcat-filter-btn ${rentalCatFilter===k?'active':''}" onclick="setRentalCatFilter('${k}')">${k}</button>`
   ).join('');
@@ -2329,24 +2300,27 @@ function renderATable(d, rows, groupByCat=false) {
     const tbl = tblWrap.querySelector('table');
     if(tbl) {
       tbl.style.tableLayout = 'fixed';
-      // 기존 colgroup 제거 후 재생성
       tbl.querySelectorAll('colgroup').forEach(c=>c.remove());
       const cg = document.createElement('colgroup');
       // 체크박스 col
-      const c0 = document.createElement('col');
-      c0.style.width = '36px';
-      cg.appendChild(c0);
-      // 데이터 col들
+      const c0 = document.createElement('col'); c0.style.width = '36px'; cg.appendChild(c0);
+      // 컬럼별 기본 너비 (저장값 없을 때)
+      const DEFAULT_W = {
+        'no':50, 'sn':120, '계약번호':110, '옵션':80, '모델명':120,
+        '월렌탈료':90, '보증금':100, '전용평수':80, '임차료':90,
+        '계약시작일':95, '계약종료일':95, '관코드':80,
+        '캠퍼스명':100, '건물명':90, '층수':60, '운용상태':75,
+        '자산코드':90, '비고':80, '확인여부':80,
+        '법인명':80, '지역':60, '분류':70, '렌탈품목':90,
+        '업체명':80, '학원명':80, '사업부':70, '브랜드':70,
+      };
       d.headers.forEach(h => {
         const col = document.createElement('col');
-        const w = savedWidths[h];
+        const w = savedWidths[h] || DEFAULT_W[h];
         if(w) col.style.width = w + 'px';
         cg.appendChild(col);
       });
-      // 관리 col
-      const cLast = document.createElement('col');
-      cLast.style.width = '110px';
-      cg.appendChild(cLast);
+      const cLast = document.createElement('col'); cLast.style.width = '110px'; cg.appendChild(cLast);
       tbl.insertBefore(cg, tbl.firstChild);
     }
   }
@@ -2360,7 +2334,7 @@ function renderATable(d, rows, groupByCat=false) {
       const isSorted = sortState.col === h;
       const arrow = isSorted ? (sortState.asc ? '↑' : '↓') : '↕';
       const arrowColor = isSorted ? 'var(--gold)' : 'var(--border2)';
-      return `<th data-col="${h}" style="position:relative;cursor:pointer;user-select:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:9px 22px 9px 10px;"
+      return `<th data-col="${h}" style="position:relative;cursor:pointer;user-select:none;white-space:nowrap;padding:9px 22px 9px 10px;"
         onclick="sortByCol('${h}')">
         <span style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3)">${h}</span>
         <span style="font-size:10px;color:${arrowColor};font-weight:700;margin-left:3px">${arrow}</span>
