@@ -4621,36 +4621,44 @@ function setCostSort(col) {
   if(costResult.length) runCostCalc();
 }
 
-// ── 지역별 비용 파일 업로드 분석 ─────────────────────────────
+const ASSET_PROXY_URL = 'https://script.google.com/macros/s/AKfycbyRB6RyWKM7h3TeCcrTSyZFTEzHpcw__LaI_-LIb3UdXFvJ7Uu95wFdjAbc8W1FGA5n/exec';
+
+async function callClaudeProxy(messages, max_tokens=1000) {
+  const res = await fetch(ASSET_PROXY_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens,
+      messages
+    })
+  });
+  return await res.json();
+}
+
 const REGION_FILE_PROMPT = `이 거래명세서(청구서)를 분석해서 아래 JSON 배열 형식으로만 응답하세요. 다른 텍스트 없이 JSON만 출력하세요.
 
 [
   {
     "업체명": "업체명",
     "품목": "캡스 또는 청소용역 또는 청소용품 중 하나로만 분류",
-    "금액": 숫자 (반드시 VAT 포함 최종 금액, 원 단위 숫자만. 공급가액이 아닌 VAT포함 합계금액),
-    "지역": "지역명 (예: 수내, 광교, 정자, 이매, 영통. 없으면 빈 문자열)",
-    "건물명": "설치 건물명 (예: 수내동빌딩, 다운타운빌딩. 없으면 빈 문자열)",
-    "층수": "층수 (예: 3층, 8층. 없으면 빈 문자열)",
-    "관코드": "관코드 또는 지점코드 숫자 (예: 101, 224. 없으면 빈 문자열)",
-    "비고": "특이사항 (없으면 빈 문자열)"
+    "금액": 숫자(반드시 VAT포함 최종금액 원단위 숫자만. 공급가액만 있으면 공급가액×1.1),
+    "지역": "지역명(예:수내,광교,정자,이매,영통. 없으면 빈문자열)",
+    "건물명": "설치건물명(예:수내동빌딩,다운타운빌딩. 없으면 빈문자열)",
+    "층수": "층수(예:3층,8층. 없으면 빈문자열)",
+    "관코드": "수익코드 또는 관코드 또는 지점코드 숫자(예:101,224. 컬럼명이 수익코드/관코드/지점코드/코드/code 등이면 해당값. 없으면 빈문자열)",
+    "비고": "특이사항(없으면 빈문자열)"
   }
 ]
 
-품목 분류 기준:
-- 캡스: 보안, CCTV, 경비, 캡스, 방범
-- 청소용역: 청소, 청소용역, 환경미화, 클리닝
-- 청소용품: 청소용품, 소모품, 세제, 비품
-
-중요: 금액은 반드시 VAT(부가세) 포함 최종 합계금액. 공급가액이나 VAT금액만 있으면 (공급가액 × 1.1) 계산해서 입력.
-같은 파일에 여러 항목이 있으면 각각 배열 항목으로 분리.
-JSON 배열만 출력, 마크다운 코드블록 없이.`;
+품목분류: 캡스(보안,CCTV,경비,방범) / 청소용역(청소,환경미화,클리닝) / 청소용품(소모품,세제,비품)
+관코드: 숫자3자리(101,224,302등)형태가 관코드일 가능성 높음. 행마다 다르면 각각 별도항목으로 분리.
+JSON배열만 출력, 마크다운코드블록 없이.`;
 
 async function handleRegionFiles(files) {
   if(!files || !files.length) return;
   const fileArr = Array.from(files);
 
-  // 진행 UI 표시
   const prog = document.getElementById('regionFileProgress');
   const progText = document.getElementById('regionFileProgressText');
   const progBar = document.getElementById('regionFileProgressBar');
@@ -4659,30 +4667,31 @@ async function handleRegionFiles(files) {
 
   fileList.innerHTML = fileArr.map((f,i) =>
     `<div style="font-size:11px;padding:3px 8px;background:#ede9fe;border-radius:3px;color:#5b21b6">
-      ${f.name} <span id="rfile-st-${i}" style="color:#7c3aed">⏳</span>
+      ${f.name} <span id="rfile-st-${i}">⏳</span>
     </div>`).join('');
 
-  const extracted = []; // raw items from Claude
+  const extracted = [];
 
   for(let i=0; i<fileArr.length; i++) {
     const f = fileArr[i];
-    progText.textContent = `분석 중 (${i+1}/${fileArr.length}): ${f.name}`;
-    progBar.style.width = Math.round((i/fileArr.length)*100) + '%';
-
+    if(progText) progText.textContent = `분석 중 (${i+1}/${fileArr.length}): ${f.name}`;
+    if(progBar)  progBar.style.width = Math.round((i/fileArr.length)*100) + '%';
     try {
       const items = await analyzeRegionFile(f);
       items.forEach(item => extracted.push(item));
-      document.getElementById(`rfile-st-${i}`).textContent = `✅ ${items.length}건`;
+      const st = document.getElementById(`rfile-st-${i}`);
+      if(st) st.textContent = `✅ ${items.length}건`;
     } catch(err) {
       console.error(err);
-      document.getElementById(`rfile-st-${i}`).textContent = '❌';
+      const st = document.getElementById(`rfile-st-${i}`);
+      if(st) st.textContent = '❌ ' + (err.message||'오류');
     }
   }
 
-  progBar.style.width = '100%';
-  progText.textContent = `✅ 분석 완료 — ${extracted.length}개 항목 추출됨. 확인 후 저장해주세요.`;
+  if(progBar) progBar.style.width = '100%';
+  if(progText) progText.textContent = `✅ 분석 완료 — ${extracted.length}개 항목 추출됨. 확인 후 저장해주세요.`;
 
-  // ── 3단계 매칭으로 지역별 행에 병합 ──
+  // 3단계 매칭으로 지역별 행에 병합
   extracted.forEach(item => {
     const cat = item['품목'];
     if(!REGION_CATS.includes(cat)) return;
@@ -4691,14 +4700,14 @@ async function handleRegionFiles(files) {
 
     let resolvedRegion = '';
 
-    // 1순위: 관코드 직접 매칭
+    // 1순위: 관코드/수익코드 매칭
     if(item['관코드']) {
       const kwanStr = String(item['관코드']).trim();
       const campusMatch = CAMPUS_ROWS.find(c => c['관코드'] === kwanStr);
       if(campusMatch) resolvedRegion = campusMatch['지역'] || '';
     }
 
-    // 2순위: 건물명 + 층수 매칭
+    // 2순위: 건물명+층수 매칭
     if(!resolvedRegion && item['건물명']) {
       const matches = CAMPUS_ROWS.filter(c =>
         buildingMatch(c['건물명'], item['건물명']) &&
@@ -4707,14 +4716,10 @@ async function handleRegionFiles(files) {
       if(matches.length > 0) resolvedRegion = matches[0]['지역'] || '';
     }
 
-    // 3순위: 지역 직접 사용
-    if(!resolvedRegion && item['지역']) {
-      resolvedRegion = item['지역'];
-    }
-
+    // 3순위: 지역 직접
+    if(!resolvedRegion && item['지역']) resolvedRegion = item['지역'];
     if(!resolvedRegion) resolvedRegion = '미분류';
 
-    // regionCostData에 병합
     let row = regionCostData.find(r => r.region === resolvedRegion);
     if(!row) {
       row = { region: resolvedRegion, 캡스:0, 청소용역:0, 청소용품:0 };
@@ -4724,8 +4729,6 @@ async function handleRegionFiles(files) {
   });
 
   renderRegionCostRows();
-
-  // 파일 input 초기화
   document.getElementById('regionFileInput').value = '';
 }
 
@@ -4746,21 +4749,11 @@ async function analyzeRegionFile(file) {
       { type:'text', text: REGION_FILE_PROMPT }
     ];
   } else {
-    // Excel
     const text = await readExcelText(file);
     content = [{ type:'text', text: REGION_FILE_PROMPT + '\n\n[파일 내용]\n' + text }];
   }
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method:'POST',
-    headers:{ 'Content-Type':'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1000,
-      messages: [{ role:'user', content }]
-    })
-  });
-  const data = await res.json();
+  const data = await callClaudeProxy([{ role:'user', content }], 2000);
   const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
   const clean = text.replace(/```json|```/g,'').trim();
   const parsed = JSON.parse(clean);
@@ -4784,7 +4777,7 @@ async function readExcelText(file) {
   wb.SheetNames.forEach(name => {
     text += `[${name}]\n` + XLSX.utils.sheet_to_csv(wb.Sheets[name]) + '\n';
   });
-  return text.slice(0, 6000);
+  return text.slice(0, 12000);
 }
 
 // ── 지역별 비용 (캡스·청소용역·청소용품) ═══════════════════════
@@ -4936,7 +4929,7 @@ async function loadAdditionalCostMap() {
       if(!additionalCostMap[r['관코드']]) additionalCostMap[r['관코드']] = {};
       additionalCostMap[r['관코드']][r['분류']] = { amt: r['금액'], reason: r['사유']||'', id: r.id };
     });
-    if(costResult.length) runCostCalc();
+    if(typeof costResult !== 'undefined' && costResult.length) runCostCalc();
   } catch(e) { console.warn('추가비용 로드 오류:', e); }
 }
 
