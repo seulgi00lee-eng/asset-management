@@ -4624,15 +4624,12 @@ function setCostSort(col) {
 const ASSET_PROXY_URL = 'https://script.google.com/macros/s/AKfycbyRB6RyWKM7h3TeCcrTSyZFTEzHpcw__LaI_-LIb3UdXFvJ7Uu95wFdjAbc8W1FGA5n/exec';
 
 async function callClaudeProxy(messages, max_tokens=1000) {
-  const res = await fetch(ASSET_PROXY_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens,
-      messages
-    })
-  });
+  const params = encodeURIComponent(JSON.stringify({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens,
+    messages
+  }));
+  const res = await fetch(ASSET_PROXY_URL + '?payload=' + params);
   return await res.json();
 }
 
