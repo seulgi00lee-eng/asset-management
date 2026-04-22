@@ -619,10 +619,24 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
               <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:6px">지역 단위 공통 비용 — 지역별 합산 행으로 반영</span>
             </div>
             <div style="display:flex;gap:8px">
+              <button class="btn btn-ghost btn-sm" onclick="document.getElementById('regionFileInput').click()" style="color:#5a1a8a;border-color:#c4b5fd">📎 파일로 자동입력</button>
+              <input type="file" id="regionFileInput" multiple accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls" style="display:none" onchange="handleRegionFiles(this.files)">
               <button class="btn btn-ghost btn-sm" onclick="addRegionCostRow()">＋ 지역 추가</button>
               <button class="btn btn-ghost btn-sm" onclick="saveRegionCosts()" style="color:#065f46;border-color:#a7f3d0">💾 저장</button>
             </div>
           </div>
+
+          <!-- 파일 분석 진행 상태 -->
+          <div id="regionFileProgress" style="display:none;padding:10px 16px;background:#faf5ff;border-bottom:1px solid #e9d5ff">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="font-size:12px;color:#7c3aed;font-weight:600" id="regionFileProgressText">분석 중...</div>
+              <div style="flex:1;height:4px;background:#e9d5ff;border-radius:2px;overflow:hidden">
+                <div id="regionFileProgressBar" style="height:100%;background:#7c3aed;width:0%;transition:width .3s"></div>
+              </div>
+            </div>
+            <div id="regionFileList" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"></div>
+          </div>
+
           <div style="padding:12px 16px">
             <div style="display:grid;grid-template-columns:120px 1fr 1fr 1fr 32px;gap:8px;margin-bottom:6px">
               <div style="font-size:9px;letter-spacing:1px;color:var(--text3);padding:4px 0">지역</div>
@@ -4607,7 +4621,150 @@ function setCostSort(col) {
   if(costResult.length) runCostCalc();
 }
 
-// ═══════════════════════ 지역별 비용 (캡스·청소용역·청소용품) ═══════════════════════
+// ── 지역별 비용 파일 업로드 분석 ─────────────────────────────
+const REGION_FILE_PROMPT = `이 거래명세서(청구서)를 분석해서 아래 JSON 배열 형식으로만 응답하세요. 다른 텍스트 없이 JSON만 출력하세요.
+
+[
+  {
+    "지역": "지역명 (예: 수내, 광교, 정자, 이매, 영통 등. 없으면 빈 문자열)",
+    "품목": "캡스 또는 청소용역 또는 청소용품 중 하나로만 분류",
+    "금액": 숫자 (VAT 포함 최종 금액, 원 단위 숫자만),
+    "업체명": "업체명",
+    "비고": "특이사항 (없으면 빈 문자열)"
+  }
+]
+
+품목 분류 기준:
+- 캡스: 보안, CCTV, 경비, 캡스, 방범
+- 청소용역: 청소, 청소용역, 환경미화, 클리닝
+- 청소용품: 청소용품, 소모품, 세제, 비품
+
+같은 파일에 여러 항목이 있으면 각각 배열 항목으로 분리하세요.
+금액은 숫자만 (쉼표·원·VAT 문자 제외).
+JSON 배열만 출력, 마크다운 코드블록 없이.`;
+
+async function handleRegionFiles(files) {
+  if(!files || !files.length) return;
+  const fileArr = Array.from(files);
+
+  // 진행 UI 표시
+  const prog = document.getElementById('regionFileProgress');
+  const progText = document.getElementById('regionFileProgressText');
+  const progBar = document.getElementById('regionFileProgressBar');
+  const fileList = document.getElementById('regionFileList');
+  if(prog) prog.style.display = 'block';
+
+  fileList.innerHTML = fileArr.map((f,i) =>
+    `<div style="font-size:11px;padding:3px 8px;background:#ede9fe;border-radius:3px;color:#5b21b6">
+      ${f.name} <span id="rfile-st-${i}" style="color:#7c3aed">⏳</span>
+    </div>`).join('');
+
+  const extracted = []; // [{ 지역, 캡스, 청소용역, 청소용품 }]
+
+  for(let i=0; i<fileArr.length; i++) {
+    const f = fileArr[i];
+    progText.textContent = `분석 중 (${i+1}/${fileArr.length}): ${f.name}`;
+    progBar.style.width = Math.round((i/fileArr.length)*100) + '%';
+
+    try {
+      const items = await analyzeRegionFile(f);
+      items.forEach(item => {
+        // 지역 찾기 또는 생성
+        let row = extracted.find(r => r.region === item['지역']);
+        if(!row) {
+          row = { region: item['지역']||'', 캡스:0, 청소용역:0, 청소용품:0 };
+          extracted.push(row);
+        }
+        const cat = item['품목'];
+        if(REGION_CATS.includes(cat)) {
+          row[cat] = (row[cat]||0) + (Number(item['금액'])||0);
+        }
+      });
+      document.getElementById(`rfile-st-${i}`).textContent = `✅ ${items.length}건`;
+    } catch(err) {
+      console.error(err);
+      document.getElementById(`rfile-st-${i}`).textContent = '❌';
+    }
+  }
+
+  progBar.style.width = '100%';
+  progText.textContent = `✅ 분석 완료 — ${extracted.length}개 지역 추출됨. 확인 후 저장해주세요.`;
+
+  // 기존 데이터에 병합 (같은 지역이면 금액 합산)
+  extracted.forEach(ex => {
+    const existing = regionCostData.find(r => r.region === ex.region);
+    if(existing) {
+      REGION_CATS.forEach(c => { existing[c] = (existing[c]||0) + (ex[c]||0); });
+    } else {
+      regionCostData.push(ex);
+    }
+  });
+
+  renderRegionCostRows();
+
+  // 파일 input 초기화
+  document.getElementById('regionFileInput').value = '';
+}
+
+async function analyzeRegionFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  let content = [];
+
+  if(['jpg','jpeg','png'].includes(ext)) {
+    const b64 = await fileToBase64(file);
+    content = [
+      { type:'image', source:{ type:'base64', media_type: file.type||'image/jpeg', data: b64.split(',')[1] } },
+      { type:'text', text: REGION_FILE_PROMPT }
+    ];
+  } else if(ext === 'pdf') {
+    const b64 = await fileToBase64(file);
+    content = [
+      { type:'document', source:{ type:'base64', media_type:'application/pdf', data: b64.split(',')[1] } },
+      { type:'text', text: REGION_FILE_PROMPT }
+    ];
+  } else {
+    // Excel
+    const text = await readExcelText(file);
+    content = [{ type:'text', text: REGION_FILE_PROMPT + '\n\n[파일 내용]\n' + text }];
+  }
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      messages: [{ role:'user', content }]
+    })
+  });
+  const data = await res.json();
+  const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+  const clean = text.replace(/```json|```/g,'').trim();
+  const parsed = JSON.parse(clean);
+  return Array.isArray(parsed) ? parsed : [parsed];
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
+async function readExcelText(file) {
+  if(typeof XLSX === 'undefined') return '(Excel 파싱 불가)';
+  const ab = await file.arrayBuffer();
+  const wb = XLSX.read(ab, { type:'array' });
+  let text = '';
+  wb.SheetNames.forEach(name => {
+    text += `[${name}]\n` + XLSX.utils.sheet_to_csv(wb.Sheets[name]) + '\n';
+  });
+  return text.slice(0, 6000);
+}
+
+// ── 지역별 비용 (캡스·청소용역·청소용품) ═══════════════════════
 const REGION_CATS = ['캡스','청소용역','청소용품'];
 let regionCostData = []; // [{ region, 캡스, 청소용역, 청소용품 }]
 
