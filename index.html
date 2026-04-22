@@ -2103,9 +2103,8 @@ async function runCostCalc(){
   const thead = document.getElementById('costSummaryHead');
   const tbody = document.getElementById('costSummaryBody');
   const tfoot = document.getElementById('costSummaryFoot');
-  const TH = (txt, right=false) => `<th style="padding:8px 10px;font-size:9px;letter-spacing:1px;color:var(--text3);white-space:nowrap;${right?'text-align:right':''}">${txt}</th>`;
+
   const TD = (txt, opts='') => `<td style="padding:8px 10px;font-size:11px;white-space:nowrap;${opts}">${txt}</td>`;
-  // 금액 셀 — 클릭 시 추가비용 입력 모달
   const TDN = (n, kwan, cat) => {
     const extra = additionalCostMap[kwan]?.[cat];
     const hasExtra = extra && extra.amt > 0;
@@ -2120,14 +2119,42 @@ async function runCostCalc(){
       title="클릭하여 추가비용 입력">${base}${extraTag}</td>`;
   };
 
+  // 정렬 함수
+  const sortedResult = [...costResult].sort((a, b) => {
+    if(!costSortCol) return 0;
+    let va, vb;
+    if(FIXED_CATS.includes(costSortCol)) {
+      va = a.catAmts[costSortCol]||0; vb = b.catAmts[costSortCol]||0;
+    } else if(costSortCol === '비용합계') {
+      va = a.총비용; vb = b.총비용;
+    } else if(costSortCol === '항목수') {
+      va = a.항목수; vb = b.항목수;
+    } else {
+      va = String(a[costSortCol]||''); vb = String(b[costSortCol]||'');
+      return costSortAsc ? va.localeCompare(vb,'ko') : vb.localeCompare(va,'ko');
+    }
+    return costSortAsc ? va - vb : vb - va;
+  });
+
+  // 헤더 생성 함수 (클릭 정렬 + 화살표)
+  const TH = (txt, col, right=false) => {
+    const isActive = costSortCol === col;
+    const arrow = isActive ? (costSortAsc ? '↑' : '↓') : '↕';
+    const arrowColor = isActive ? 'var(--gold)' : 'var(--border2)';
+    return `<th onclick="setCostSort('${col}')" style="padding:8px 10px;font-size:9px;letter-spacing:1px;color:var(--text3);white-space:nowrap;cursor:pointer;user-select:none;${right?'text-align:right':''}">
+      ${txt} <span style="font-size:10px;color:${arrowColor}">${arrow}</span>
+    </th>`;
+  };
+
   if(thead) thead.innerHTML = `<tr style="background:var(--cream2);border-bottom:2px solid var(--text)">
-    ${TH('법인명')}${TH('관코드')}${TH('사업부')}${TH('브랜드')}
-    ${FIXED_CATS.map(c=>TH(c+'✎',true)).join('')}
-    ${TH('비용합계',true)}${TH('항목수')}${TH('비율')}
+    ${TH('법인명','법인명')}${TH('관코드','code')}${TH('사업부','사업부')}${TH('브랜드','브랜드')}
+    ${FIXED_CATS.map(c=>TH(c+'✎',c,true)).join('')}
+    ${TH('비용합계','비용합계',true)}${TH('항목수','항목수')}
+    <th style="padding:8px 10px;font-size:9px;letter-spacing:1px;color:var(--text3)">비율</th>
   </tr>`;
 
   const colors = ['#1a1a1a','#3a6a3a','#c8a96e','#6a5a8a','#2a6a6a','#8a2a2a'];
-  if(tbody) tbody.innerHTML = costResult.map((d,i) => {
+  if(tbody) tbody.innerHTML = sortedResult.map((d,i) => {
     const pct = totalAmt>0 ? (d.총비용/totalAmt*100).toFixed(1) : '0.0';
     const color = colors[i%colors.length];
     return `<tr style="border-bottom:1px solid var(--cream2)">
@@ -4563,6 +4590,21 @@ function autoMapRentalKwan(rows) {
       if(campusNames.length > 0) row['캠퍼스명'] = campusNames.join(' / ');
     }
   });
+}
+
+// ── 비용 피벗 테이블 정렬 상태 ──
+let costSortCol = '비용합계';  // 기본: 비용합계 내림차순
+let costSortAsc = false;
+
+function setCostSort(col) {
+  if(costSortCol === col) {
+    costSortAsc = !costSortAsc;
+  } else {
+    costSortCol = col;
+    costSortAsc = col === '법인명' || col === '사업부' || col === '브랜드' || col === 'code';
+  }
+  // costResult가 있으면 테이블만 재렌더 (전체 재계산 없이)
+  if(costResult.length) runCostCalc();
 }
 
 // ═══════════════════════ 지역별 비용 (캡스·청소용역·청소용품) ═══════════════════════
