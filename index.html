@@ -612,6 +612,32 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
         </div>
 
         <!-- KPI 카드 -->
+        <!-- 지역별 비용 입력 (캡스·청소용역·청소용품) -->
+        <div class="sec" style="margin-bottom:12px" id="regionCostSec">
+          <div class="sec-hd">
+            <div class="sec-t">지역별 비용 입력
+              <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:6px">캡스·청소용역·청소용품 — 지역 합산 후 해당 지역 관코드 균등 배분</span>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-ghost btn-sm" onclick="addRegionCostRow()">＋ 지역 추가</button>
+              <button class="btn btn-ghost btn-sm" onclick="saveRegionCosts()" style="color:#065f46;border-color:#a7f3d0">💾 저장</button>
+            </div>
+          </div>
+          <div style="padding:12px 16px">
+            <div style="display:grid;grid-template-columns:120px 1fr 1fr 1fr 32px;gap:8px;margin-bottom:6px">
+              <div style="font-size:9px;letter-spacing:1px;color:var(--text3);padding:4px 0">지역</div>
+              <div style="font-size:9px;letter-spacing:1px;color:var(--text3);text-align:right;padding:4px 0">캡스 (원)</div>
+              <div style="font-size:9px;letter-spacing:1px;color:var(--text3);text-align:right;padding:4px 0">청소용역 (원)</div>
+              <div style="font-size:9px;letter-spacing:1px;color:var(--text3);text-align:right;padding:4px 0">청소용품 (원)</div>
+              <div></div>
+            </div>
+            <div id="regionCostRows"></div>
+            <div id="regionCostEmpty" style="text-align:center;padding:16px;color:var(--text3);font-size:12px">
+              ＋ 지역 추가 버튼을 눌러 지역별 비용을 입력하세요
+            </div>
+          </div>
+        </div>
+
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);margin-bottom:16px">
           <div style="background:#fff;padding:16px 18px;position:relative">
             <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:#1a1a1a"></div>
@@ -1842,6 +1868,8 @@ function initCostPage(){
   });
   // 추가비용 Supabase에서 로드
   loadAdditionalCostMap();
+  // 지역별 비용 로드
+  loadRegionCosts();
 }
 
 function initCostPeriod(){
@@ -2016,6 +2044,29 @@ async function runCostCalc(){
       deptMap[kwan].items.push({...row, deptCode:kwan, splitAmt, origAmt:amt, kwanCount:kwanList.length, matchedCat});
     });
     totalAmt += amt;
+  });
+
+  // ── 지역별 비용 합산 (캡스·청소용역·청소용품) → 지역 공통 행으로 표시 ──
+  regionCostData.forEach(d => {
+    if(!d.region) return;
+    const regionKey = `[${d.region}]공통`;  // 예: "[수내]공통"
+    if(!deptMap[regionKey]) {
+      deptMap[regionKey] = {
+        code: regionKey,
+        법인명: d.region,
+        사업부: '공통',
+        브랜드: '—',
+        catAmts: {}, 총비용: 0, 항목수: 0, items: []
+      };
+      FIXED_CATS.forEach(c => deptMap[regionKey].catAmts[c] = 0);
+    }
+    REGION_CATS.forEach(cat => {
+      const amt = Number(d[cat]) || 0;
+      if(!amt) return;
+      deptMap[regionKey].catAmts[cat] = (deptMap[regionKey].catAmts[cat]||0) + amt;
+      deptMap[regionKey].총비용 += amt;
+      totalAmt += amt;
+    });
   });
 
   // ── 추가비용 합산 (셀 직접 입력) ──
@@ -4512,6 +4563,136 @@ function autoMapRentalKwan(rows) {
       if(campusNames.length > 0) row['캠퍼스명'] = campusNames.join(' / ');
     }
   });
+}
+
+// ═══════════════════════ 지역별 비용 (캡스·청소용역·청소용품) ═══════════════════════
+const REGION_CATS = ['캡스','청소용역','청소용품'];
+let regionCostData = []; // [{ region, 캡스, 청소용역, 청소용품 }]
+
+async function loadRegionCosts() {
+  try {
+    const ym = getCurYearMonth();
+    const { data, error } = await _supa.from('cost_region').select('*').eq('year_month', ym);
+    if(error) throw error;
+    regionCostData = (data||[]).map(r => ({
+      id: r.id,
+      region: r['지역']||'',
+      캡스: r['캡스']||0,
+      청소용역: r['청소용역']||0,
+      청소용품: r['청소용품']||0,
+    }));
+  } catch(e) {
+    // 테이블 없으면 빈 배열 유지
+    regionCostData = [];
+  }
+  renderRegionCostRows();
+}
+
+function renderRegionCostRows() {
+  const container = document.getElementById('regionCostRows');
+  const empty = document.getElementById('regionCostEmpty');
+  if(!container) return;
+
+  if(!regionCostData.length) {
+    container.innerHTML = '';
+    if(empty) empty.style.display = 'block';
+    return;
+  }
+  if(empty) empty.style.display = 'none';
+
+  // 지역 옵션 — 캠퍼스 현황의 지역 목록
+  const regions = [...new Set(CAMPUS_ROWS.map(c=>c['지역']||'').filter(Boolean))].sort();
+  const regionOpts = regions.map(r=>`<option value="${r}">${r}</option>`).join('');
+
+  container.innerHTML = regionCostData.map((d,i) => `
+    <div style="display:grid;grid-template-columns:120px 1fr 1fr 1fr 32px;gap:8px;margin-bottom:6px;align-items:center" id="rcrow-${i}">
+      <select onchange="regionCostData[${i}].region=this.value"
+        style="border:1px solid var(--border);padding:7px 8px;font-size:12px;font-family:var(--font);background:var(--cream2);outline:none">
+        <option value="">지역 선택</option>
+        ${regionOpts}
+        <option value="${d.region}" ${!regions.includes(d.region)&&d.region?'selected':''}>${d.region||''}</option>
+      </select>
+      ${REGION_CATS.map(cat => `
+        <input type="number" value="${d[cat]||''}" placeholder="0"
+          onchange="regionCostData[${i}]['${cat}']=Number(this.value)||0"
+          style="border:1px solid var(--border);padding:7px 10px;font-size:12px;font-family:var(--mono);background:var(--cream2);outline:none;text-align:right">
+      `).join('')}
+      <button onclick="removeRegionCostRow(${i})"
+        style="border:none;background:none;cursor:pointer;color:#991b1b;font-size:16px;padding:0">✕</button>
+    </div>`).join('');
+
+  // 지역 select 현재값 세팅
+  regionCostData.forEach((d,i) => {
+    const sel = document.querySelector(`#rcrow-${i} select`);
+    if(sel && d.region) sel.value = d.region;
+  });
+}
+
+function addRegionCostRow() {
+  regionCostData.push({ region:'', 캡스:0, 청소용역:0, 청소용품:0 });
+  renderRegionCostRows();
+  // 포커스
+  setTimeout(() => {
+    const rows = document.querySelectorAll('[id^="rcrow-"]');
+    if(rows.length) rows[rows.length-1].querySelector('select')?.focus();
+  }, 50);
+}
+
+function removeRegionCostRow(i) {
+  regionCostData.splice(i, 1);
+  renderRegionCostRows();
+}
+
+async function saveRegionCosts() {
+  const ym = getCurYearMonth();
+  const valid = regionCostData.filter(d => d.region);
+  if(!valid.length) { showToast('지역을 선택해 주세요'); return; }
+
+  setLoading(true);
+  // 기존 데이터 전체 삭제 후 재입력 (단순화)
+  try {
+    await _supa.from('cost_region').delete().eq('year_month', ym);
+    const inserts = valid.map(d => ({
+      year_month: ym, 지역: d.region,
+      캡스: d.캡스||0, 청소용역: d.청소용역||0, 청소용품: d.청소용품||0
+    }));
+    const { error } = await _supa.from('cost_region').insert(inserts);
+    if(error) throw error;
+    await loadRegionCosts();
+    showToast(`✅ ${valid.length}개 지역 비용 저장 완료 → 배분 재계산`);
+    runCostCalc();
+  } catch(e) {
+    showToast('❌ 저장 실패: ' + e.message);
+  }
+  setLoading(false);
+}
+
+// 지역별 비용을 관코드별로 배분하는 함수
+function calcRegionCostByKwan(campusRows) {
+  // { 관코드: { 캡스: N, 청소용역: N, 청소용품: N } }
+  const result = {};
+  if(!regionCostData.length) return result;
+
+  regionCostData.forEach(d => {
+    if(!d.region) return;
+    // 해당 지역의 관코드 목록
+    const kwansInRegion = [...new Set(
+      campusRows.filter(c => c['지역'] === d.region && c['관코드'])
+                .map(c => c['관코드'])
+    )];
+    if(!kwansInRegion.length) return;
+
+    REGION_CATS.forEach(cat => {
+      const amt = Number(d[cat]) || 0;
+      if(!amt) return;
+      const share = amt / kwansInRegion.length;
+      kwansInRegion.forEach(kwan => {
+        if(!result[kwan]) result[kwan] = {};
+        result[kwan][cat] = (result[kwan][cat]||0) + share;
+      });
+    });
+  });
+  return result;
 }
 
 // ═══════════════════════ 비용 관별배분 추가비용 ═══════════════════════
