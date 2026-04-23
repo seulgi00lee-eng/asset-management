@@ -5267,6 +5267,7 @@ async function sendCostReportEmail(ym) {
     console.error('메일 발송 오류:', e);
     showToast('⚠️ 메일 발송 실패: ' + e.message);
   }
+}
 
 // ═══════════════════════ 비용 누적 관리 페이지 ═══════════════════════
 async function loadCostHistory() {
