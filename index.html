@@ -2120,17 +2120,12 @@ async function runCostCalc(){
 
   const TD = (txt, opts='') => `<td style="padding:8px 10px;font-size:11px;white-space:nowrap;${opts}">${txt}</td>`;
   const TDN = (n, kwan, cat) => {
-    const extra = additionalCostMap[kwan]?.[cat];
-    const hasExtra = extra && extra.amt > 0;
-    const extraTag = hasExtra
-      ? `<span title="${extra.reason||''}" style="margin-left:3px;font-size:9px;padding:0 4px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:2px;cursor:pointer">+${fmt(Math.round(extra.amt))}</span>`
-      : '';
     const base = n > 0 ? fmt(Math.round(n)) : '—';
     return `<td style="padding:8px 10px;text-align:right;font-family:var(--mono);font-size:10px;white-space:nowrap;cursor:pointer;transition:background .15s"
       onclick="openAddCostModal('${kwan}','${cat}',${n})"
       onmouseenter="this.style.background='rgba(200,169,110,.12)'"
       onmouseleave="this.style.background=''"
-      title="클릭하여 추가비용 입력">${base}${extraTag}</td>`;
+      title="클릭하여 추가비용 입력">${base}</td>`;
   };
 
   // 정렬 함수
