@@ -5234,7 +5234,39 @@ async function closeCostMonth() {
   if(badge){ badge.textContent='NEW'; badge.style.display='inline'; }
 
   showToast(`✅ ${ym} 월 마감 완료 — ${success}개 관 저장됨`);
+
+  // 메일 자동 발송
+  await sendCostReportEmail(ym);
 }
+
+async function sendCostReportEmail(ym) {
+  try {
+    showToast('📧 메일 발송 중...');
+    const res = await fetch('https://seulgi00lee.app.n8n.cloud/webhook/send-cost-report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        yearMonth: ym,
+        rows: costResult.map(d => ({
+          법인명: d.법인명||'—',
+          code: d.code,
+          사업부: d.사업부||'—',
+          브랜드: d.브랜드||'—',
+          catAmts: d.catAmts,
+          총비용: Math.round(d.총비용),
+          항목수: d.항목수
+        }))
+      })
+    });
+    if(res.ok) {
+      showToast('✅ 메일 발송 완료!');
+    } else {
+      showToast('⚠️ 메일 발송 실패 — n8n 설정을 확인해주세요');
+    }
+  } catch(e) {
+    console.error('메일 발송 오류:', e);
+    showToast('⚠️ 메일 발송 실패: ' + e.message);
+  }
 
 // ═══════════════════════ 비용 누적 관리 페이지 ═══════════════════════
 async function loadCostHistory() {
