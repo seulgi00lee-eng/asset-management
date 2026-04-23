@@ -1988,7 +1988,7 @@ function loadCostSample(){
 
 async function runCostCalc(){
   // ── 고정 분류 컬럼 8개 ──
-  const FIXED_CATS = ['복합기','잉크젯','공기청정기','정수기','LMS','캡스','청소용역','청소용품'];
+  const FIXED_CATS = ['복합기','잉크젯','공기청정기','LMS','캡스','청소용역','청소용품'];
 
   // ── Supabase 렌탈자산 로드 ──
   setLoading(true);
@@ -2033,7 +2033,7 @@ async function runCostCalc(){
 
     // 분류 정규화 — 렌탈자산에서는 복합기·잉크젯·공기청정기·정수기만 배분
     // LMS·캡스·청소용역·청소용품은 지역별 입력으로만 반영
-    const RENTAL_ONLY_CATS = ['복합기','잉크젯','공기청정기','정수기'];
+    const RENTAL_ONLY_CATS = ['복합기','잉크젯','공기청정기'];
     const rawCat = String(row['분류']||'').trim();
     const matchedCat = RENTAL_ONLY_CATS.find(c => rawCat.includes(c) || c.includes(rawCat));
     if(!matchedCat) return; // LMS·캡스·청소용역·청소용품 등은 건너뜀
@@ -2236,7 +2236,7 @@ function renderCostDetail(){
 
 function exportCostExcel(){
   if(!costResult.length){showToast('먼저 배분 계산을 실행해 주세요');return;}
-  const FIXED_CATS = ['복합기','잉크젯','공기청정기','정수기','LMS','캡스','청소용역','청소용품'];
+  const FIXED_CATS = ['복합기','잉크젯','공기청정기','LMS','캡스','청소용역','청소용품'];
   const now = new Date();
   const period = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}`;
   const wb = XLSX.utils.book_new();
@@ -5184,7 +5184,7 @@ document.addEventListener('click', (e) => {
 document.addEventListener('click',e=>{if(!e.target.closest('#notifPanel')&&!e.target.closest('.tb-bell'))closeNotif();});
 
 // ═══════════════════════ 비용 월 마감 ═══════════════════════
-const FIXED_CATS_HIST = ['복합기','잉크젯','공기청정기','정수기','LMS','캡스','청소용역','청소용품'];
+const FIXED_CATS_HIST = ['복합기','잉크젯','공기청정기','LMS','캡스','청소용역','청소용품'];
 let costHistoryData = [];
 
 async function closeCostMonth() {
