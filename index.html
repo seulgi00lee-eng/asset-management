@@ -4735,31 +4735,47 @@ async function handleRegionFiles(files) {
 
 async function analyzeRegionFile(file) {
   const ext = file.name.split('.').pop().toLowerCase();
-  let fileText = '';
-
   if(['jpg','jpeg','png','pdf'].includes(ext)) {
-    // 이미지/PDF: base64 → Claude vision (별도 프록시 필요하므로 안내)
-    showToast(`⚠️ ${file.name}: 이미지/PDF는 Excel로 변환 후 업로드해주세요`);
+    showToast(`⚠️ ${file.name}: Excel 파일만 지원합니다.`);
     return [];
-  } else {
-    // Excel/CSV → 텍스트 변환
-    fileText = await readExcelText(file);
   }
+  return await parseLMSExcel(file);
+}
 
-  // 텍스트를 3000자로 제한 (GET URL 한도)
-  const trimmed = fileText.slice(0, 3000);
-  const prompt = REGION_FILE_PROMPT + '\n\n[파일 내용]\n' + trimmed;
-
-  const data = await callClaudeProxy([{ role:'user', content: prompt }], 2000);
-  const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
-  const clean = text.replace(/```json|```/g,'').trim();
-  console.log('Claude 응답 텍스트:', clean.slice(0, 200));
+async function parseLMSExcel(file) {
+  if(typeof XLSX === 'undefined') { showToast('Excel 라이브러리 로딩 중...'); return []; }
   try {
-    const parsed = JSON.parse(clean);
-    return Array.isArray(parsed) ? parsed : [parsed];
-  } catch(e) {
-    console.error('JSON 파싱 실패 전체:', clean);
-    throw new Error('응답 파싱 실패');
+    const ab = await file.arrayBuffer();
+    const wb = XLSX.read(ab, { type:'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+
+    const seen = {};
+    for(const row of rows) {
+      const kwanCode = String(row[1]||'').trim(); // B열 = 수익코드/관코드
+      const amtRaw   = row[6];                    // G열 = 금액(VAT+)
+      if(!kwanCode || isNaN(Number(kwanCode))) continue;
+      const amt = Number(String(amtRaw).replace(/[^0-9.-]/g,'')) || 0;
+      if(!amt) continue;
+      const campus = CAMPUS_ROWS.find(c => c['관코드'] === kwanCode);
+      const region = campus ? (campus['지역']||'') : '';
+      if(!seen[kwanCode]) seen[kwanCode] = { kwanCode, region, amt: 0 };
+      seen[kwanCode].amt += amt;
+    }
+
+    return Object.values(seen).map(d => ({
+      업체명: file.name.replace(/\.xlsx?$/i,''),
+      품목: 'LMS',
+      금액: Math.round(d.amt),
+      지역: d.region,
+      건물명: '', 층수: '',
+      관코드: d.kwanCode,
+      비고: ''
+    }));
+  } catch(err) {
+    console.error('Excel 파싱 오류:', err);
+    showToast('❌ Excel 파싱 실패: ' + err.message);
+    return [];
   }
 }
 
@@ -4776,7 +4792,7 @@ async function readExcelText(file) {
   if(typeof XLSX === 'undefined') return '(Excel 파싱 불가)';
   try {
     const ab = await file.arrayBuffer();
-    const wb = XLSX.read(ab, { type:'array', sheetRows: 200 }); // 최대 200행만
+    const wb = XLSX.read(ab, { type:'array', sheetRows: 100 }); // 최대 100행만
     let text = '';
     // 첫 번째 시트만 처리 (데이터 시트)
     const firstName = wb.SheetNames[0];
