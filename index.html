@@ -532,6 +532,7 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
           <div class="ph-acts">
             <button class="btn btn-ghost btn-sm" onclick="openBulk()">🏷️ QR 일괄출력</button>
             <button class="btn btn-ghost btn-sm" onclick="openExcelUpload()">📥 엑셀 업로드</button>
+            <button id="btnShowReturned" class="btn btn-ghost btn-sm" onclick="toggleReturnedAssets()" style="color:#6b7280;border-color:#d1d5db">반납 자산 보기</button>
             <button class="btn btn-out btn-sm" onclick="refreshAsset()">↻</button>
             <button class="btn btn-navy" onclick="openModal()">＋ 신규 등록</button>
           </div>
@@ -2649,7 +2650,11 @@ function buildRow(row, d, today, DKW) {
   <td><div style="display:flex;gap:5px">
     <button class="btn btn-out btn-sm" onclick="openModal(${row._id})">수정</button>
     <button class="btn btn-ghost btn-sm" onclick="openQR(${row._id})" title="QR 출력">QR</button>
-    <button class="btn btn-danger btn-sm" onclick="delItem(${row._id})">삭제</button>
+    ${(row['상태']||'운영중')==='반납'
+      ? `<span style="font-size:10px;color:#6b7280;padding:3px 6px;border:1px solid #d1d5db;border-radius:3px">반납완료</span>`
+      : `<button class="btn btn-ghost btn-sm" onclick="returnItem(${row._id})" style="color:#c8a96e;border-color:#e5d5a8" title="반납 처리">반납</button>
+         <button class="btn btn-danger btn-sm" onclick="delItem(${row._id})">삭제</button>`
+    }
   </div></td></tr>`;
 }
 
@@ -2697,6 +2702,12 @@ function filterAsset(){
   const q = document.getElementById('aSearch').value.toLowerCase();
   const d = SAMPLE[curType];
   let base = d.rows;
+
+  // 렌탈자산: 반납 자산 필터링 (기본 숨김)
+  if(curType === 'rental' && !showReturnedAssets) {
+    base = base.filter(r => (r['상태']||'운영중') !== '반납');
+  }
+
   if (curType === 'rental' && rentalCatFilter !== '전체') {
     base = base.filter(r => getCatForRow(r) === rentalCatFilter);
   }
@@ -3970,6 +3981,49 @@ async function delItem(id){
   showToast('✅ 삭제 완료 — Supabase 반영됨');
 }
 
+async function returnItem(id) {
+  const d = SAMPLE[curType];
+  const row = d.rows.find(r => r._id === id);
+  if(!row) { showToast('항목을 찾을 수 없습니다'); return; }
+
+  // 반납일 입력 팝업
+  const today = new Date().toISOString().split('T')[0];
+  const returnDate = prompt(`반납일을 입력해주세요 (YYYY-MM-DD)\n자산명: ${row[d.headers[0]]||id}`, today);
+  if(!returnDate) return;
+
+  // 날짜 형식 검증
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(returnDate)) {
+    showToast('❌ 날짜 형식이 올바르지 않습니다 (YYYY-MM-DD)');
+    return;
+  }
+
+  if(!confirm(`반납 처리하시겠습니까?\n자산명: ${row[d.headers[0]]||id}\n반납일: ${returnDate}\n\n※ 반납 처리 후 해당 월 마감 시까지 비용에 포함됩니다.`)) return;
+
+  setLoading(true);
+  const { error } = await _supa.from('rental')
+    .update({ 상태: '반납', 반납일: returnDate })
+    .eq('id', row._rowId || row.id);
+  setLoading(false);
+
+  if(error) { showToast('❌ 반납 처리 실패: ' + error.message); return; }
+
+  addHist({
+    assetType: d.label,
+    assetName: row[d.headers[0]]||id,
+    assetCode: genCode(curType, row),
+    field: '상태',
+    from: '운영중',
+    to: `반납(${returnDate})`,
+    worker: document.getElementById('uNm')?.textContent||'관리자',
+    source: '대시보드',
+    memo: `반납일: ${returnDate}`
+  });
+
+  await loadAsset(curType);
+  renderDashHist();
+  showToast(`✅ 반납 처리 완료 — ${returnDate}`);
+}
+
 // ═══════════════════════ HISTORY RENDER ═══════════════════════
 function hRowHTML(h){
   const ts=new Date(h.ts);
@@ -4562,6 +4616,20 @@ function floorMatch(campusFloor, assetFloor) {
   const an = af.replace(/[^0-9]/g,'');
   if(cn && an && cn === an) return true;
   return false;
+}
+
+// ── 반납 자산 표시 토글 ──
+let showReturnedAssets = false;
+
+function toggleReturnedAssets() {
+  showReturnedAssets = !showReturnedAssets;
+  const btn = document.getElementById('btnShowReturned');
+  if(btn) {
+    btn.textContent = showReturnedAssets ? '반납 자산 숨기기' : '반납 자산 보기';
+    btn.style.color = showReturnedAssets ? '#c8a96e' : '#6b7280';
+    btn.style.borderColor = showReturnedAssets ? '#e5d5a8' : '#d1d5db';
+  }
+  loadAsset(curType);
 }
 
 function autoMapRentalKwan(rows) {
@@ -5183,7 +5251,8 @@ document.addEventListener('click', (e) => {
 
 document.addEventListener('click',e=>{if(!e.target.closest('#notifPanel')&&!e.target.closest('.tb-bell'))closeNotif();});
 
-// ═══════════════════════ 비용 월 마감 ═══════════════════════
+// ── 테스트 모드: true이면 월 마감 시 메일 발송 안 함 ──
+const COST_MAIL_TEST_MODE = true;
 const FIXED_CATS_HIST = ['복합기','잉크젯','공기청정기','LMS','캡스','청소용역','청소용품'];
 let costHistoryData = [];
 
@@ -5235,8 +5304,12 @@ async function closeCostMonth() {
 
   showToast(`✅ ${ym} 월 마감 완료 — ${success}개 관 저장됨`);
 
-  // 메일 자동 발송
-  await sendCostReportEmail(ym);
+  // 메일 자동 발송 (테스트 모드 시 발송 안 함)
+  if(COST_MAIL_TEST_MODE) {
+    showToast('⚠️ 테스트 모드 — 메일 발송 생략');
+  } else {
+    await sendCostReportEmail(ym);
+  }
 }
 
 async function sendCostReportEmail(ym) {
