@@ -4622,23 +4622,18 @@ function setCostSort(col) {
   if(costResult.length) runCostCalc();
 }
 
-const ASSET_PROXY_URL = 'https://script.google.com/macros/s/AKfycbyRB6RyWKM7h3TeCcrTSyZFTEzHpcw__LaI_-LIb3UdXFvJ7Uu95wFdjAbc8W1FGA5n/exec';
+const ASSET_PROXY_URL = 'https://seulgi00lee.app.n8n.cloud/webhook/claude-proxy';
 
 async function callClaudeProxy(messages, max_tokens=1000) {
-  // GET 방식으로 고정 (Apps Script CORS 이슈 우회)
-  // 메시지를 텍스트로만 압축해서 전달
-  const textOnly = messages.map(m => ({
-    role: m.role,
-    content: Array.isArray(m.content)
-      ? m.content.filter(c => c.type === 'text').map(c => c.text).join('\n')
-      : m.content
-  }));
-  const params = encodeURIComponent(JSON.stringify({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens,
-    messages: textOnly
-  }));
-  const res = await fetch(ASSET_PROXY_URL + '?payload=' + params);
+  const res = await fetch(ASSET_PROXY_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens,
+      messages
+    })
+  });
   return await res.json();
 }
 
