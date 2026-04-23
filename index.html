@@ -638,9 +638,8 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
           </div>
 
           <div style="padding:12px 16px">
-            <div style="display:grid;grid-template-columns:120px 1fr 1fr 1fr 1fr 32px;gap:8px;margin-bottom:6px">
+            <div style="display:grid;grid-template-columns:120px 1fr 1fr 1fr 32px;gap:8px;margin-bottom:6px">
               <div style="font-size:9px;letter-spacing:1px;color:var(--text3);padding:4px 0">지역</div>
-              <div style="font-size:9px;letter-spacing:1px;color:var(--text3);text-align:right;padding:4px 0">LMS (원)</div>
               <div style="font-size:9px;letter-spacing:1px;color:var(--text3);text-align:right;padding:4px 0">캡스 (원)</div>
               <div style="font-size:9px;letter-spacing:1px;color:var(--text3);text-align:right;padding:4px 0">청소용역 (원)</div>
               <div style="font-size:9px;letter-spacing:1px;color:var(--text3);text-align:right;padding:4px 0">청소용품 (원)</div>
@@ -4750,28 +4749,31 @@ async function parseLMSExcel(file) {
     const ws = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
 
-    const seen = {};
+    let count = 0;
+    const ym = getCurYearMonth();
+
     for(const row of rows) {
       const kwanCode = String(row[1]||'').trim(); // B열 = 수익코드/관코드
       const amtRaw   = row[6];                    // G열 = 금액(VAT+)
       if(!kwanCode || isNaN(Number(kwanCode))) continue;
       const amt = Number(String(amtRaw).replace(/[^0-9.-]/g,'')) || 0;
       if(!amt) continue;
-      const campus = CAMPUS_ROWS.find(c => c['관코드'] === kwanCode);
-      const region = campus ? (campus['지역']||'') : '';
-      if(!seen[kwanCode]) seen[kwanCode] = { kwanCode, region, amt: 0 };
-      seen[kwanCode].amt += amt;
+
+      // additionalCostMap에 관코드별 LMS 금액 누적
+      if(!additionalCostMap[kwanCode]) additionalCostMap[kwanCode] = {};
+      const existing = additionalCostMap[kwanCode]['LMS'];
+      additionalCostMap[kwanCode]['LMS'] = {
+        amt: (existing ? existing.amt : 0) + amt,
+        reason: 'LMS 파일 자동입력',
+        id: existing?.id || null
+      };
+      count++;
     }
 
-    return Object.values(seen).map(d => ({
-      업체명: file.name.replace(/\.xlsx?$/i,''),
-      품목: 'LMS',
-      금액: Math.round(d.amt),
-      지역: d.region,
-      건물명: '', 층수: '',
-      관코드: d.kwanCode,
-      비고: ''
-    }));
+    showToast(`✅ LMS ${count}개 관코드 → 피벗 테이블에 반영됨`);
+    // 배분 재계산
+    if(costResult.length) runCostCalc();
+    return []; // handleRegionFiles에서 regionCostData 병합 안 함
   } catch(err) {
     console.error('Excel 파싱 오류:', err);
     showToast('❌ Excel 파싱 실패: ' + err.message);
@@ -4812,7 +4814,7 @@ async function readExcelText(file) {
 }
 
 // ── 지역별 비용 (캡스·청소용역·청소용품) ═══════════════════════
-const REGION_CATS = ['LMS','캡스','청소용역','청소용품'];
+const REGION_CATS = ['캡스','청소용역','청소용품'];
 let regionCostData = []; // [{ region, 캡스, 청소용역, 청소용품 }]
 
 async function loadRegionCosts() {
@@ -4852,7 +4854,7 @@ function renderRegionCostRows() {
   const regionOpts = regions.map(r=>`<option value="${r}">${r}</option>`).join('');
 
   container.innerHTML = regionCostData.map((d,i) => `
-    <div style="display:grid;grid-template-columns:120px 1fr 1fr 1fr 1fr 32px;gap:8px;margin-bottom:6px;align-items:center" id="rcrow-${i}">
+    <div style="display:grid;grid-template-columns:120px 1fr 1fr 1fr 32px;gap:8px;margin-bottom:6px;align-items:center" id="rcrow-${i}">
       <select onchange="regionCostData[${i}].region=this.value"
         style="border:1px solid var(--border);padding:7px 8px;font-size:12px;font-family:var(--font);background:var(--cream2);outline:none">
         <option value="">지역 선택</option>
