@@ -2652,8 +2652,13 @@ function buildRow(row, d, today, DKW) {
     <button class="btn btn-ghost btn-sm" onclick="openQR(${row._id})" title="QR 출력">QR</button>
     ${(row['상태']||'운영중')==='반납'
       ? `<button class="btn btn-ghost btn-sm" onclick="restoreItem(${row._id})" style="color:#3a6a3a;border-color:#a7f3d0" title="반납 취소">↩ 운영중</button>`
-      : `<button class="btn btn-ghost btn-sm" onclick="returnItem(${row._id})" style="color:#c8a96e;border-color:#e5d5a8" title="반납 처리">반납</button>
-         <button class="btn btn-danger btn-sm" onclick="delItem(${row._id})">삭제</button>`
+      : row['예약반납일']
+        ? `<button class="btn btn-ghost btn-sm" onclick="returnItem(${row._id})" style="color:#c8a96e;border-color:#e5d5a8" title="반납 처리">반납</button>
+           <button class="btn btn-ghost btn-sm" onclick="cancelScheduledReturn(${row._id})" style="color:#6b7280;border-color:#d1d5db;font-size:10px" title="예약반납 취소">📅${row['예약반납일']} ✕</button>
+           <button class="btn btn-danger btn-sm" onclick="delItem(${row._id})">삭제</button>`
+        : `<button class="btn btn-ghost btn-sm" onclick="returnItem(${row._id})" style="color:#c8a96e;border-color:#e5d5a8" title="반납 처리">반납</button>
+           <button class="btn btn-ghost btn-sm" onclick="scheduleReturn(${row._id})" style="color:#7c3aed;border-color:#c4b5fd;font-size:10px" title="예약반납 등록">📅예약</button>
+           <button class="btn btn-danger btn-sm" onclick="delItem(${row._id})">삭제</button>`
     }
   </div></td></tr>`;
 }
@@ -3979,6 +3984,65 @@ async function delItem(id){
   await loadAsset(curType);
   renderDashHist();
   showToast('✅ 삭제 완료 — Supabase 반영됨');
+}
+
+async function scheduleReturn(id) {
+  const d = SAMPLE[curType];
+  const row = d.rows.find(r => r._id === id);
+  if(!row) { showToast('항목을 찾을 수 없습니다'); return; }
+
+  const today = new Date().toISOString().split('T')[0];
+  const schedDate = prompt(`예약 반납일을 입력해주세요 (YYYY-MM-DD)\n자산명: ${row[d.headers[0]]||id}\n\n※ 예약반납일 + 10일 후 자동으로 반납 처리됩니다.`, today);
+  if(!schedDate) return;
+
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(schedDate)) {
+    showToast('❌ 날짜 형식이 올바르지 않습니다 (YYYY-MM-DD)');
+    return;
+  }
+
+  if(!confirm(`예약반납을 등록하시겠습니까?\n자산명: ${row[d.headers[0]]||id}\n예약반납일: ${schedDate}\n\n※ ${schedDate} + 10일 후 자동 반납 처리됩니다.`)) return;
+
+  setLoading(true);
+  const { error } = await _supa.from('rental')
+    .update({ 예약반납일: schedDate })
+    .eq('id', row._rowId || row.id);
+  setLoading(false);
+
+  if(error) { showToast('❌ 예약반납 등록 실패: ' + error.message); return; }
+
+  addHist({
+    assetType: d.label,
+    assetName: row[d.headers[0]]||id,
+    assetCode: genCode(curType, row),
+    field: '예약반납일',
+    from: '—',
+    to: schedDate,
+    worker: document.getElementById('uNm')?.textContent||'관리자',
+    source: '대시보드',
+    memo: `예약반납일 등록: ${schedDate}`
+  });
+
+  await loadAsset(curType);
+  showToast(`✅ 예약반납 등록 완료 — ${schedDate}`);
+}
+
+async function cancelScheduledReturn(id) {
+  const d = SAMPLE[curType];
+  const row = d.rows.find(r => r._id === id);
+  if(!row) { showToast('항목을 찾을 수 없습니다'); return; }
+
+  if(!confirm(`예약반납을 취소하시겠습니까?\n자산명: ${row[d.headers[0]]||id}\n예약반납일: ${row['예약반납일']}`)) return;
+
+  setLoading(true);
+  const { error } = await _supa.from('rental')
+    .update({ 예약반납일: null })
+    .eq('id', row._rowId || row.id);
+  setLoading(false);
+
+  if(error) { showToast('❌ 예약반납 취소 실패: ' + error.message); return; }
+
+  await loadAsset(curType);
+  showToast('✅ 예약반납 취소 완료');
 }
 
 async function restoreItem(id) {
