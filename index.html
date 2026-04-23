@@ -2651,7 +2651,7 @@ function buildRow(row, d, today, DKW) {
     <button class="btn btn-out btn-sm" onclick="openModal(${row._id})">수정</button>
     <button class="btn btn-ghost btn-sm" onclick="openQR(${row._id})" title="QR 출력">QR</button>
     ${(row['상태']||'운영중')==='반납'
-      ? `<span style="font-size:10px;color:#6b7280;padding:3px 6px;border:1px solid #d1d5db;border-radius:3px">반납완료</span>`
+      ? `<button class="btn btn-ghost btn-sm" onclick="restoreItem(${row._id})" style="color:#3a6a3a;border-color:#a7f3d0" title="반납 취소">↩ 운영중</button>`
       : `<button class="btn btn-ghost btn-sm" onclick="returnItem(${row._id})" style="color:#c8a96e;border-color:#e5d5a8" title="반납 처리">반납</button>
          <button class="btn btn-danger btn-sm" onclick="delItem(${row._id})">삭제</button>`
     }
@@ -3979,6 +3979,38 @@ async function delItem(id){
   await loadAsset(curType);
   renderDashHist();
   showToast('✅ 삭제 완료 — Supabase 반영됨');
+}
+
+async function restoreItem(id) {
+  const d = SAMPLE[curType];
+  const row = d.rows.find(r => r._id === id);
+  if(!row) { showToast('항목을 찾을 수 없습니다'); return; }
+
+  if(!confirm(`운영중으로 되돌리시겠습니까?\n자산명: ${row[d.headers[0]]||id}`)) return;
+
+  setLoading(true);
+  const { error } = await _supa.from('rental')
+    .update({ 상태: '운영중', 반납일: null })
+    .eq('id', row._rowId || row.id);
+  setLoading(false);
+
+  if(error) { showToast('❌ 복구 실패: ' + error.message); return; }
+
+  addHist({
+    assetType: d.label,
+    assetName: row[d.headers[0]]||id,
+    assetCode: genCode(curType, row),
+    field: '상태',
+    from: '반납',
+    to: '운영중',
+    worker: document.getElementById('uNm')?.textContent||'관리자',
+    source: '대시보드',
+    memo: '반납 취소 → 운영중 복구'
+  });
+
+  await loadAsset(curType);
+  renderDashHist();
+  showToast('✅ 운영중으로 복구 완료');
 }
 
 async function returnItem(id) {
