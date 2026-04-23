@@ -4625,15 +4625,20 @@ function setCostSort(col) {
 const ASSET_PROXY_URL = 'https://script.google.com/macros/s/AKfycbyRB6RyWKM7h3TeCcrTSyZFTEzHpcw__LaI_-LIb3UdXFvJ7Uu95wFdjAbc8W1FGA5n/exec';
 
 async function callClaudeProxy(messages, max_tokens=1000) {
-  const res = await fetch(ASSET_PROXY_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens,
-      messages
-    })
-  });
+  // GET 방식으로 고정 (Apps Script CORS 이슈 우회)
+  // 메시지를 텍스트로만 압축해서 전달
+  const textOnly = messages.map(m => ({
+    role: m.role,
+    content: Array.isArray(m.content)
+      ? m.content.filter(c => c.type === 'text').map(c => c.text).join('\n')
+      : m.content
+  }));
+  const params = encodeURIComponent(JSON.stringify({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens,
+    messages: textOnly
+  }));
+  const res = await fetch(ASSET_PROXY_URL + '?payload=' + params);
   return await res.json();
 }
 
@@ -4735,30 +4740,31 @@ async function handleRegionFiles(files) {
 
 async function analyzeRegionFile(file) {
   const ext = file.name.split('.').pop().toLowerCase();
-  let content = [];
+  let fileText = '';
 
-  if(['jpg','jpeg','png'].includes(ext)) {
-    const b64 = await fileToBase64(file);
-    content = [
-      { type:'image', source:{ type:'base64', media_type: file.type||'image/jpeg', data: b64.split(',')[1] } },
-      { type:'text', text: REGION_FILE_PROMPT }
-    ];
-  } else if(ext === 'pdf') {
-    const b64 = await fileToBase64(file);
-    content = [
-      { type:'document', source:{ type:'base64', media_type:'application/pdf', data: b64.split(',')[1] } },
-      { type:'text', text: REGION_FILE_PROMPT }
-    ];
+  if(['jpg','jpeg','png','pdf'].includes(ext)) {
+    // 이미지/PDF: base64 → Claude vision (별도 프록시 필요하므로 안내)
+    showToast(`⚠️ ${file.name}: 이미지/PDF는 Excel로 변환 후 업로드해주세요`);
+    return [];
   } else {
-    const text = await readExcelText(file);
-    content = [{ type:'text', text: REGION_FILE_PROMPT + '\n\n[파일 내용]\n' + text }];
+    // Excel/CSV → 텍스트 변환
+    fileText = await readExcelText(file);
   }
 
-  const data = await callClaudeProxy([{ role:'user', content }], 2000);
+  // 텍스트를 3000자로 제한 (GET URL 한도)
+  const trimmed = fileText.slice(0, 3000);
+  const prompt = REGION_FILE_PROMPT + '\n\n[파일 내용]\n' + trimmed;
+
+  const data = await callClaudeProxy([{ role:'user', content: prompt }], 2000);
   const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
   const clean = text.replace(/```json|```/g,'').trim();
-  const parsed = JSON.parse(clean);
-  return Array.isArray(parsed) ? parsed : [parsed];
+  try {
+    const parsed = JSON.parse(clean);
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch(e) {
+    console.error('JSON 파싱 실패:', clean);
+    throw new Error('응답 파싱 실패');
+  }
 }
 
 function fileToBase64(file) {
