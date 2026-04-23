@@ -4744,8 +4744,8 @@ async function parseLMSExcel(file) {
     const ws = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
 
-    let count = 0;
     const ym = getCurYearMonth();
+    const kwanAmts = {};
 
     for(const row of rows) {
       const kwanCode = String(row[1]||'').trim(); // B열 = 수익코드/관코드
@@ -4753,23 +4753,35 @@ async function parseLMSExcel(file) {
       if(!kwanCode || isNaN(Number(kwanCode))) continue;
       const amt = Number(String(amtRaw).replace(/[^0-9.-]/g,'')) || 0;
       if(!amt) continue;
-
-      // additionalCostMap에 관코드별 LMS 금액 누적
-      if(!additionalCostMap[kwanCode]) additionalCostMap[kwanCode] = {};
-      const existing = additionalCostMap[kwanCode]['LMS'];
-      additionalCostMap[kwanCode]['LMS'] = {
-        amt: (existing ? existing.amt : 0) + amt,
-        reason: 'LMS 파일 자동입력',
-        id: existing?.id || null
-      };
-      count++;
+      kwanAmts[kwanCode] = (kwanAmts[kwanCode]||0) + amt;
     }
 
-    showToast(`✅ LMS ${count}개 관코드 → 피벗 테이블에 반영됨`);
-    // 배분 재계산
-    if(costResult.length) runCostCalc();
-    return []; // handleRegionFiles에서 regionCostData 병합 안 함
+    // Supabase에 저장 + additionalCostMap에도 반영
+    setLoading(true);
+    for(const [kwanCode, amt] of Object.entries(kwanAmts)) {
+      const existing = additionalCostMap[kwanCode]?.['LMS'];
+      let error;
+      if(existing?.id) {
+        ({ error } = await _supa.from('cost_extra')
+          .update({ 금액: Math.round(amt), 사유: 'LMS 파일 자동입력' })
+          .eq('id', existing.id));
+      } else {
+        ({ error } = await _supa.from('cost_extra')
+          .insert([{ year_month: ym, 관코드: kwanCode, 분류: 'LMS', 금액: Math.round(amt), 사유: 'LMS 파일 자동입력' }]));
+      }
+      if(!error) {
+        if(!additionalCostMap[kwanCode]) additionalCostMap[kwanCode] = {};
+        additionalCostMap[kwanCode]['LMS'] = { amt: Math.round(amt), reason: 'LMS 파일 자동입력', id: existing?.id || null };
+      }
+    }
+    setLoading(false);
+
+    // additionalCostMap 최신 id로 갱신
+    await loadAdditionalCostMap();
+    showToast(`✅ LMS ${Object.keys(kwanAmts).length}개 관코드 저장 및 반영됨`);
+    return [];
   } catch(err) {
+    setLoading(false);
     console.error('Excel 파싱 오류:', err);
     showToast('❌ Excel 파싱 실패: ' + err.message);
     return [];
