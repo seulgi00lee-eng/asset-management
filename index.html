@@ -2035,8 +2035,8 @@ async function runCostCalc(){
     // LMS·캡스·청소용역·청소용품은 지역별 입력으로만 반영
     const RENTAL_ONLY_CATS = ['복합기','잉크젯','공기청정기','정수기'];
     const rawCat = String(row['분류']||'').trim();
-    let matchedCat = RENTAL_ONLY_CATS.find(c => rawCat.includes(c) || c.includes(rawCat)) || null;
-    if(!matchedCat) continue; // LMS·캡스·청소용역·청소용품 등은 건너뜀
+    const matchedCat = RENTAL_ONLY_CATS.find(c => rawCat.includes(c) || c.includes(rawCat));
+    if(!matchedCat) return; // LMS·캡스·청소용역·청소용품 등은 건너뜀
 
     kwanList.forEach(kwan => {
       if(!kwan) return;
