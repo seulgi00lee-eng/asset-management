@@ -2031,9 +2031,12 @@ async function runCostCalc(){
     const kwanList = rawKwan.split(/[,，\s]+/).map(k=>k.trim()).filter(Boolean);
     const splitAmt = kwanList.length > 0 ? amt / kwanList.length : amt;
 
-    // 분류 정규화 (유사 키워드 매칭)
+    // 분류 정규화 — 렌탈자산에서는 복합기·잉크젯·공기청정기·정수기만 배분
+    // LMS·캡스·청소용역·청소용품은 지역별 입력으로만 반영
+    const RENTAL_ONLY_CATS = ['복합기','잉크젯','공기청정기','정수기'];
     const rawCat = String(row['분류']||'').trim();
-    let matchedCat = FIXED_CATS.find(c => rawCat.includes(c) || c.includes(rawCat)) || '기타';
+    let matchedCat = RENTAL_ONLY_CATS.find(c => rawCat.includes(c) || c.includes(rawCat)) || null;
+    if(!matchedCat) continue; // LMS·캡스·청소용역·청소용품 등은 건너뜀
 
     kwanList.forEach(kwan => {
       if(!kwan) return;
