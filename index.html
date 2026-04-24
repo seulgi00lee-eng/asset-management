@@ -1353,7 +1353,7 @@ document.getElementById('lpw').addEventListener('keydown',e=>{if(e.key==='Enter'
 function doLogout(){document.getElementById('loginScreen').style.display='flex';document.getElementById('app').style.display='none';}
 
 // ═══════════════════════ INIT ═══════════════════════
-function initApp(){
+async function initApp(){
   const now=new Date();
   document.getElementById('topDate').textContent=now.toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'short'});
   document.getElementById('dashDate').textContent='기준일 '+now.toLocaleDateString('ko-KR');
@@ -1792,7 +1792,7 @@ const PAGE_LABELS = {
   qrscan:'QR 현장 스캔', campus:'캠퍼스 전체 현황'
 };
 
-function go(p, pushHistory=true){
+async function go(p, pushHistory=true){
   // 현재 페이지를 스택에 저장 (dash 제외)
   const curPage = pageStack.length > 0 ? pageStack[pageStack.length-1] : 'dash';
   if(pushHistory && curPage !== p){
@@ -5420,54 +5420,6 @@ async function confirmCostMonthClose() {
   if(badge){ badge.textContent='NEW'; badge.style.display='inline'; }
   showToast(`✅ ${ym} 월 마감 완료 — ${success}개 관 저장됨`);
   if(!COST_MAIL_TEST_MODE) await sendCostReportEmail(ym);
-}
-
-  // 같은 월 이미 마감됐는지 확인
-  const existing = await sbSelect('cost_history');
-  const alreadyClosed = existing.some(r => r['year_month'] === ym);
-  if(alreadyClosed) {
-    if(!confirm(`${ym} 월은 이미 마감됐습니다.\n덮어쓰시겠습니까?`)) return;
-    // 기존 데이터 삭제
-    for(const r of existing.filter(r=>r['year_month']===ym)){
-      await sbDelete('cost_history', r.id);
-    }
-  } else {
-    if(!confirm(`${ym} 월 비용을 마감하시겠습니까?\n총 ${costResult.length}개 관 데이터가 저장됩니다.`)) return;
-  }
-
-  setLoading(true);
-  let success = 0;
-  for(const d of costResult){
-    const row = {
-      year_month: ym,
-      관코드: d.code,
-      법인명: d.법인명||'—',
-      사업부: d.사업부||'—',
-      브랜드: d.브랜드||'—',
-      총비용: Math.round(d.총비용),
-      항목수: d.항목수
-    };
-    FIXED_CATS_HIST.forEach(c => {
-      const key = c === 'LMS' ? 'lms' : c;
-      row[key] = Math.round(d.catAmts[c]||0);
-    });
-    const ok = await sbInsert('cost_history', row);
-    if(ok) success++;
-  }
-  setLoading(false);
-
-  // 사이드바 배지 업데이트
-  const badge = document.getElementById('nb-cost-history');
-  if(badge){ badge.textContent='NEW'; badge.style.display='inline'; }
-
-  showToast(`✅ ${ym} 월 마감 완료 — ${success}개 관 저장됨`);
-
-  // 메일 자동 발송 (테스트 모드 시 발송 안 함)
-  if(COST_MAIL_TEST_MODE) {
-    showToast('⚠️ 테스트 모드 — 메일 발송 생략');
-  } else {
-    await sendCostReportEmail(ym);
-  }
 }
 
 async function sendCostReportEmail(ym) {
