@@ -4783,7 +4783,7 @@ function setCostSort(col) {
   if(costResult.length) runCostCalc();
 }
 
-const ASSET_PROXY_URL = 'https://seulgi00lee.app.n8n.cloud/webhook/claude-proxy';
+const ASSET_PROXY_URL = 'https://seulgi00lee.app.n8n.cloud/webhook/asset-claude-proxy';
 
 async function callClaudeProxy(messages, max_tokens=1000) {
   const res = await fetch(ASSET_PROXY_URL, {
