@@ -4896,11 +4896,70 @@ async function handleRegionFiles(files) {
 
 async function analyzeRegionFile(file) {
   const ext = file.name.split('.').pop().toLowerCase();
-  if(['jpg','jpeg','png','pdf'].includes(ext)) {
-    showToast(`⚠️ ${file.name}: Excel 파일만 지원합니다.`);
-    return [];
+  if(['jpg','jpeg','png'].includes(ext)) {
+    return await analyzeImageFile(file);
+  }
+  if(ext === 'pdf') {
+    return await analyzePdfFile(file);
   }
   return await parseLMSExcel(file);
+}
+
+async function analyzeImageFile(file) {
+  try {
+    const base64 = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result.split(',')[1]);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+    const mimeType = file.type || 'image/jpeg';
+    const data = await callClaudeProxy([{
+      role: 'user',
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: mimeType, data: base64 } },
+        { type: 'text', text: REGION_FILE_PROMPT }
+      ]
+    }], 2000);
+    return parseClaudeRegionResponse(data);
+  } catch(err) {
+    showToast('❌ 이미지 분석 실패: ' + err.message);
+    return [];
+  }
+}
+
+async function analyzePdfFile(file) {
+  try {
+    const base64 = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result.split(',')[1]);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+    const data = await callClaudeProxy([{
+      role: 'user',
+      content: [
+        { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
+        { type: 'text', text: REGION_FILE_PROMPT }
+      ]
+    }], 2000);
+    return parseClaudeRegionResponse(data);
+  } catch(err) {
+    showToast('❌ PDF 분석 실패: ' + err.message);
+    return [];
+  }
+}
+
+function parseClaudeRegionResponse(data) {
+  try {
+    const text = data?.content?.[0]?.text || data?.content || '';
+    const match = String(text).match(/\[[\s\S]*\]/);
+    if(!match) return [];
+    return JSON.parse(match[0]);
+  } catch(e) {
+    console.error('Claude 응답 파싱 실패:', e);
+    return [];
+  }
 }
 
 async function parseLMSExcel(file) {
