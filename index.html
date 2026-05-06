@@ -1012,7 +1012,15 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
   <div class="mo-box" style="width:420px">
     <div class="mo-t">🏢 관코드 선택 (중복 가능)</div>
     <div style="font-size:11px;color:var(--text3);margin-bottom:14px">해당 자산을 사용하는 관을 모두 선택하세요.</div>
-    <div id="kwanPickerList" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);margin-bottom:16px;padding:8px"></div>
+    <div id="kwanPickerList" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);margin-bottom:14px;padding:8px"></div>
+    <!-- 적용시작월 -->
+    <div class="fg" style="margin-bottom:14px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:11px">적용시작월 *
+        <span style="font-size:10px;color:#5a1a8a;background:#f0e8fa;padding:2px 7px;border-radius:10px">비용마감 기준</span>
+      </label>
+      <select id="kwanPickerApplyMonth" style="border:1px solid var(--border);padding:8px 12px;font-size:12px;font-family:var(--mono);font-weight:600;color:var(--text);width:100%"></select>
+      <div style="font-size:10px;color:var(--text3);margin-top:3px">이 달부터 새 관코드로 비용이 배분됩니다.</div>
+    </div>
     <div class="mo-ft">
       <button class="btn btn-ghost" onclick="closeMo('moKwanPicker')">취소</button>
       <button class="btn btn-navy" onclick="saveKwanPicker()">✅ 저장</button>
@@ -3511,6 +3519,22 @@ function openKwanPicker(rowId, currentVal) {
       </label>`;
   }
   document.getElementById('moKwanPicker').classList.add('open');
+
+  // 적용시작월 드롭다운 자동 생성
+  const applyMonthSel = document.getElementById('kwanPickerApplyMonth');
+  if(applyMonthSel) {
+    applyMonthSel.innerHTML = '';
+    const now = new Date();
+    for(let i = 0; i <= 6; i++) {
+      const d2 = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      const v = `${d2.getFullYear()}-${String(d2.getMonth()+1).padStart(2,'0')}`;
+      const lbl = `${d2.getFullYear()}년 ${d2.getMonth()+1}월${i===0?' (이번달)':i===1?' (다음달)':''}`;
+      const opt = document.createElement('option');
+      opt.value = v; opt.textContent = lbl;
+      if(i===0) opt.selected = true;
+      applyMonthSel.appendChild(opt);
+    }
+  }
 }
 
 function toggleKwanPick(code, checked) {
@@ -3561,21 +3585,23 @@ async function saveKwanPicker() {
   // 이동이력 기록
   if(oldVal !== newVal) {
     const nameCol = d.headers.find(h => ['자산명','렌탈품목','계약명','건물명'].includes(h)) || d.headers[0];
+    const applyMonth = document.getElementById('kwanPickerApplyMonth')?.value || '';
     addHist({
       assetType: d.label,
       assetName: row[nameCol] || '—',
       assetCode: row['자산코드'] || '—',
       fromLoc: oldVal || '미지정',
       toLoc: newVal || '미지정',
+      applyMonth: applyMonth,
       worker: document.getElementById('uNm')?.textContent || '관리자',
       source: '관코드변경',
-      memo: `관코드 변경: ${oldVal||'미지정'} → ${newVal||'미지정'}`,
+      memo: `관코드 변경: ${oldVal||'미지정'} → ${newVal||'미지정'}${applyMonth?' ('+applyMonth+'부터)':''}`,
     });
   }
 
   closeMo('moKwanPicker');
   filterAsset();
-  showToast(`✅ 관코드 저장 완료 — ${newVal || '미지정'}`);
+  showToast(`✅ 관코드 저장 완료 — ${newVal || '미지정'} (${document.getElementById('kwanPickerApplyMonth')?.value||''}부터 적용)`);
 }
 
 // ═══════════════════════ 관코드 빠른 수정 ═══════════════════════
