@@ -5003,19 +5003,25 @@ function setCostSort(col) {
   if(costResult.length) runCostCalc();
 }
 
-const ASSET_PROXY_URL = 'https://script.google.com/macros/s/AKfycbyKNJGwjCudaJoWcWG-N6E-Y2xpxSHU69Q86-_MZNdHuZffhukpoESPMIyZrsn75XMr/exec';
+const ASSET_PROXY_URL = 'https://script.google.com/macros/s/AKfycbz8DCx6gusbrUPglGnUMh8XFBoE70qKl3jnP2FHDMelz3LvowJ9tNdY9bsINDQFThJX/exec';
 
 async function callClaudeProxy(messages, max_tokens=1000) {
-  const res = await fetch(ASSET_PROXY_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens,
-      messages
-    })
-  });
-  return await res.json();
+  try {
+    const res = await fetch(ASSET_PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens,
+        messages
+      })
+    });
+    const text = await res.text();
+    return JSON.parse(text);
+  } catch(err) {
+    console.error('Claude Proxy 오류:', err);
+    throw err;
+  }
 }
 
 const REGION_FILE_PROMPT = `이 거래명세서(청구서)를 분석해서 아래 JSON 배열 형식으로만 응답하세요. 다른 텍스트 없이 JSON만 출력하세요.
