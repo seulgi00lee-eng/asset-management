@@ -894,6 +894,8 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
             <select id="kwanBulkNewCodeSel" style="border:1px solid var(--border);padding:7px 12px;font-size:12px;font-family:var(--font);background:#fff;outline:none" onchange="if(this.value){document.getElementById('kwanBulkNewCode').value=this.value;}">
               <option value="">캠퍼스에서 선택</option>
             </select>
+            <select id="kwanBulkApplyMonth" style="border:1px solid var(--border);padding:7px 12px;font-size:12px;font-family:var(--mono);background:#fff;outline:none;color:var(--text)">
+            </select>
             <button class="btn btn-navy" onclick="applyKwanBulkChange()" style="font-size:12px">✅ 일괄 변경 적용</button>
           </div>
 
@@ -1006,6 +1008,28 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
   </div>
 </div>
 
+
+<!-- 공통 적용시작월 선택 모달 -->
+<div class="mo" id="moApplyMonth" onclick="closeMoBg(event,'moApplyMonth')">
+  <div class="mo-box" style="width:380px">
+    <div class="mo-t">📅 적용시작월 선택</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:16px">
+      관코드 변경: <strong id="applyMonthTitle" style="font-family:var(--mono);color:var(--navy)">—</strong>
+    </div>
+    <div class="fg" style="margin-bottom:8px">
+      <label style="display:flex;align-items:center;gap:6px">
+        적용시작월
+        <span style="font-size:10px;color:#5a1a8a;background:#f0e8fa;padding:2px 7px;border-radius:10px">비용마감 기준</span>
+      </label>
+      <select id="applyMonthSel" style="border:1px solid var(--border);padding:9px 12px;font-size:13px;font-family:var(--mono);font-weight:600;color:var(--text);width:100%"></select>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">⚠️ 이 달부터 새 관코드로 비용이 배분됩니다.</div>
+    </div>
+    <div class="mo-ft">
+      <button class="btn btn-ghost" onclick="closeMo('moApplyMonth')">취소</button>
+      <button class="btn btn-navy" onclick="confirmApplyMonth()">✅ 확인</button>
+    </div>
+  </div>
+</div>
 
 <!-- 관코드 다중 선택 모달 -->
 <div class="mo" id="moKwanPicker" onclick="closeMoBg(event,'moKwanPicker')">
@@ -3326,6 +3350,24 @@ function openCampusModal(id=null) {
     <button class="btn btn-ghost" onclick="closeMo('moForm')">취소</button>
     <button class="btn btn-navy" onclick="saveCampusItem()">저장</button>`;
 
+  // 수정 모드일 때 적용시작월 드롭다운 추가
+  if(id) {
+    const moF = document.getElementById('moF');
+    const applyDiv = document.createElement('div');
+    applyDiv.className = 'fg';
+    applyDiv.style.cssText = 'margin-top:8px;border-top:1px solid var(--border);padding-top:12px';
+    applyDiv.innerHTML = `
+      <label style="display:flex;align-items:center;gap:6px">
+        관코드 변경 시 적용시작월
+        <span style="font-size:10px;color:#5a1a8a;background:#f0e8fa;padding:2px 7px;border-radius:10px">비용마감 기준</span>
+      </label>
+      <select id="campusApplyMonth" style="border:1px solid var(--border);padding:9px 12px;font-size:13px;font-family:var(--mono);font-weight:600;color:var(--text);width:100%"></select>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">⚠️ 관코드가 변경될 경우에만 적용됩니다. 연결된 모든 자산에 일괄 반영됩니다.</div>
+    `;
+    moF.appendChild(applyDiv);
+    initApplyMonthDropdown('campusApplyMonth');
+  }
+
   document.getElementById('moForm').classList.add('open');
 }
 
@@ -3378,19 +3420,20 @@ async function saveCampusItem() {
       }
 
       // 이동이력 기록
+      const campusApplyMonth = document.getElementById('campusApplyMonth')?.value || '';
       addHist({
         assetType: '캠퍼스',
         assetName: saveData['건물명'] || oldKwan,
         assetCode: newKwan,
-        field: '관코드 변경',
-        from: oldKwan,
-        to: newKwan,
+        fromLoc: oldKwan,
+        toLoc: newKwan,
+        applyMonth: campusApplyMonth,
         worker: document.getElementById('uNm')?.textContent || '관리자',
-        source: '대시보드',
-        memo: `캠퍼스 관코드 변경 → 연결 자산 ${totalUpdated}건 일괄 반영`
+        source: '캠퍼스관코드변경',
+        memo: `캠퍼스 관코드 변경 → 연결 자산 ${totalUpdated}건 일괄 반영${campusApplyMonth?' ('+campusApplyMonth+'부터)':''}`
       });
 
-      showToast(`✅ 관코드 ${oldKwan} → ${newKwan} 변경 완료 · 연결 자산 ${totalUpdated}건 자동 반영됨`);
+      showToast(`✅ 관코드 ${oldKwan} → ${newKwan} 변경 완료 · 연결 자산 ${totalUpdated}건 자동 반영${campusApplyMonth?' ('+campusApplyMonth+'부터)':''}`);
     } else {
       showToast('✅ 캠퍼스 수정 완료 — Supabase 반영됨');
     }
@@ -3664,8 +3707,73 @@ function inlineKwanChange(rowId, newCode) {
     sel.style.color = 'var(--text)';
   }
 
+  // 적용시작월 선택 모달 띄우기
+  openApplyMonthModal(oldCode, newCode, row, d, rowId);
+}
+
+function openApplyMonthModal(oldCode, newCode, row, d, rowId) {
+  const modal = document.getElementById('moApplyMonth');
+  if(!modal) {
+    // 모달 없으면 기본값(이번달)으로 바로 저장
+    commitInlineKwanChange(oldCode, newCode, row, d, rowId, '');
+    return;
+  }
+  // 모달 데이터 세팅
+  modal._data = { oldCode, newCode, row, d, rowId };
+  document.getElementById('applyMonthTitle').textContent = `${oldCode} → ${newCode}`;
+  const sel = document.getElementById('applyMonthSel');
+  sel.innerHTML = '';
+  const now = new Date();
+  for(let i = 0; i <= 6; i++) {
+    const d2 = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const v = `${d2.getFullYear()}-${String(d2.getMonth()+1).padStart(2,'0')}`;
+    const lbl = `${d2.getFullYear()}년 ${d2.getMonth()+1}월${i===0?' (이번달)':i===1?' (다음달)':''}`;
+    const opt = document.createElement('option');
+    opt.value = v; opt.textContent = lbl;
+    if(i===0) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  modal.classList.add('open');
+}
+
+function confirmApplyMonth() {
+  const modal = document.getElementById('moApplyMonth');
+  if(!modal) return;
+  const { oldCode, newCode, row, d, rowId } = modal._data;
+  const applyMonth = document.getElementById('applyMonthSel').value;
+  modal.classList.remove('open');
+  commitInlineKwanChange(oldCode, newCode, row, d, rowId, applyMonth);
+}
+
+async function commitInlineKwanChange(oldCode, newCode, row, d, rowId, applyMonth) {
+  const nameCol = d.headers.find(h =>
+    ['자산명','렌탈품목','계약명','소프트웨어명','보험명','품목명','건물명'].includes(h)
+  ) || d.headers[0];
+
+  // Supabase 업데이트
+  if(d.dbTable) {
+    await sbUpdate(d.dbTable, row._rowId || row.id, { '관코드': newCode });
+  }
+
+  // 이동이력 기록
+  addHist({
+    assetType: d.label,
+    assetName: row[nameCol] || '—',
+    assetCode: row['자산코드'] || '—',
+    fromLoc: oldCode,
+    toLoc: newCode,
+    applyMonth: applyMonth,
+    worker: document.getElementById('uNm')?.textContent || '관리자',
+    source: '관코드변경',
+    memo: `관코드 변경: ${oldCode} → ${newCode}${applyMonth?' ('+applyMonth+'부터)':''}`,
+  });
+
+  // 셀 색상 즉시 업데이트
+  const sel = document.getElementById(`kwan-sel-${rowId}`);
+  if(sel) { sel.style.background = 'var(--cream2)'; sel.style.color = 'var(--text)'; }
+
   const kwanName = KWAN_CODES.find(k=>k.code===newCode)?.name || '';
-  showToast(`✅ ${row[nameCol]||''} — 관코드 ${oldCode} → ${newCode}${kwanName?' ('+kwanName+')':''}`);
+  showToast(`✅ ${row[nameCol]||''} — 관코드 ${oldCode} → ${newCode}${applyMonth?' ('+applyMonth+'부터)':''}${kwanName?' ['+kwanName+']':''}`);
 }
 let KWAN_CODES = [];
 
@@ -4423,6 +4531,23 @@ function switchCampusTab(tab) {
   if(isKwan) loadKwanBulkData();
 }
 
+// ═══════════════════════ 적용시작월 드롭다운 공통 초기화 ═══════════════════════
+function initApplyMonthDropdown(selId) {
+  const sel = document.getElementById(selId);
+  if(!sel) return;
+  sel.innerHTML = '';
+  const now = new Date();
+  for(let i = 0; i <= 6; i++) {
+    const d2 = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const v = `${d2.getFullYear()}-${String(d2.getMonth()+1).padStart(2,'0')}`;
+    const lbl = `${d2.getFullYear()}년 ${d2.getMonth()+1}월${i===0?' (이번달)':i===1?' (다음달)':''}`;
+    const opt = document.createElement('option');
+    opt.value = v; opt.textContent = lbl;
+    if(i===0) opt.selected = true;
+    sel.appendChild(opt);
+  }
+}
+
 // ═══════════════════════ 관코드 일괄 수정 ═══════════════════════
 let kwanBulkRows = [];
 let kwanBulkFiltered = [];
@@ -4432,6 +4557,9 @@ async function loadKwanBulkData() {
   setLoading(true);
   const rows = await sbSelect(type);
   setLoading(false);
+
+  // 적용시작월 드롭다운 초기화
+  initApplyMonthDropdown('kwanBulkApplyMonth');
 
   kwanBulkRows = rows.map(r => ({ _dbId: r.id, ...r }));
 
@@ -4599,19 +4727,21 @@ async function saveInlineKwan(dbId, newKwan, type) {
   }
 
   // 이동이력 기록
+  const applyMonthBulk = document.getElementById('kwanBulkApplyMonth')?.value || '';
   addHist({
     assetType: SAMPLE[type]?.label || type,
     assetName: row ? (row['렌탈품목']||row['건물명']||row['자산명']||row['상품명']||'—') : '—',
     assetCode: '—',
     field: '관코드 변경',
-    from: oldKwan || '미지정',
-    to: newKwan,
+    fromLoc: oldKwan || '미지정',
+    toLoc: newKwan,
+    applyMonth: applyMonthBulk,
     worker: document.getElementById('uNm')?.textContent || '관리자',
     source: '대시보드',
-    memo: `관코드 인라인 수정: ${oldKwan||'미지정'} → ${newKwan}`
+    memo: `관코드 수정: ${oldKwan||'미지정'} → ${newKwan}${applyMonthBulk?' ('+applyMonthBulk+'부터)':''}`
   });
 
-  showToast(`✅ 관코드 → ${newKwan} 저장 완료`);
+  showToast(`✅ 관코드 → ${newKwan} 저장 완료${applyMonthBulk?' ('+applyMonthBulk+'부터 적용)':''}`);
   loadKwanBulkData();
 }
 
@@ -4645,16 +4775,18 @@ async function applyKwanBulkChange() {
         if(sr) sr['관코드'] = newKwan;
       }
       // 이동이력 기록
+      const applyMonthMulti = document.getElementById('kwanBulkApplyMonth')?.value || '';
       addHist({
         assetType: SAMPLE[type]?.label || type,
         assetName: chk.closest('tr')?.cells[1]?.textContent || '—',
         assetCode: '—',
         field: '관코드 일괄변경',
-        from: oldKwan,
-        to: newKwan,
+        fromLoc: oldKwan,
+        toLoc: newKwan,
+        applyMonth: applyMonthMulti,
         worker,
         source: '대시보드',
-        memo: `관코드 일괄 수정: ${oldKwan} → ${newKwan}`
+        memo: `관코드 일괄 수정: ${oldKwan} → ${newKwan}${applyMonthMulti?' ('+applyMonthMulti+'부터)':''}`
       });
     } else { fail++; }
   }
