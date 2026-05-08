@@ -1286,6 +1286,14 @@ function fmtDate(val) {
   return s;
 }
 
+// 금액 포맷 (1000000 → 1,000,000)
+function fmtAmt(val) {
+  if(val === null || val === undefined || val === '') return '';
+  const n = Number(String(val).replace(/[^0-9.-]/g, ''));
+  if(isNaN(n)) return val;
+  return n.toLocaleString('ko-KR');
+}
+
 // ═══════════════════════ SUPABASE ═══════════════════════
 function setLoading(on){const el=document.getElementById("loadingOverlay");if(el)el.style.display=on?"flex":"none";}
 const SUPABASE_URL = 'https://gegrylivlqxwcobnuwie.supabase.co';
@@ -1800,7 +1808,7 @@ async function loadAlertsFromServer() {
             type: c.label, tc: c.tc,
             name: r[c.nameCol] || '—',
             detail,
-            date: d, days: diff,
+            date: fmtDate(d), days: diff,
             // 추가 필드 보존
             분류: r['분류'] || '',
             건물명: r['건물명'] || '',
@@ -2745,8 +2753,15 @@ function buildRow(row, d, today, DKW) {
       </td>`;
     }
 
-    const dv = isDt ? fmtDate(v) : v;
-    return `<td class="${isDt?'dt':''}">${dv}${badge}</td>`;
+    // 날짜 포맷
+    let dv = isDt ? fmtDate(v) : v;
+    // 금액 포맷 (금액/비용/렌탈료/임차료/청구금액/보험료 포함 헤더)
+    const isAmt = /금액|비용|렌탈료|임차료|청구|보험료|단가|수수료|관리비/.test(h);
+    if(isAmt && v !== '' && v !== null && v !== undefined) {
+      const n = Number(String(v).replace(/[^0-9.-]/g,''));
+      if(!isNaN(n) && n > 0) dv = n.toLocaleString('ko-KR');
+    }
+    return `<td class="${isDt?'dt':''} ${isAmt?'amt':''}">${dv}${badge}</td>`;
   }).join('')}
   <td><div style="display:flex;gap:5px">
     <button class="btn btn-out btn-sm" onclick="openModal(${row._id})">수정</button>
