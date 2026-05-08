@@ -5181,11 +5181,30 @@ async function handleRegionFiles(files) {
 // 추출 결과 미리보기 팝업
 function showRegionPreview(extracted) {
   const CATS = ['LMS','캡스','청소용역','청소용품'];
-  const regionOptions = [...new Set(CAMPUS_ROWS.map(c=>c['지역']).filter(Boolean))].sort();
+  // CAMPUS_ROWS 없으면 기존 regionCostData 지역 + 기본 지역 목록 사용
+  const campusRegions = [...new Set(CAMPUS_ROWS.map(c=>c['지역']).filter(Boolean))].sort();
+  const existingRegions = [...new Set(regionCostData.map(r=>r.region).filter(Boolean))];
+  const defaultRegions = ['수내','광교','정자','이매','영통','죽전','동천','상현'];
+  const regionOptions = campusRegions.length > 0
+    ? campusRegions
+    : [...new Set([...existingRegions, ...defaultRegions])].sort();
 
   const rows = extracted.map((item, idx) => {
-    const regOpts = ['미분류', ...regionOptions].map(r =>
-      `<option value="${r}" ${item['지역']===r?'selected':''}>${r}</option>`
+    // 지역 자동 매칭 (건물명/품목명에서 추출)
+    let autoRegion = item['지역'] || '';
+    if(!autoRegion && item['건물명']) {
+      const matched = regionOptions.find(r => item['건물명'].includes(r));
+      if(matched) autoRegion = matched;
+    }
+    if(!autoRegion) {
+      // 품목명에서 지역 추출 (예: 광교SK → 광교)
+      const matched = regionOptions.find(r => (item['업체명']||'').includes(r) || (item['비고']||'').includes(r));
+      if(matched) autoRegion = matched;
+    }
+    item['지역'] = autoRegion;
+
+    const regOpts = ['', ...regionOptions].map(r =>
+      `<option value="${r}" ${autoRegion===r?'selected':''}>${r||'지역 선택'}</option>`
     ).join('');
     const catOpts = CATS.map(c =>
       `<option value="${c}" ${item['품목']===c?'selected':''}>${c}</option>`
@@ -5511,7 +5530,7 @@ function renderRegionCostRows() {
 }
 
 function addRegionCostRow() {
-  regionCostData.push({ region:'', 캡스:0, 청소용역:0, 청소용품:0 });
+  regionCostData.push({ region:'', LMS:0, 캡스:0, 청소용역:0, 청소용품:0 });
   renderRegionCostRows();
   // 포커스
   setTimeout(() => {
