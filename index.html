@@ -1925,7 +1925,7 @@ const COST_MAP={
   '경기 성남':{code:'SN-02',name:'수내캠퍼스'},
 };
 
-function initCostPage(){
+async function initCostPage(){
   const typeEl = document.getElementById('costPeriodType');
   const selEl  = document.getElementById('costPeriod');
   const bdgEl  = document.getElementById('costPeriodBadge');
@@ -1939,6 +1939,16 @@ function initCostPage(){
     const el = document.getElementById(id);
     if(el && el.textContent === '—') el.textContent = '—';
   });
+
+  // CAMPUS_ROWS 없으면 Supabase에서 로드 (지역 드롭다운용)
+  if(!CAMPUS_ROWS.length) {
+    try {
+      const rows = await sbSelect('campus');
+      CAMPUS_ROWS = rows.map(r => ({ _id: r.id, _rowId: r.id, ...r }));
+      syncKwanFromCampus();
+    } catch(e) { console.warn('campus 로드 실패:', e); }
+  }
+
   // 추가비용 Supabase에서 로드
   loadAdditionalCostMap();
   // 지역별 비용 로드
@@ -5184,10 +5194,11 @@ function showRegionPreview(extracted) {
   // CAMPUS_ROWS 없으면 기존 regionCostData 지역 + 기본 지역 목록 사용
   const campusRegions = [...new Set(CAMPUS_ROWS.map(c=>c['지역']).filter(Boolean))].sort();
   const existingRegions = [...new Set(regionCostData.map(r=>r.region).filter(Boolean))];
-  const defaultRegions = ['수내','광교','정자','이매','영통','죽전','동천','상현'];
   const regionOptions = campusRegions.length > 0
     ? campusRegions
-    : [...new Set([...existingRegions, ...defaultRegions])].sort();
+    : existingRegions.length > 0
+    ? existingRegions
+    : ['수내','광교','이매','영통','수지','잠실'];
 
   const rows = extracted.map((item, idx) => {
     // 지역 자동 매칭 (건물명/품목명에서 추출)
@@ -5501,8 +5512,11 @@ function renderRegionCostRows() {
   }
   if(empty) empty.style.display = 'none';
 
-  // 지역 옵션 — 캠퍼스 현황의 지역 목록
-  const regions = [...new Set(CAMPUS_ROWS.map(c=>c['지역']||'').filter(Boolean))].sort();
+  // 지역 옵션 — Supabase campus 기반 + 기본값 fallback
+  const _campusRegions = [...new Set(CAMPUS_ROWS.map(c=>c['지역']||'').filter(Boolean))].sort();
+  const regions = _campusRegions.length > 0
+    ? _campusRegions
+    : ['수내','광교','이매','영통','수지','잠실'];
   const regionOpts = regions.map(r=>`<option value="${r}">${r}</option>`).join('');
 
   container.innerHTML = regionCostData.map((d,i) => `
