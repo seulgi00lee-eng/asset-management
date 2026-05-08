@@ -1372,6 +1372,9 @@ function addHist(e){
       요청자: entry.worker || '',
       이동사유: entry.memo || entry.source || '',
       적용시작월: entry.applyMonth || '',
+      건물명: entry.건물명 || '',
+      층수: entry.층수 || '',
+      분류: entry.분류 || '',
     }).catch(err => console.warn('이력 저장 오류:', err));
   }
 }
@@ -4346,18 +4349,34 @@ function hRowHTML(h){
   const tm=ts.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
   const tc={임대차계약:'tg-lease',유형자산:'tg-tangible',무형자산:'tg-intangible',렌탈자산:'tg-rental',보험:'tg-insurance'}[h.assetType]||'tg-lease';
   const sc=h.source==='QR스캔'?'src-scan':'src-dash';
+  // 자산유형별 식별 정보 구성
+  let assetLabel = h.assetName || '—';
+  if(h.assetType === '임대차계약') {
+    // 건물명 & 층수
+    const parts = [h.건물명, h.층수].filter(Boolean);
+    if(parts.length) assetLabel = parts.join(' ');
+    else assetLabel = h.assetName || '—';
+  } else if(h.assetType === '렌탈자산') {
+    // 분류 & 건물명 & 층수
+    const parts = [h.분류, h.건물명, h.층수].filter(Boolean);
+    if(parts.length) assetLabel = parts.join(' · ');
+    else assetLabel = h.assetName || '—';
+  }
+
   return `<div class="hr">
     <div class="hr-time">${ds}<br>${tm}</div>
     <div class="hr-body">
       <div class="hr-title">
         <span class="tag ${tc}">${h.assetType}</span>
-        ${h.assetName}
+        <span style="font-weight:600">${assetLabel}</span>
         <span class="hr-src ${sc}">${h.source}</span>
         ${h.assetCode?`<span class="code" style="font-size:10px">${h.assetCode}</span>`:''}
       </div>
       <div class="hr-detail">
         ${h.field&&h.field!=='undefined'?`<span>${h.field}</span>`:''}
-        ${(h.from&&h.from!=='undefined')||(h.to&&h.to!=='undefined')?`<span class="hr-chg"><span>${h.from||'—'}</span><span class="hr-arr">→</span><span>${h.to||'—'}</span></span>`:''}
+        ${(h.fromLoc&&h.fromLoc!=='undefined')||(h.toLoc&&h.toLoc!=='undefined')?`<span class="hr-chg"><span>${h.fromLoc||'—'}</span><span class="hr-arr">→</span><span>${h.toLoc||'—'}</span></span>`:
+          (h.from&&h.from!=='undefined')||(h.to&&h.to!=='undefined')?`<span class="hr-chg"><span>${h.from||'—'}</span><span class="hr-arr">→</span><span>${h.to||'—'}</span></span>`:''}
+        ${h.applyMonth?`<span style="color:#5a1a8a;font-size:10px">(${h.applyMonth}부터)</span>`:''}
         ${h.worker?`<span>처리: ${h.worker}</span>`:''}
         ${h.memo?`<span style="color:var(--text3);font-style:italic">${h.memo}</span>`:''}
       </div>
