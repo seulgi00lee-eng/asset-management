@@ -685,19 +685,25 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
             <div class="sec-t">관별 비용 배분 써머리</div>
             <div style="font-size:10px;color:var(--text3)">렌탈자산 기준 · 관코드 N분의1 자동 배분</div>
           </div>
-          <!-- 관코드 다중선택 드롭다운 필터 -->
-          <div id="kwanFilterWrap" style="display:none;padding:10px 0 10px;border-bottom:1px solid var(--border);margin-bottom:12px">
-            <div style="font-size:10px;color:var(--text3);margin-bottom:6px">관코드 필터 <span style="color:#5a1a8a">(Ctrl+클릭으로 다중 선택, 미선택 시 전체 표시)</span></div>
-            <div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap">
-              <select id="kwanFilterSelect" multiple size="5"
-                style="border:1px solid var(--border);padding:4px;font-size:11px;font-family:var(--mono);background:var(--cream);min-width:180px;max-width:300px"
-                onchange="renderCostSummaryFiltered()">
-              </select>
-              <div style="display:flex;flex-direction:column;gap:6px">
-                <button onclick="kwanFilterAll(true)" style="font-size:10px;padding:4px 12px;border:1px solid var(--border);background:var(--cream2);cursor:pointer;border-radius:3px">전체 선택</button>
-                <button onclick="kwanFilterAll(false)" style="font-size:10px;padding:4px 12px;border:1px solid var(--border);background:var(--cream2);cursor:pointer;border-radius:3px">전체 해제</button>
-                <div id="kwanFilterCount" style="font-size:10px;color:var(--text3);padding:2px 0"></div>
+          <!-- 관코드 필터 드롭다운 -->
+          <div id="kwanFilterWrap" style="display:none;margin-bottom:12px;position:relative">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <div style="position:relative">
+                <button id="kwanFilterBtn" onclick="toggleKwanFilterDrop()"
+                  style="display:flex;align-items:center;gap:6px;padding:6px 14px;border:1px solid var(--border);background:var(--cream);font-size:11px;font-family:var(--mono);cursor:pointer;border-radius:4px;min-width:160px;justify-content:space-between">
+                  <span id="kwanFilterLabel">전체 관코드</span>
+                  <span>▾</span>
+                </button>
+                <!-- 드롭다운 패널 -->
+                <div id="kwanFilterDrop" style="display:none;position:absolute;top:100%;left:0;z-index:999;background:var(--cream);border:1px solid var(--border);border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,.12);min-width:220px;max-height:300px;overflow-y:auto;margin-top:2px">
+                  <div style="padding:8px 10px;border-bottom:1px solid var(--border);display:flex;gap:6px">
+                    <button onclick="kwanFilterAll(true)" style="flex:1;font-size:10px;padding:3px 6px;border:1px solid var(--border);background:var(--cream2);cursor:pointer;border-radius:3px">전체 선택</button>
+                    <button onclick="kwanFilterAll(false)" style="flex:1;font-size:10px;padding:3px 6px;border:1px solid var(--border);background:var(--cream2);cursor:pointer;border-radius:3px">전체 해제</button>
+                  </div>
+                  <div id="kwanFilterBoxes" style="padding:6px 4px"></div>
+                </div>
               </div>
+              <div id="kwanFilterCount" style="font-size:11px;color:var(--text3)"></div>
             </div>
           </div>
           <div style="overflow-x:auto">
@@ -2358,15 +2364,18 @@ async function runCostCalc(){
 
   renderCostDetail();
 
-  // 관코드 다중선택 드롭다운 초기화
+  // 관코드 드롭다운 체크박스 초기화
   const kwanCodes = costResult.map(d => d.code);
   const wrap = document.getElementById('kwanFilterWrap');
-  const kwanSel2 = document.getElementById('kwanFilterSelect');
-  if(wrap && kwanSel2 && kwanCodes.length) {
+  const boxes = document.getElementById('kwanFilterBoxes');
+  if(wrap && boxes && kwanCodes.length) {
     wrap.style.display = 'block';
-    kwanSel2.innerHTML = kwanCodes.map(code => `<option value="${code}" selected>${code}</option>`).join('');
-    kwanSel2.size = Math.min(kwanCodes.length, 8);
-    document.getElementById('kwanFilterCount').textContent = `${kwanCodes.length}개 관코드`;
+    boxes.innerHTML = kwanCodes.map(code => `
+      <label style="display:flex;align-items:center;gap:6px;padding:5px 10px;cursor:pointer;font-size:11px;font-family:var(--mono);border-radius:3px" onmouseenter="this.style.background='var(--cream2)'" onmouseleave="this.style.background=''">
+        <input type="checkbox" checked value="${code}" onchange="renderCostSummaryFiltered()" style="cursor:pointer">
+        ${code}
+      </label>`).join('');
+    updateKwanFilterLabel();
   }
 
   // 상세 내역 관코드 드롭다운 초기화
@@ -2380,13 +2389,11 @@ async function runCostCalc(){
 }
 
 function renderCostSummaryFiltered() {
-  const selEl = document.getElementById('kwanFilterSelect');
-  const selected = selEl ? [...selEl.selectedOptions].map(o => o.value) : [];
-  const filtered = selected.length === 0 || selected.length === costResult.length
+  const checked = [...document.querySelectorAll('#kwanFilterBoxes input:checked')].map(el => el.value);
+  const filtered = checked.length === 0 || checked.length === costResult.length
     ? costResult
-    : costResult.filter(d => selected.includes(d.code));
-  const cnt = document.getElementById('kwanFilterCount');
-  if(cnt) cnt.textContent = `${selected.length}/${costResult.length}개 관코드 표시 중`;
+    : costResult.filter(d => checked.includes(d.code));
+  updateKwanFilterLabel();
   const tbody = document.getElementById('costSummaryBody');
   const tfoot = document.getElementById('costSummaryFoot');
   const fmt = n => n.toLocaleString('ko-KR');
@@ -2419,11 +2426,33 @@ function renderCostSummaryFiltered() {
 }
 
 function kwanFilterAll(sel) {
-  const el = document.getElementById('kwanFilterSelect');
-  if(!el) return;
-  [...el.options].forEach(o => o.selected = sel);
+  document.querySelectorAll('#kwanFilterBoxes input').forEach(el => el.checked = sel);
   renderCostSummaryFiltered();
 }
+
+function toggleKwanFilterDrop() {
+  const drop = document.getElementById('kwanFilterDrop');
+  if(!drop) return;
+  drop.style.display = drop.style.display === 'none' ? 'block' : 'none';
+}
+
+function updateKwanFilterLabel() {
+  const total = document.querySelectorAll('#kwanFilterBoxes input').length;
+  const checked = document.querySelectorAll('#kwanFilterBoxes input:checked').length;
+  const label = document.getElementById('kwanFilterLabel');
+  const count = document.getElementById('kwanFilterCount');
+  if(label) label.textContent = checked === total ? '전체 관코드' : `${checked}개 선택됨`;
+  if(count) count.textContent = `${checked}/${total}개 표시 중`;
+}
+
+// 드롭다운 외부 클릭 시 닫기
+document.addEventListener('click', function(e) {
+  const btn = document.getElementById('kwanFilterBtn');
+  const drop = document.getElementById('kwanFilterDrop');
+  if(drop && btn && !btn.contains(e.target) && !drop.contains(e.target)) {
+    drop.style.display = 'none';
+  }
+});
 
 function openKwanItems(kwanCode) {
   const d = costResult.find(r => r.code === kwanCode);
