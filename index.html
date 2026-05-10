@@ -624,6 +624,8 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
               <button class="btn btn-ghost btn-sm" onclick="document.getElementById('regionFileInput').click()" style="color:#5a1a8a;border-color:#c4b5fd">📎 파일로 자동입력</button>
               <input type="file" id="regionFileInput" multiple accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls" style="display:none" onchange="handleRegionFiles(this.files)">
               <button class="btn btn-ghost btn-sm" onclick="addRegionCostRow()">＋ 지역 추가</button>
+              <button class="btn btn-ghost btn-sm" onclick="saveDraftCost()" style="color:#5a1a8a;border-color:#c4b5fd">📌 임시저장</button>
+              <button class="btn btn-ghost btn-sm" onclick="loadDraftCost()" style="color:#1a5a8a;border-color:#b5d4fd">📂 불러오기</button>
               <button class="btn btn-ghost btn-sm" onclick="saveRegionCosts()" style="color:#065f46;border-color:#a7f3d0">💾 저장</button>
             </div>
           </div>
@@ -5735,6 +5737,76 @@ function removeRegionCostRow(i) {
   renderRegionCostRows();
 }
 
+
+// ═══════════════════════ 비용 임시저장 (Supabase cost_draft) ═══════════════════════
+
+async function saveDraftCost() {
+  const ym = getCurYearMonth();
+  const userId = document.getElementById('uNm')?.textContent || 'unknown';
+  const valid = regionCostData.filter(d => d.region);
+  if(!valid.length) { showToast('저장할 데이터가 없습니다'); return; }
+
+  setLoading(true);
+  try {
+    // 기존 draft 삭제 후 새로 저장
+    await _supa.from('cost_draft').delete().eq('user_id', userId);
+    const { error } = await _supa.from('cost_draft').insert({
+      user_id: userId,
+      year_month: ym,
+      region_costs: valid,
+      saved_at: new Date().toISOString()
+    });
+    if(error) throw error;
+    showToast(`📌 임시저장 완료 — ${valid.length}개 지역 (${ym})`);
+  } catch(e) {
+    showToast('❌ 임시저장 실패: ' + e.message);
+  }
+  setLoading(false);
+}
+
+async function loadDraftCost() {
+  const userId = document.getElementById('uNm')?.textContent || 'unknown';
+  setLoading(true);
+  try {
+    const { data, error } = await _supa.from('cost_draft')
+      .select('*').eq('user_id', userId)
+      .order('saved_at', { ascending: false }).limit(1);
+    if(error) throw error;
+    if(!data || !data.length) {
+      showToast('저장된 임시데이터가 없습니다');
+      setLoading(false);
+      return;
+    }
+    const draft = data[0];
+    const savedAt = new Date(draft.saved_at).toLocaleString('ko-KR');
+    if(!confirm(`${draft.year_month} 기준 임시저장 데이터를 불러올까요?\n저장 시각: ${savedAt}\n현재 입력 중인 데이터는 덮어씁니다.`)) {
+      setLoading(false);
+      return;
+    }
+    regionCostData = (draft.region_costs || []).map(d => ({
+      region: d.region || '',
+      LMS: Number(d.LMS) || 0,
+      캡스: Number(d.캡스) || 0,
+      청소용역: Number(d.청소용역) || 0,
+      청소용품: Number(d.청소용품) || 0,
+    }));
+    renderRegionCostRows();
+    showToast(`📂 불러오기 완료 — ${regionCostData.length}개 지역 (${draft.year_month} 기준, ${savedAt} 저장)`);
+  } catch(e) {
+    showToast('❌ 불러오기 실패: ' + e.message);
+  }
+  setLoading(false);
+}
+
+async function deleteDraftCost() {
+  const userId = document.getElementById('uNm')?.textContent || 'unknown';
+  try {
+    await _supa.from('cost_draft').delete().eq('user_id', userId);
+  } catch(e) {
+    console.warn('draft 삭제 실패:', e);
+  }
+}
+
 async function saveRegionCosts() {
   const ym = getCurYearMonth();
   const valid = regionCostData.filter(d => d.region);
@@ -6088,6 +6160,7 @@ async function confirmCostMonthClose() {
   const badge = document.getElementById('nb-cost-history');
   if(badge){ badge.textContent='NEW'; badge.style.display='inline'; }
   showToast(`✅ ${ym} 월 마감 완료 — ${success}개 관 저장됨`);
+  await deleteDraftCost(); // 마감 완료 후 임시저장 자동 삭제
   if(!COST_MAIL_TEST_MODE) await sendCostReportEmail(ym);
 }
 
@@ -6294,7 +6367,7 @@ function exportCostHistoryExcel() {
   <div class="mo-box" style="width:480px">
     <div class="mo-t">📌 월 마감 — 기준월 선택</div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:16px;background:var(--cream2);padding:10px 14px;border-left:3px solid var(--gold)">
-      마감할 기준월을 선택하세요. 선택한 월의 배분 계산 결과가 <b>비용 누적 관리</b>에 저장됩니다.
+      실제 <b>비용이 출금된 달</b>을 선택하세요. (예: 4월 사용분이 5월 10일 출금 → 2026년 5월 선택) 선택한 월 기준으로 <b>비용 누적 관리</b>에 저장됩니다.
     </div>
     <div id="costMonthSummary" style="margin-bottom:18px;padding:14px;background:var(--cream2);border:1px solid var(--border)"></div>
     <div class="fg" style="margin-bottom:20px">
