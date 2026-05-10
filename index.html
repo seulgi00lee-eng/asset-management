@@ -2189,6 +2189,7 @@ async function runCostCalc(){
         deptMap[kwan] = {
           code: kwan,
           법인명: campus['법인명'] || '—',
+          지역: campus['지역'] || '—',
           사업부: campus['사업부'] || '—',
           브랜드: campus['브랜드'] || '—',
           catAmts: {},
@@ -2281,6 +2282,9 @@ async function runCostCalc(){
     let va, vb;
     if(FIXED_CATS.includes(costSortCol)) {
       va = a.catAmts[costSortCol]||0; vb = b.catAmts[costSortCol]||0;
+    } else if(costSortCol === '지역') {
+      va = String(a.지역||''); vb = String(b.지역||'');
+      return costSortAsc ? va.localeCompare(vb,'ko') : vb.localeCompare(va,'ko');
     } else if(costSortCol === '비용합계') {
       va = a.총비용; vb = b.총비용;
     } else if(costSortCol === '항목수') {
@@ -2303,7 +2307,7 @@ async function runCostCalc(){
   };
 
   if(thead) thead.innerHTML = `<tr style="background:var(--cream2);border-bottom:2px solid var(--text)">
-    ${TH('법인명','법인명')}${TH('관코드','code')}${TH('사업부','사업부')}${TH('브랜드','브랜드')}
+    ${TH('법인명','법인명')}${TH('관코드','code')}${TH('지역','지역')}${TH('사업부','사업부')}${TH('브랜드','브랜드')}
     ${FIXED_CATS.map(c=>TH(c+'✎',c,true)).join('')}
     ${TH('비용합계','비용합계',true)}${TH('항목수','항목수')}
     <th style="padding:8px 10px;font-size:9px;letter-spacing:1px;color:var(--text3)">비율</th>
@@ -2316,6 +2320,7 @@ async function runCostCalc(){
     return `<tr style="border-bottom:1px solid var(--cream2)">
       ${TD(`<span style="font-weight:600">${d.법인명}</span>`)}
       ${TD(`<span style="font-family:var(--mono);font-weight:700;color:${color}">${d.code}</span>`)}
+      ${TD(d.지역||'—')}
       ${TD(d.사업부)}
       ${TD(d.브랜드)}
       ${FIXED_CATS.map(c=>TDN(d.catAmts[c]||0, d.code, c)).join('')}
@@ -2398,6 +2403,7 @@ function renderCostSummaryFiltered() {
     return `<tr style="border-bottom:1px solid var(--cream2)">
       ${TD(`<span style="font-weight:600">${d.법인명}</span>`)}
       ${TD(`<span style="font-family:var(--mono);font-weight:700;color:${color}">${d.code}</span>`)}
+      ${TD(d.지역||'—')}
       ${TD(d.사업부)}${TD(d.브랜드)}
       ${FIXED_CATS.map(c=>TDN(d.catAmts[c]||0)).join('')}
       ${TD(fmt(Math.round(d.총비용)), `text-align:right;font-family:var(--mono);font-weight:700;color:${color};`)}
