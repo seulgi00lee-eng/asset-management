@@ -683,6 +683,15 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
             <div class="sec-t">관별 비용 배분 써머리</div>
             <div style="font-size:10px;color:var(--text3)">렌탈자산 기준 · 관코드 N분의1 자동 배분</div>
           </div>
+          <!-- 관코드 체크박스 필터 -->
+          <div id="kwanFilterWrap" style="display:none;padding:10px 0 6px;border-bottom:1px solid var(--border);margin-bottom:10px">
+            <div style="font-size:10px;color:var(--text3);margin-bottom:6px">관코드 필터 (체크한 관코드만 표시)</div>
+            <div id="kwanFilterBoxes" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+            <div style="margin-top:8px;display:flex;gap:8px">
+              <button onclick="kwanFilterAll(true)" style="font-size:10px;padding:3px 10px;border:1px solid var(--border);background:var(--cream2);cursor:pointer;border-radius:3px">전체 선택</button>
+              <button onclick="kwanFilterAll(false)" style="font-size:10px;padding:3px 10px;border:1px solid var(--border);background:var(--cream2);cursor:pointer;border-radius:3px">전체 해제</button>
+            </div>
+          </div>
           <div style="overflow-x:auto">
             <table style="width:100%;border-collapse:collapse;font-size:12px" id="costSummaryTable">
               <thead id="costSummaryHead"></thead>
@@ -696,9 +705,14 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
         <div class="sec">
           <div class="sec-hd">
             <div class="sec-t">항목 상세 내역</div>
-            <select id="costDetailFilter" style="border:1px solid var(--border);padding:5px 10px;font-size:11px;font-family:var(--font);background:var(--cream);outline:none" onchange="renderCostDetail()">
-              <option value="">전체 분류</option>
-            </select>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <select id="costDetailFilter" style="border:1px solid var(--border);padding:5px 10px;font-size:11px;font-family:var(--font);background:var(--cream);outline:none" onchange="renderCostDetail()">
+                <option value="">전체 분류</option>
+              </select>
+              <select id="costDetailKwanFilter" style="border:1px solid var(--border);padding:5px 10px;font-size:11px;font-family:var(--mono);background:var(--cream);outline:none" onchange="renderCostDetail()">
+                <option value="">전체 관코드</option>
+              </select>
+            </div>
           </div>
           <div style="overflow-x:auto">
             <table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -1009,6 +1023,18 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
   </div>
 </div>
 
+
+<!-- 항목수 클릭 상세 팝업 -->
+<div class="mo" id="moKwanItems" onclick="closeMoBg(event,'moKwanItems')">
+  <div class="mo-box" style="width:860px;max-height:85vh;overflow-y:auto">
+    <div class="mo-t" id="moKwanItemsTitle">관코드 항목 상세</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:12px" id="moKwanItemsSubtitle"></div>
+    <div id="moKwanItemsBody" style="overflow-x:auto"></div>
+    <div class="mo-ft" style="margin-top:16px">
+      <button class="btn btn-ghost" onclick="closeMo('moKwanItems')">닫기</button>
+    </div>
+  </div>
+</div>
 
 <!-- 파일 자동입력 미리보기 모달 -->
 <div class="mo" id="moRegionPreview" onclick="closeMoBg(event,'moRegionPreview')">
@@ -2286,7 +2312,7 @@ async function runCostCalc(){
       ${TD(d.브랜드)}
       ${FIXED_CATS.map(c=>TDN(d.catAmts[c]||0, d.code, c)).join('')}
       ${TD(fmt(Math.round(d.총비용)), `text-align:right;font-family:var(--mono);font-weight:700;color:${color};`)}
-      ${TD(d.항목수+'건', 'color:var(--text3);')}
+      ${'<td style="padding:8px 10px;color:var(--text3);cursor:pointer;white-space:nowrap" onclick="openKwanItems(\'' + d.code + '\')" onmouseenter="this.style.background=\'rgba(200,169,110,.12)\'" onmouseleave="this.style.background=\'\'" title="클릭하여 항목 상세 확인">' + d.항목수 + '건 🔍</td>'}
       <td style="padding:8px 10px;min-width:100px">
         <div style="display:flex;align-items:center;gap:6px">
           <div style="flex:1;height:4px;background:var(--cream2)"><div style="width:${pct}%;height:100%;background:${color}"></div></div>
@@ -2318,13 +2344,119 @@ async function runCostCalc(){
   }
 
   renderCostDetail();
+
+  // 관코드 체크박스 필터 초기화
+  const kwanCodes = costResult.map(d => d.code);
+  const wrap = document.getElementById('kwanFilterWrap');
+  const boxes = document.getElementById('kwanFilterBoxes');
+  if(wrap && boxes && kwanCodes.length) {
+    wrap.style.display = 'block';
+    boxes.innerHTML = kwanCodes.map(code => `
+      <label style="display:flex;align-items:center;gap:4px;font-size:11px;font-family:var(--mono);cursor:pointer;padding:3px 8px;border:1px solid var(--border);border-radius:3px;background:var(--cream2)">
+        <input type="checkbox" checked value="${code}" onchange="renderCostSummaryFiltered()" style="cursor:pointer">
+        ${code}
+      </label>`).join('');
+  }
+
+  // 상세 내역 관코드 드롭다운 초기화
+  const kwanSel = document.getElementById('costDetailKwanFilter');
+  if(kwanSel) {
+    kwanSel.innerHTML = '<option value="">전체 관코드</option>' +
+      kwanCodes.map(c => `<option value="${c}">${c}</option>`).join('');
+  }
+
   showToast(`✅ 배분 계산 완료 — ${costResult.length}개 관 · 총 ${fmt(Math.round(totalAmt))}원/월`);
+}
+
+function renderCostSummaryFiltered() {
+  const checked = [...document.querySelectorAll('#kwanFilterBoxes input:checked')].map(el => el.value);
+  const filtered = costResult.filter(d => checked.includes(d.code));
+  const tbody = document.getElementById('costSummaryBody');
+  const tfoot = document.getElementById('costSummaryFoot');
+  const fmt = n => n.toLocaleString('ko-KR');
+  const TD = (txt, opts='') => `<td style="padding:8px 10px;font-size:11px;white-space:nowrap;${opts}">${txt}</td>`;
+  const TDN = (n) => {
+    const base = n > 0 ? fmt(Math.round(n)) : '—';
+    return `<td style="padding:8px 10px;text-align:right;font-family:var(--mono);font-size:10px;white-space:nowrap">${base}</td>`;
+  };
+  const colors = ['#1a1a1a','#3a6a3a','#c8a96e','#6a5a8a','#2a6a6a','#8a2a2a'];
+  const totalAmt = filtered.reduce((s,d) => s+d.총비용, 0);
+  if(tbody) tbody.innerHTML = filtered.map((d,i) => {
+    const pct = totalAmt>0 ? (d.총비용/totalAmt*100).toFixed(1) : '0.0';
+    const color = colors[i%colors.length];
+    return `<tr style="border-bottom:1px solid var(--cream2)">
+      ${TD(`<span style="font-weight:600">${d.법인명}</span>`)}
+      ${TD(`<span style="font-family:var(--mono);font-weight:700;color:${color}">${d.code}</span>`)}
+      ${TD(d.사업부)}${TD(d.브랜드)}
+      ${FIXED_CATS.map(c=>TDN(d.catAmts[c]||0)).join('')}
+      ${TD(fmt(Math.round(d.총비용)), `text-align:right;font-family:var(--mono);font-weight:700;color:${color};`)}
+      <td style="padding:8px 10px;color:var(--text3);cursor:pointer;white-space:nowrap" onclick="openKwanItems('${d.code}')" onmouseenter="this.style.background='rgba(200,169,110,.12)'" onmouseleave="this.style.background=''" title="클릭하여 항목 상세 확인">${d.항목수}건 🔍</td>
+      <td style="padding:8px 10px;min-width:100px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="flex:1;height:4px;background:var(--cream2)"><div style="width:${pct}%;height:100%;background:${color}"></div></div>
+          <span style="font-family:var(--mono);font-size:10px;min-width:32px;text-align:right">${pct}%</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function kwanFilterAll(checked) {
+  document.querySelectorAll('#kwanFilterBoxes input').forEach(el => el.checked = checked);
+  renderCostSummaryFiltered();
+}
+
+function openKwanItems(kwanCode) {
+  const d = costResult.find(r => r.code === kwanCode);
+  if(!d) return;
+  document.getElementById('moKwanItemsTitle').textContent = `관코드 ${kwanCode} — 항목 상세`;
+  document.getElementById('moKwanItemsSubtitle').textContent =
+    `총 ${d.항목수}건 · ${d.총비용.toLocaleString('ko-KR')}원/월`;
+  const fmt = n => n.toLocaleString('ko-KR');
+  document.getElementById('moKwanItemsBody').innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:11px">
+      <thead>
+        <tr style="background:var(--cream2);border-bottom:2px solid var(--text)">
+          <th style="padding:8px 10px;text-align:left">NO</th>
+          <th style="padding:8px 10px;text-align:left">업체명</th>
+          <th style="padding:8px 10px;text-align:left">분류</th>
+          <th style="padding:8px 10px;text-align:left">기종</th>
+          <th style="padding:8px 10px;text-align:left">건물명</th>
+          <th style="padding:8px 10px;text-align:left">층수</th>
+          <th style="padding:8px 10px;text-align:right">청구금액</th>
+          <th style="padding:8px 10px;text-align:right">배분금액</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${d.items.map((item, idx) => `
+          <tr style="border-bottom:1px solid var(--cream2);${idx%2===1?'background:var(--cream2)':''}">
+            <td style="padding:7px 10px;color:var(--text3)">${idx+1}</td>
+            <td style="padding:7px 10px">${item.업체명||'—'}</td>
+            <td style="padding:7px 10px"><span style="font-size:10px;padding:2px 7px;background:#f0e8fa;color:#5a1a8a;border-radius:10px">${item.분류||'—'}</span></td>
+            <td style="padding:7px 10px">${item.기종||'—'}</td>
+            <td style="padding:7px 10px">${item.건물명||'—'}</td>
+            <td style="padding:7px 10px">${item.층수||'—'}</td>
+            <td style="padding:7px 10px;text-align:right;font-family:var(--mono)">${fmt(Math.round(item.청구금액||0))}</td>
+            <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-weight:700">${fmt(Math.round(item.배분금액||0))}</td>
+          </tr>`).join('')}
+      </tbody>
+      <tfoot>
+        <tr style="background:var(--cream2);border-top:2px solid var(--text)">
+          <td colspan="6" style="padding:8px 10px;font-weight:700">합계</td>
+          <td style="padding:8px 10px;text-align:right;font-family:var(--mono);font-weight:700">${fmt(Math.round(d.items.reduce((s,i)=>s+(i.청구금액||0),0)))}</td>
+          <td style="padding:8px 10px;text-align:right;font-family:var(--mono);font-weight:700">${fmt(Math.round(d.총비용))}</td>
+        </tr>
+      </tfoot>
+    </table>`;
+  document.getElementById('moKwanItems').classList.add('open');
 }
 
 function renderCostDetail(){
   const f = document.getElementById('costDetailFilter')?.value || '';
+  const kwanF = document.getElementById('costDetailKwanFilter')?.value || '';
   const allItems = costResult.flatMap(d => d.items);
-  const filtered = f ? allItems.filter(r => (r['분류']||'') === f) : allItems;
+  let filtered = f ? allItems.filter(r => (r['분류']||'') === f) : allItems;
+  if(kwanF) filtered = filtered.filter(r => r.deptCode === kwanF);
   const colors = ['#1a1a1a','#3a6a3a','#c8a96e','#6a5a8a','#2a6a6a','#8a2a2a'];
 
   document.getElementById('costDetailBody').innerHTML = filtered.length
