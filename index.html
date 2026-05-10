@@ -683,13 +683,19 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
             <div class="sec-t">관별 비용 배분 써머리</div>
             <div style="font-size:10px;color:var(--text3)">렌탈자산 기준 · 관코드 N분의1 자동 배분</div>
           </div>
-          <!-- 관코드 체크박스 필터 -->
-          <div id="kwanFilterWrap" style="display:none;padding:10px 0 6px;border-bottom:1px solid var(--border);margin-bottom:10px">
-            <div style="font-size:10px;color:var(--text3);margin-bottom:6px">관코드 필터 (체크한 관코드만 표시)</div>
-            <div id="kwanFilterBoxes" style="display:flex;flex-wrap:wrap;gap:6px"></div>
-            <div style="margin-top:8px;display:flex;gap:8px">
-              <button onclick="kwanFilterAll(true)" style="font-size:10px;padding:3px 10px;border:1px solid var(--border);background:var(--cream2);cursor:pointer;border-radius:3px">전체 선택</button>
-              <button onclick="kwanFilterAll(false)" style="font-size:10px;padding:3px 10px;border:1px solid var(--border);background:var(--cream2);cursor:pointer;border-radius:3px">전체 해제</button>
+          <!-- 관코드 다중선택 드롭다운 필터 -->
+          <div id="kwanFilterWrap" style="display:none;padding:10px 0 10px;border-bottom:1px solid var(--border);margin-bottom:12px">
+            <div style="font-size:10px;color:var(--text3);margin-bottom:6px">관코드 필터 <span style="color:#5a1a8a">(Ctrl+클릭으로 다중 선택, 미선택 시 전체 표시)</span></div>
+            <div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap">
+              <select id="kwanFilterSelect" multiple size="5"
+                style="border:1px solid var(--border);padding:4px;font-size:11px;font-family:var(--mono);background:var(--cream);min-width:180px;max-width:300px"
+                onchange="renderCostSummaryFiltered()">
+              </select>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <button onclick="kwanFilterAll(true)" style="font-size:10px;padding:4px 12px;border:1px solid var(--border);background:var(--cream2);cursor:pointer;border-radius:3px">전체 선택</button>
+                <button onclick="kwanFilterAll(false)" style="font-size:10px;padding:4px 12px;border:1px solid var(--border);background:var(--cream2);cursor:pointer;border-radius:3px">전체 해제</button>
+                <div id="kwanFilterCount" style="font-size:10px;color:var(--text3);padding:2px 0"></div>
+              </div>
             </div>
           </div>
           <div style="overflow-x:auto">
@@ -2345,17 +2351,15 @@ async function runCostCalc(){
 
   renderCostDetail();
 
-  // 관코드 체크박스 필터 초기화
+  // 관코드 다중선택 드롭다운 초기화
   const kwanCodes = costResult.map(d => d.code);
   const wrap = document.getElementById('kwanFilterWrap');
-  const boxes = document.getElementById('kwanFilterBoxes');
-  if(wrap && boxes && kwanCodes.length) {
+  const kwanSel2 = document.getElementById('kwanFilterSelect');
+  if(wrap && kwanSel2 && kwanCodes.length) {
     wrap.style.display = 'block';
-    boxes.innerHTML = kwanCodes.map(code => `
-      <label style="display:flex;align-items:center;gap:4px;font-size:11px;font-family:var(--mono);cursor:pointer;padding:3px 8px;border:1px solid var(--border);border-radius:3px;background:var(--cream2)">
-        <input type="checkbox" checked value="${code}" onchange="renderCostSummaryFiltered()" style="cursor:pointer">
-        ${code}
-      </label>`).join('');
+    kwanSel2.innerHTML = kwanCodes.map(code => `<option value="${code}" selected>${code}</option>`).join('');
+    kwanSel2.size = Math.min(kwanCodes.length, 8);
+    document.getElementById('kwanFilterCount').textContent = `${kwanCodes.length}개 관코드`;
   }
 
   // 상세 내역 관코드 드롭다운 초기화
@@ -2369,8 +2373,13 @@ async function runCostCalc(){
 }
 
 function renderCostSummaryFiltered() {
-  const checked = [...document.querySelectorAll('#kwanFilterBoxes input:checked')].map(el => el.value);
-  const filtered = costResult.filter(d => checked.includes(d.code));
+  const selEl = document.getElementById('kwanFilterSelect');
+  const selected = selEl ? [...selEl.selectedOptions].map(o => o.value) : [];
+  const filtered = selected.length === 0 || selected.length === costResult.length
+    ? costResult
+    : costResult.filter(d => selected.includes(d.code));
+  const cnt = document.getElementById('kwanFilterCount');
+  if(cnt) cnt.textContent = `${selected.length}/${costResult.length}개 관코드 표시 중`;
   const tbody = document.getElementById('costSummaryBody');
   const tfoot = document.getElementById('costSummaryFoot');
   const fmt = n => n.toLocaleString('ko-KR');
@@ -2401,8 +2410,10 @@ function renderCostSummaryFiltered() {
   }).join('');
 }
 
-function kwanFilterAll(checked) {
-  document.querySelectorAll('#kwanFilterBoxes input').forEach(el => el.checked = checked);
+function kwanFilterAll(sel) {
+  const el = document.getElementById('kwanFilterSelect');
+  if(!el) return;
+  [...el.options].forEach(o => o.selected = sel);
   renderCostSummaryFiltered();
 }
 
@@ -2411,7 +2422,7 @@ function openKwanItems(kwanCode) {
   if(!d) return;
   document.getElementById('moKwanItemsTitle').textContent = `관코드 ${kwanCode} — 항목 상세`;
   document.getElementById('moKwanItemsSubtitle').textContent =
-    `총 ${d.항목수}건 · ${d.총비용.toLocaleString('ko-KR')}원/월`;
+    `총 ${d.항목수}건 · ${Math.round(d.총비용).toLocaleString('ko-KR')}원/월`;
   const fmt = n => n.toLocaleString('ko-KR');
   document.getElementById('moKwanItemsBody').innerHTML = `
     <table style="width:100%;border-collapse:collapse;font-size:11px">
@@ -2436,14 +2447,14 @@ function openKwanItems(kwanCode) {
             <td style="padding:7px 10px">${item.기종||'—'}</td>
             <td style="padding:7px 10px">${item.건물명||'—'}</td>
             <td style="padding:7px 10px">${item.층수||'—'}</td>
-            <td style="padding:7px 10px;text-align:right;font-family:var(--mono)">${fmt(Math.round(item.청구금액||0))}</td>
-            <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-weight:700">${fmt(Math.round(item.배분금액||0))}</td>
+            <td style="padding:7px 10px;text-align:right;font-family:var(--mono)">${fmt(Math.round(item.origAmt||0))}</td>
+            <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-weight:700">${fmt(Math.round(item.splitAmt||0))}</td>
           </tr>`).join('')}
       </tbody>
       <tfoot>
         <tr style="background:var(--cream2);border-top:2px solid var(--text)">
           <td colspan="6" style="padding:8px 10px;font-weight:700">합계</td>
-          <td style="padding:8px 10px;text-align:right;font-family:var(--mono);font-weight:700">${fmt(Math.round(d.items.reduce((s,i)=>s+(i.청구금액||0),0)))}</td>
+          <td style="padding:8px 10px;text-align:right;font-family:var(--mono);font-weight:700">${fmt(Math.round(d.items.reduce((s,i)=>s+(i.origAmt||0),0)))}</td>
           <td style="padding:8px 10px;text-align:right;font-family:var(--mono);font-weight:700">${fmt(Math.round(d.총비용))}</td>
         </tr>
       </tfoot>
