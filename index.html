@@ -2354,8 +2354,8 @@ async function runCostCalc(){
 
   const colors = ['#1a1a1a','#3a6a3a','#c8a96e','#6a5a8a','#2a6a6a','#8a2a2a'];
   if(tbody) tbody.innerHTML = sortedResult.map((d,i) => {
-    const pct = totalAmt>0 ? (d.총비용/totalAmt*100).toFixed(1) : '0.0';
-    const color = colors[i%colors.length];
+    const pct = totalAmt2>0 ? (d.총비용/totalAmt2*100).toFixed(1) : '0.0';
+    const color = colors2[i%colors2.length];
     return `<tr style="border-bottom:1px solid var(--cream2)">
       ${TD(`<span style="font-weight:600">${d.법인명}</span>`)}
       ${TD(`<span style="font-family:var(--mono);font-weight:700;color:${color}">${d.code}</span>`)}
@@ -2438,10 +2438,11 @@ async function runCostCalc(){
 
 function renderCostSummaryFiltered() {
   const checked = [...document.querySelectorAll('#kwanFilterBoxes input:checked')].map(el => el.value);
+  const totalKwan = document.querySelectorAll('#kwanFilterBoxes input').length;
   const corpChecked = [...document.querySelectorAll('#corpFilterBoxes input:checked')].map(el => el.value);
   const totalCorp = document.querySelectorAll('#corpFilterBoxes input').length;
 
-  let filtered = checked.length === 0 || checked.length === costResult.length
+  let filtered = (checked.length === 0 || checked.length === totalKwan)
     ? costResult
     : costResult.filter(d => checked.includes(d.code));
 
@@ -2451,6 +2452,55 @@ function renderCostSummaryFiltered() {
 
   updateKwanFilterLabel();
   updateCorpFilterLabel();
+
+  // tbody 직접 업데이트
+  const filterTbody = document.getElementById('costSummaryBody');
+  const filterTfoot = document.getElementById('costSummaryFoot');
+  if(!filterTbody) return;
+
+  const fmt2 = n => Number(n).toLocaleString('ko-KR');
+  const TD2 = (txt, opts='') => `<td style="padding:8px 10px;white-space:nowrap;${opts}">${txt}</td>`;
+  const TDN2 = (n) => {
+    const base = n > 0 ? fmt2(Math.round(n)) : '—';
+    return `<td style="padding:8px 10px;text-align:right;font-family:var(--mono);font-size:10px;white-space:nowrap">${base}</td>`;
+  };
+  const colors2 = ['#1a1a1a','#3a6a3a','#c8a96e','#6a5a8a','#2a6a6a','#8a2a2a'];
+  const CATS2 = ['복합기','잉크젯','공기청정기','LMS','캡스','청소용역','청소용품'];
+  const totalAmt2 = filtered.reduce((s,d) => s+d.총비용, 0);
+
+  filterTbody.innerHTML = filtered.map((d,i) => {
+    const pct = totalAmt>0 ? (d.총비용/totalAmt*100).toFixed(1) : '0.0';
+    const color = colors[i%colors.length];
+    return `<tr style="border-bottom:1px solid var(--cream2)">
+      ${TD2(`<span style="font-weight:600">${d.법인명}</span>`)}
+      ${TD2(`<span style="font-family:var(--mono);font-weight:700;color:${color}">${d.code}</span>`)}
+      ${TD2(d.지역||'—')}
+      ${TD2(d.사업부||'—')}${TD2(d.브랜드||'—')}
+      ${CATS2.map(c => TDN2(d.catAmts?.[c]||0)).join('')}
+      ${TD2(fmt2(Math.round(d.총비용)), `text-align:right;font-family:var(--mono);font-weight:700;color:${color};`)}
+      <td style="padding:8px 10px;color:var(--text3);cursor:pointer;white-space:nowrap" onclick="openKwanItems('${d.code}')" onmouseenter="this.style.background='rgba(200,169,110,.12)'" onmouseleave="this.style.background=''" title="클릭하여 항목 상세 확인">${d.항목수}건 🔍</td>
+      <td style="padding:8px 10px;min-width:100px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="flex:1;height:4px;background:var(--cream2)"><div style="width:${pct}%;height:100%;background:${color}"></div></div>
+          <span style="font-family:var(--mono);font-size:10px;min-width:32px;text-align:right">${pct}%</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  // tfoot 합계 업데이트
+  if(filterTfoot) {
+    const rows2 = filtered.length;
+    filterTfoot.innerHTML = `<tr style="background:var(--cream2);border-top:2px solid var(--text)">
+      ${TD2('<span style="font-weight:700">합계</span>')}
+      ${TD2(rows2+'개 관', 'font-family:var(--mono);font-size:10px;color:var(--text3)')}
+      ${TD2('')}${TD2('')}${TD2('')}
+      ${CATS2.map(() => TD2('')).join('')}
+      ${TD2(fmt2(Math.round(totalAmt2)), 'text-align:right;font-family:var(--mono);font-weight:700;')}
+      ${TD2(rows2+'건', 'font-weight:700;')}
+      ${TD2('100%', 'font-family:var(--mono);font-weight:700;')}
+    </tr>`;
+  }
   const tbody = document.getElementById('costSummaryBody');
   const tfoot = document.getElementById('costSummaryFoot');
   const fmt = n => n.toLocaleString('ko-KR');
