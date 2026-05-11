@@ -744,6 +744,9 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
               <select id="costDetailKwanFilter" style="border:1px solid var(--border);padding:5px 10px;font-size:11px;font-family:var(--mono);background:var(--cream);outline:none" onchange="renderCostDetail()">
                 <option value="">전체 관코드</option>
               </select>
+              <select id="costDetailVendorFilter" style="border:1px solid var(--border);padding:5px 10px;font-size:11px;background:var(--cream);outline:none" onchange="renderCostDetail()">
+                <option value="">전체 업체명</option>
+              </select>
             </div>
           </div>
           <div style="overflow-x:auto">
@@ -764,6 +767,9 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
                 </tr>
               </thead>
               <tbody id="costDetailBody">
+              </tbody>
+              <tfoot id="costDetailFoot"></tfoot>
+              <tbody style="display:none">
                 <tr><td colspan="11"><div class="empty" style="padding:24px"><div class="et">배분 계산 실행 버튼을 클릭하세요</div></div></td></tr>
               </tbody>
             </table>
@@ -2492,13 +2498,14 @@ function renderCostSummaryFiltered() {
   }).join('');
 
   if(tfoot) {
+    const catTotals = CATS.map(c => filtered.reduce((s,d) => s+(d.catAmts?.[c]||0), 0));
     tfoot.innerHTML = `<tr style="background:var(--cream2);border-top:2px solid var(--text)">
       ${TD('<span style="font-weight:700">합계</span>')}
       ${TD(filtered.length+'개 관','font-family:var(--mono);font-size:10px;color:var(--text3)')}
       ${TD('')}${TD('')}${TD('')}
-      ${CATS.map(()=>TD('')).join('')}
+      ${catTotals.map(n => `<td style="padding:8px 10px;text-align:right;font-family:var(--mono);font-size:10px;font-weight:700;white-space:nowrap">${n>0?fmtN(n):'—'}</td>`).join('')}
       ${TD(fmtN(total),'text-align:right;font-family:var(--mono);font-weight:700;')}
-      ${TD(filtered.length+'건','font-weight:700;')}
+      ${TD(filtered.reduce((s,d)=>s+d.항목수,0)+'건','font-weight:700;')}
       ${TD('100%','font-family:var(--mono);font-weight:700;')}
     </tr>`;
   }
@@ -2604,14 +2611,32 @@ function openKwanItems(kwanCode) {
 }
 
 function renderCostDetail(){
-  const f = document.getElementById('costDetailFilter')?.value || '';
-  const kwanF = document.getElementById('costDetailKwanFilter')?.value || '';
+  const f       = document.getElementById('costDetailFilter')?.value || '';
+  const kwanF   = document.getElementById('costDetailKwanFilter')?.value || '';
+  const vendorF = document.getElementById('costDetailVendorFilter')?.value || '';
   const allItems = costResult.flatMap(d => d.items);
-  let filtered = f ? allItems.filter(r => (r['분류']||'') === f) : allItems;
-  if(kwanF) filtered = filtered.filter(r => r.deptCode === kwanF);
-  const colors = ['#1a1a1a','#3a6a3a','#c8a96e','#6a5a8a','#2a6a6a','#8a2a2a'];
 
-  document.getElementById('costDetailBody').innerHTML = filtered.length
+  let filtered = f ? allItems.filter(r => (r['분류']||'') === f) : allItems;
+  if(kwanF)   filtered = filtered.filter(r => r.deptCode === kwanF);
+  if(vendorF) filtered = filtered.filter(r => (r['업체명']||'') === vendorF);
+
+  // 업체명 드롭다운 초기화 (현재 필터 기준으로)
+  const vendorSel = document.getElementById('costDetailVendorFilter');
+  if(vendorSel) {
+    const vendors = [...new Set(allItems.map(r => r['업체명']||'').filter(Boolean))].sort();
+    vendorSel.innerHTML = '<option value="">전체 업체명</option>' +
+      vendors.map(v => `<option value="${v}" ${v===vendorF?'selected':''}>${v}</option>`).join('');
+  }
+
+  const colors = ['#1a1a1a','#3a6a3a','#c8a96e','#6a5a8a','#2a6a6a','#8a2a2a'];
+  const fmtN = n => Math.round(Number(n)||0).toLocaleString('ko-KR');
+
+  // 합계
+  const sumOrig  = filtered.reduce((s,r) => s + (r['origAmt']||0), 0);
+  const sumSplit = filtered.reduce((s,r) => s + (r.splitAmt||0), 0);
+
+  const tbody = document.getElementById('costDetailBody');
+  tbody.innerHTML = filtered.length
     ? filtered.map((r,i) => `<tr style="border-bottom:1px solid var(--cream2)">
         <td style="padding:9px 14px;font-family:var(--mono);font-size:10px;font-weight:700;color:${colors[i%colors.length]}">${r.deptCode}</td>
         <td style="padding:9px 14px;color:var(--text3);font-size:11px">${r['지역법인명']||r['법인명']||'—'}</td>
@@ -2621,11 +2646,22 @@ function renderCostDetail(){
         <td style="padding:9px 14px;font-size:11px;color:var(--text3)">${r['캠퍼스명']||'—'}</td>
         <td style="padding:9px 14px;font-size:11px;color:var(--text3)">${r['건물명']||'—'}</td>
         <td style="padding:9px 14px;font-size:11px;color:var(--text3)">${r['층수']||'—'}</td>
-        <td style="padding:9px 14px;text-align:right;font-family:var(--mono)">${fmt(r['origAmt']||0)}원</td>
+        <td style="padding:9px 14px;text-align:right;font-family:var(--mono)">${fmtN(r['origAmt']||0)}원</td>
         <td style="padding:9px 14px;font-family:var(--mono);font-size:11px">${r.deptCode}${r.kwanCount>1?` <span style="color:var(--text3);font-size:9px">(÷${r.kwanCount})</span>`:''}</td>
-        <td style="padding:9px 14px;text-align:right;font-family:var(--mono);font-weight:700;color:var(--green)">${fmt(Math.round(r.splitAmt||0))}원</td>
+        <td style="padding:9px 14px;text-align:right;font-family:var(--mono);font-weight:700;color:var(--green)">${fmtN(r.splitAmt||0)}원</td>
       </tr>`).join('')
     : '<tr><td colspan="11"><div class="empty" style="padding:20px"><div class="et">해당 항목 없음</div></div></td></tr>';
+
+  // 합계 행 항상 표시
+  const tfoot = document.getElementById('costDetailFoot');
+  if(tfoot) {
+    tfoot.innerHTML = `<tr style="background:var(--cream2);border-top:2px solid var(--text)">
+      <td colspan="8" style="padding:9px 14px;font-weight:700;font-size:12px">합계 (${filtered.length}건)</td>
+      <td style="padding:9px 14px;text-align:right;font-family:var(--mono);font-weight:700">${fmtN(sumOrig)}원</td>
+      <td style="padding:9px 14px"></td>
+      <td style="padding:9px 14px;text-align:right;font-family:var(--mono);font-weight:700;color:var(--green)">${fmtN(sumSplit)}원</td>
+    </tr>`;
+  }
 }
 
 function exportCostExcel(){
