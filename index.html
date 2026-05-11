@@ -688,13 +688,14 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
           <!-- 관코드 필터 드롭다운 -->
           <div id="kwanFilterWrap" style="display:none;margin-bottom:12px;position:relative">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+
+              <!-- 관코드 필터 -->
               <div style="position:relative">
                 <button id="kwanFilterBtn" onclick="toggleKwanFilterDrop()"
                   style="display:flex;align-items:center;gap:6px;padding:6px 14px;border:1px solid var(--border);background:var(--cream);font-size:11px;font-family:var(--mono);cursor:pointer;border-radius:4px;min-width:160px;justify-content:space-between">
                   <span id="kwanFilterLabel">전체 관코드</span>
                   <span>▾</span>
                 </button>
-                <!-- 드롭다운 패널 -->
                 <div id="kwanFilterDrop" style="display:none;position:absolute;top:100%;left:0;z-index:999;background:var(--cream);border:1px solid var(--border);border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,.12);min-width:220px;max-height:300px;overflow-y:auto;margin-top:2px">
                   <div style="padding:8px 10px;border-bottom:1px solid var(--border);display:flex;gap:6px">
                     <button onclick="kwanFilterAll(true)" style="flex:1;font-size:10px;padding:3px 6px;border:1px solid var(--border);background:var(--cream2);cursor:pointer;border-radius:3px">전체 선택</button>
@@ -703,6 +704,23 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
                   <div id="kwanFilterBoxes" style="padding:6px 4px"></div>
                 </div>
               </div>
+
+              <!-- 법인명 필터 -->
+              <div style="position:relative">
+                <button id="corpFilterBtn" onclick="toggleCorpFilterDrop()"
+                  style="display:flex;align-items:center;gap:6px;padding:6px 14px;border:1px solid var(--border);background:var(--cream);font-size:11px;cursor:pointer;border-radius:4px;min-width:140px;justify-content:space-between">
+                  <span id="corpFilterLabel">전체 법인명</span>
+                  <span>▾</span>
+                </button>
+                <div id="corpFilterDrop" style="display:none;position:absolute;top:100%;left:0;z-index:999;background:var(--cream);border:1px solid var(--border);border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,.12);min-width:200px;max-height:300px;overflow-y:auto;margin-top:2px">
+                  <div style="padding:8px 10px;border-bottom:1px solid var(--border);display:flex;gap:6px">
+                    <button onclick="corpFilterAll(true)" style="flex:1;font-size:10px;padding:3px 6px;border:1px solid var(--border);background:var(--cream2);cursor:pointer;border-radius:3px">전체 선택</button>
+                    <button onclick="corpFilterAll(false)" style="flex:1;font-size:10px;padding:3px 6px;border:1px solid var(--border);background:var(--cream2);cursor:pointer;border-radius:3px">전체 해제</button>
+                  </div>
+                  <div id="corpFilterBoxes" style="padding:6px 4px"></div>
+                </div>
+              </div>
+
               <div id="kwanFilterCount" style="font-size:11px;color:var(--text3)"></div>
             </div>
           </div>
@@ -2393,6 +2411,21 @@ async function runCostCalc(){
     updateKwanFilterLabel();
   }
 
+  // 법인명 체크박스 초기화
+  const corpNames = [...new Set(costResult.map(d => d.법인명).filter(Boolean))].sort();
+  const corpBoxes = document.getElementById('corpFilterBoxes');
+  if(corpBoxes && corpNames.length > 1) {
+    corpBoxes.innerHTML = corpNames.map(name => `
+      <label style="display:flex;align-items:center;gap:6px;padding:5px 10px;cursor:pointer;font-size:11px;border-radius:3px" onmouseenter="this.style.background='var(--cream2)'" onmouseleave="this.style.background=''">
+        <input type="checkbox" checked value="${name}" onchange="renderCostSummaryFiltered()" style="cursor:pointer">
+        ${name}
+      </label>`).join('');
+    document.getElementById('corpFilterBtn').style.display = 'flex';
+  } else {
+    const btn = document.getElementById('corpFilterBtn');
+    if(btn) btn.style.display = 'none';
+  }
+
   // 상세 내역 관코드 드롭다운 초기화
   const kwanSel = document.getElementById('costDetailKwanFilter');
   if(kwanSel) {
@@ -2405,10 +2438,19 @@ async function runCostCalc(){
 
 function renderCostSummaryFiltered() {
   const checked = [...document.querySelectorAll('#kwanFilterBoxes input:checked')].map(el => el.value);
-  const filtered = checked.length === 0 || checked.length === costResult.length
+  const corpChecked = [...document.querySelectorAll('#corpFilterBoxes input:checked')].map(el => el.value);
+  const totalCorp = document.querySelectorAll('#corpFilterBoxes input').length;
+
+  let filtered = checked.length === 0 || checked.length === costResult.length
     ? costResult
     : costResult.filter(d => checked.includes(d.code));
+
+  if(corpChecked.length > 0 && corpChecked.length < totalCorp) {
+    filtered = filtered.filter(d => corpChecked.includes(d.법인명));
+  }
+
   updateKwanFilterLabel();
+  updateCorpFilterLabel();
   const tbody = document.getElementById('costSummaryBody');
   const tfoot = document.getElementById('costSummaryFoot');
   const fmt = n => n.toLocaleString('ko-KR');
@@ -2445,6 +2487,25 @@ function kwanFilterAll(sel) {
   renderCostSummaryFiltered();
 }
 
+function toggleCorpFilterDrop() {
+  const drop = document.getElementById('corpFilterDrop');
+  if(!drop) return;
+  drop.style.display = drop.style.display === 'none' ? 'block' : 'none';
+  document.getElementById('kwanFilterDrop').style.display = 'none';
+}
+
+function corpFilterAll(sel) {
+  document.querySelectorAll('#corpFilterBoxes input').forEach(el => el.checked = sel);
+  renderCostSummaryFiltered();
+}
+
+function updateCorpFilterLabel() {
+  const total = document.querySelectorAll('#corpFilterBoxes input').length;
+  const checked = document.querySelectorAll('#corpFilterBoxes input:checked').length;
+  const label = document.getElementById('corpFilterLabel');
+  if(label) label.textContent = checked === total ? '전체 법인명' : `${checked}개 선택됨`;
+}
+
 function toggleKwanFilterDrop() {
   const drop = document.getElementById('kwanFilterDrop');
   if(!drop) return;
@@ -2466,6 +2527,11 @@ document.addEventListener('click', function(e) {
   const drop = document.getElementById('kwanFilterDrop');
   if(drop && btn && !btn.contains(e.target) && !drop.contains(e.target)) {
     drop.style.display = 'none';
+  }
+  const corpDrop = document.getElementById('corpFilterDrop');
+  const corpBtn = document.getElementById('corpFilterBtn');
+  if(corpDrop && corpBtn && !corpBtn.contains(e.target) && !corpDrop.contains(e.target)) {
+    corpDrop.style.display = 'none';
   }
 });
 
