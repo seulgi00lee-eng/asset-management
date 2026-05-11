@@ -764,17 +764,32 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
               <label>관코드 · 분류</label>
               <div id="moAddCostInfo" style="padding:9px 12px;background:var(--cream2);border:1px solid var(--border);font-size:12px;font-family:var(--mono);font-weight:600;color:var(--text)"></div>
             </div>
+            <!-- 추가/상계 탭 -->
             <div class="fg full">
-              <label>추가 금액 (원)</label>
-              <input type="number" id="moAddCostAmt" placeholder="예: 35000" style="font-family:var(--mono)" oninput="updateAddCostPreview()">
+              <label>처리 유형</label>
+              <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:4px;overflow:hidden">
+                <button id="addCostTypeAdd" onclick="setAddCostType('add')"
+                  style="flex:1;padding:8px;font-size:12px;font-weight:600;background:#1a1a8a;color:#fff;border:none;cursor:pointer">
+                  ➕ 추가 (가산)
+                </button>
+                <button id="addCostTypeMinus" onclick="setAddCostType('minus')"
+                  style="flex:1;padding:8px;font-size:12px;font-weight:600;background:var(--cream2);color:var(--text);border:none;cursor:pointer">
+                  ➖ 상계 (차감)
+                </button>
+              </div>
+              <div id="addCostTypeDesc" style="font-size:10px;color:#1a1a8a;margin-top:4px">전달 누락 비용, 추가 발생 비용 등을 더합니다.</div>
+            </div>
+            <div class="fg full">
+              <label id="moAddCostAmtLabel">추가 금액 (원)</label>
+              <input type="number" id="moAddCostAmt" placeholder="예: 35000" style="font-family:var(--mono)" oninput="updateAddCostPreview()" min="0">
             </div>
             <div class="fg full">
               <label>사유</label>
-              <input type="text" id="moAddCostReason" placeholder="예: 수리비 발생, 소모품 추가 구매 등">
+              <input type="text" id="moAddCostReason" placeholder="예: 전달 초과 청구분 상계, 수리비 발생 등">
             </div>
             <div class="fg full" id="moAddCostPreviewWrap" style="display:none">
               <label>반영 후 금액</label>
-              <div id="moAddCostPreview" style="padding:9px 12px;background:#f0fdf4;border:1px solid #a7f3d0;font-size:13px;font-family:var(--mono);font-weight:700;color:#065f46"></div>
+              <div id="moAddCostPreview" style="padding:9px 12px;font-size:13px;font-family:var(--mono);font-weight:700"></div>
             </div>
           </div>
           <!-- 기존 추가비용 목록 -->
@@ -5936,7 +5951,8 @@ function openAddCostModal(kwan, cat, baseAmt) {
     listEl.innerHTML = allExtras.map(([c, e]) =>
       `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--cream2)">
         <span style="color:var(--text2)">${c}</span>
-        <span style="font-family:var(--mono);font-weight:600">+${fmt(e.amt)}원
+        <span style="font-family:var(--mono);font-weight:600;color:${e.amt<0?'#991b1b':'#065f46'}">
+          ${e.amt<0?'⬇ −'+fmt(Math.abs(e.amt)):'⬆ +'+fmt(e.amt)}원
           ${e.reason?`<span style="font-weight:400;color:var(--text3);font-size:10px"> (${e.reason})</span>`:''}
           <button onclick="removeAddCost('${kwan}','${c}')" style="border:none;background:none;cursor:pointer;color:#991b1b;font-size:11px;margin-left:6px">✕</button>
         </span>
@@ -5946,19 +5962,53 @@ function openAddCostModal(kwan, cat, baseAmt) {
     existEl.style.display = 'none';
   }
 
+  // 처리 유형 초기화 (추가로 기본 설정)
+  setAddCostType(existing?.type === 'minus' ? 'minus' : 'add');
   updateAddCostPreview();
   document.getElementById('moAddCost').classList.add('open');
   setTimeout(() => document.getElementById('moAddCostAmt').focus(), 100);
 }
 
+function setAddCostType(type) {
+  const addBtn = document.getElementById('addCostTypeAdd');
+  const minusBtn = document.getElementById('addCostTypeMinus');
+  const desc = document.getElementById('addCostTypeDesc');
+  const label = document.getElementById('moAddCostAmtLabel');
+  document.getElementById('moAddCostAmt').dataset.costType = type;
+
+  if(type === 'add') {
+    addBtn.style.background = '#1a1a8a'; addBtn.style.color = '#fff';
+    minusBtn.style.background = 'var(--cream2)'; minusBtn.style.color = 'var(--text)';
+    desc.style.color = '#1a1a8a';
+    desc.textContent = '전달 누락 비용, 추가 발생 비용 등을 더합니다.';
+    label.textContent = '추가 금액 (원)';
+  } else {
+    minusBtn.style.background = '#8a1a1a'; minusBtn.style.color = '#fff';
+    addBtn.style.background = 'var(--cream2)'; addBtn.style.color = 'var(--text)';
+    desc.style.color = '#8a1a1a';
+    desc.textContent = '전달 초과 청구분, 잘못 배분된 금액을 차감합니다 (상계처리).';
+    label.textContent = '차감 금액 (원) — 입력한 금액만큼 빼집니다';
+  }
+  updateAddCostPreview();
+}
+
 function updateAddCostPreview() {
   const amt  = Number(document.getElementById('moAddCostAmt')?.value) || 0;
   const base = Number(document.getElementById('moAddCostAmt')?.dataset.base) || 0;
+  const type = document.getElementById('moAddCostAmt')?.dataset.costType || 'add';
   const wrap = document.getElementById('moAddCostPreviewWrap');
   const prev = document.getElementById('moAddCostPreview');
   if(amt > 0) {
     wrap.style.display = 'block';
-    prev.textContent   = `${fmt(Math.round(base))}원 + ${fmt(Math.round(amt))}원 = ${fmt(Math.round(base+amt))}원`;
+    if(type === 'minus') {
+      const result = base - amt;
+      prev.style.cssText = `padding:9px 12px;font-size:13px;font-family:var(--mono);font-weight:700;background:#fff5f5;border:1px solid #fca5a5;color:#991b1b`;
+      prev.textContent = `${fmt(Math.round(base))}원 − ${fmt(Math.round(amt))}원 = ${fmt(Math.round(result))}원`;
+    } else {
+      const result = base + amt;
+      prev.style.cssText = `padding:9px 12px;font-size:13px;font-family:var(--mono);font-weight:700;background:#f0fdf4;border:1px solid #a7f3d0;color:#065f46`;
+      prev.textContent = `${fmt(Math.round(base))}원 + ${fmt(Math.round(amt))}원 = ${fmt(Math.round(result))}원`;
+    }
   } else {
     wrap.style.display = 'none';
   }
@@ -5973,6 +6023,8 @@ async function saveAddCost() {
   if(!amt) { showToast('금액을 입력해 주세요'); return; }
   if(!kwan || !cat) { showToast('오류: 관코드/분류 정보 없음'); return; }
 
+  const costType = document.getElementById('moAddCostAmt').dataset.costType || 'add';
+  const finalAmt = costType === 'minus' ? -Math.abs(amt) : Math.abs(amt);
   const ym = getCurYearMonth();
   const existing = additionalCostMap[kwan]?.[cat];
 
@@ -5980,11 +6032,11 @@ async function saveAddCost() {
   let error;
   if(existing?.id) {
     ({ error } = await _supa.from('cost_extra')
-      .update({ 금액: amt, 사유: reason })
+      .update({ 금액: finalAmt, 사유: reason, 유형: costType })
       .eq('id', existing.id));
   } else {
     ({ error } = await _supa.from('cost_extra')
-      .insert([{ year_month: ym, 관코드: kwan, 분류: cat, 금액: amt, 사유: reason }]));
+      .insert([{ year_month: ym, 관코드: kwan, 분류: cat, 금액: finalAmt, 사유: reason, 유형: costType }]));
   }
   setLoading(false);
 
@@ -5992,7 +6044,8 @@ async function saveAddCost() {
 
   await loadAdditionalCostMap();
   closeMo('moAddCost');
-  showToast(`✅ ${kwan} · ${cat} 추가비용 ${fmt(amt)}원 저장됨`);
+  const typeLabel = costType === 'minus' ? '상계처리' : '추가비용';
+  showToast(`✅ ${kwan} · ${cat} ${typeLabel} ${fmt(Math.abs(finalAmt))}원 저장됨`);
 }
 
 async function removeAddCost(kwan, cat) {
