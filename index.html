@@ -2290,9 +2290,28 @@ async function runCostCalc(){
       FIXED_CATS.forEach(c => deptMap[kwan].catAmts[c] = 0);
     }
     Object.entries(cats).forEach(([cat, entry]) => {
+      if(!entry.amt) return;
       deptMap[kwan].catAmts[cat] = (deptMap[kwan].catAmts[cat]||0) + entry.amt;
       deptMap[kwan].총비용 += entry.amt;
       totalAmt += entry.amt;
+
+      // 항목수 + items에도 추가비용 반영
+      deptMap[kwan].항목수 += 1;
+      deptMap[kwan].items.push({
+        deptCode: kwan,
+        업체명: entry.reason ? `[추가/상계] ${entry.reason}` : '[추가비용]',
+        분류: cat,
+        렌탈품목: cat,
+        캠퍼스명: '',
+        건물명: '',
+        층수: '',
+        법인명: deptMap[kwan].법인명 || '—',
+        origAmt: entry.amt,
+        splitAmt: entry.amt,
+        kwanCount: 1,
+        matchedCat: cat,
+        isExtra: true
+      });
     });
   });
 
@@ -2385,11 +2404,12 @@ async function runCostCalc(){
   FIXED_CATS.forEach(c => {
     catTotals[c] = costResult.reduce((s,d) => s+(d.catAmts[c]||0), 0);
   });
+  const totalItemCount = costResult.reduce((s,d) => s + d.항목수, 0);
   if(tfoot) tfoot.innerHTML = `<tr style="background:var(--cream2);border-top:2px solid var(--text)">
     <td colspan="4" style="padding:9px 10px;font-weight:700;font-size:12px">합계</td>
     ${FIXED_CATS.map(c=>TDN(catTotals[c])).join('')}
     ${TD(fmt(Math.round(totalAmt)), 'text-align:right;font-family:var(--mono);font-weight:700;')}
-    ${TD(rows.length+'건', 'font-weight:700;')}
+    ${TD(totalItemCount+'건', 'font-weight:700;')}
     ${TD('100%', 'font-family:var(--mono);font-weight:700;')}
   </tr>`;
 
@@ -2569,8 +2589,10 @@ function openKwanItems(kwanCode) {
   const d = costResult.find(r => r.code === kwanCode);
   if(!d) return;
   document.getElementById('moKwanItemsTitle').textContent = `관코드 ${kwanCode} — 항목 상세`;
+  const itemCount = d.items ? d.items.length : d.항목수;
+  const itemTotal = d.items ? d.items.reduce((s,i) => s+(i.splitAmt||0), 0) : d.총비용;
   document.getElementById('moKwanItemsSubtitle').textContent =
-    `총 ${d.항목수}건 · ${Math.round(d.총비용).toLocaleString('ko-KR')}원/월`;
+    `총 ${itemCount}건 · ${Math.round(itemTotal).toLocaleString('ko-KR')}원/월`;
   const fmt = n => n.toLocaleString('ko-KR');
   document.getElementById('moKwanItemsBody').innerHTML = `
     <table style="width:100%;border-collapse:collapse;font-size:11px">
@@ -2595,8 +2617,8 @@ function openKwanItems(kwanCode) {
             <td style="padding:7px 10px">${item.기종||'—'}</td>
             <td style="padding:7px 10px">${item.건물명||'—'}</td>
             <td style="padding:7px 10px">${item.층수||'—'}</td>
-            <td style="padding:7px 10px;text-align:right;font-family:var(--mono)">${fmt(Math.round(item.origAmt||0))}</td>
-            <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-weight:700">${fmt(Math.round(item.splitAmt||0))}</td>
+            <td style="padding:7px 10px;text-align:right;font-family:var(--mono);${item.isExtra?'color:#5a1a8a':''}">${fmt(Math.round(item.origAmt||0))}</td>
+            <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-weight:700;${item.isExtra?(item.splitAmt<0?'color:#991b1b':'color:#5a1a8a'):''}">${fmt(Math.round(item.splitAmt||0))}</td>
           </tr>`).join('')}
       </tbody>
       <tfoot>
