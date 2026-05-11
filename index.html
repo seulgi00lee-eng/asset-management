@@ -5989,8 +5989,9 @@ async function saveRegionCosts() {
     const { error } = await _supa.from('cost_region').insert(inserts);
     if(error) throw error;
     await loadRegionCosts();
-    showToast(`✅ ${valid.length}개 지역 비용 저장 완료 → 배분 재계산`);
-    runCostCalc();
+    showToast(`✅ ${valid.length}개 지역 비용 저장 완료 — 배분 계산 중...`);
+    await runCostCalc();
+    showToast(`✅ 저장 + 배분 계산 완료! 써머리를 확인하세요.`);
   } catch(e) {
     showToast('❌ 저장 실패: ' + e.message);
   }
