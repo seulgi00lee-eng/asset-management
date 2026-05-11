@@ -2354,8 +2354,8 @@ async function runCostCalc(){
 
   const colors = ['#1a1a1a','#3a6a3a','#c8a96e','#6a5a8a','#2a6a6a','#8a2a2a'];
   if(tbody) tbody.innerHTML = sortedResult.map((d,i) => {
-    const pct = totalAmt2>0 ? (d.총비용/totalAmt2*100).toFixed(1) : '0.0';
-    const color = colors2[i%colors2.length];
+    const pct = totalAmt>0 ? (d.총비용/totalAmt*100).toFixed(1) : '0.0';
+    const color = colors[i%colors.length];
     return `<tr style="border-bottom:1px solid var(--cream2)">
       ${TD(`<span style="font-weight:600">${d.법인명}</span>`)}
       ${TD(`<span style="font-family:var(--mono);font-weight:700;color:${color}">${d.code}</span>`)}
@@ -2472,12 +2472,12 @@ function renderCostSummaryFiltered() {
     const pct = totalAmt>0 ? (d.총비용/totalAmt*100).toFixed(1) : '0.0';
     const color = colors[i%colors.length];
     return `<tr style="border-bottom:1px solid var(--cream2)">
-      ${TD2(`<span style="font-weight:600">${d.법인명}</span>`)}
-      ${TD2(`<span style="font-family:var(--mono);font-weight:700;color:${color}">${d.code}</span>`)}
-      ${TD2(d.지역||'—')}
-      ${TD2(d.사업부||'—')}${TD2(d.브랜드||'—')}
-      ${CATS2.map(c => TDN2(d.catAmts?.[c]||0)).join('')}
-      ${TD2(fmt2(Math.round(d.총비용)), `text-align:right;font-family:var(--mono);font-weight:700;color:${color};`)}
+      ${TD(`<span style="font-weight:600">${d.법인명}</span>`)}
+      ${TD(`<span style="font-family:var(--mono);font-weight:700;color:${color}">${d.code}</span>`)}
+      ${TD(d.지역||'—')}
+      ${TD(d.사업부||'—')}${TD(d.브랜드||'—')}
+      ${FIXED_CATS.map(c=>TDN(d.catAmts[c]||0, d.code, c)).join('')}
+      ${TD(fmt(Math.round(d.총비용)), `text-align:right;font-family:var(--mono);font-weight:700;color:${color};`)}
       <td style="padding:8px 10px;color:var(--text3);cursor:pointer;white-space:nowrap" onclick="openKwanItems('${d.code}')" onmouseenter="this.style.background='rgba(200,169,110,.12)'" onmouseleave="this.style.background=''" title="클릭하여 항목 상세 확인">${d.항목수}건 🔍</td>
       <td style="padding:8px 10px;min-width:100px">
         <div style="display:flex;align-items:center;gap:6px">
