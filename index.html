@@ -5780,8 +5780,9 @@ async function parseLMSExcel(file) {
     const kwanAmts = {};
 
     for(const row of rows) {
-      const kwanCode = String(row[1]||'').trim(); // B열 = 수익코드/관코드
-      const amtRaw   = row[6];                    // G열 = 금액(VAT+)
+      // 템플릿 기준: C열(index 2) = 금액(VAT포함), H열(index 7) = 관코드
+      const kwanCode = String(row[7]||'').trim(); // H열 = 관코드
+      const amtRaw   = row[2];                    // C열 = 금액(VAT포함)
       if(!kwanCode || isNaN(Number(kwanCode))) continue;
       const amt = Number(String(amtRaw).replace(/[^0-9.-]/g,'')) || 0;
       if(!amt) continue;
