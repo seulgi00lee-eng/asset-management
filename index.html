@@ -5779,12 +5779,19 @@ async function parseLMSExcel(file) {
     const ym = getCurYearMonth();
     const kwanAmts = {};
 
-    for(const row of rows) {
-      // 템플릿 기준: C열(index 2) = 금액(VAT포함), H열(index 7) = 관코드
-      const kwanCode = String(row[7]||'').trim(); // H열 = 관코드
+    // 헤더 행 찾기 (업체명/품목/금액 등이 있는 행)
+    const headerIdx = rows.findIndex(r =>
+      r.some(c => /품목|업체명|금액|관코드/.test(String(c||'')))
+    );
+    const dataRows = headerIdx >= 0 ? rows.slice(headerIdx + 1) : rows;
+
+    for(const row of dataRows) {
+      // 템플릿 기준: B열(index 1)=품목, C열(index 2)=금액(VAT포함), G열(index 6)=관코드
+      const kwanCode = String(row[6]||'').trim(); // G열 = 관코드
       const amtRaw   = row[2];                    // C열 = 금액(VAT포함)
       if(!kwanCode || isNaN(Number(kwanCode))) continue;
-      const amt = Number(String(amtRaw).replace(/[^0-9.-]/g,'')) || 0;
+      const amtStr = String(amtRaw||'').replace(/[^0-9.-]/g,'');
+      const amt = Number(amtStr) || 0;
       if(!amt) continue;
       kwanAmts[kwanCode] = (kwanAmts[kwanCode]||0) + amt;
     }
