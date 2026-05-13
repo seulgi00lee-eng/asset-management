@@ -2156,11 +2156,10 @@ async function runCostCalc(){
     return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
   })();
 
-  // ── Supabase 렌탈자산 로드 ──
+  // ── Supabase 렌탈자산 항상 최신으로 로드 (렌탈자산 수정 시 즉시 반영) ──
   setLoading(true);
-  const rows = SAMPLE.rental.rows.length > 0
-    ? SAMPLE.rental.rows
-    : await sbSelect('rental');
+  const rows = await sbSelect('rental');
+  SAMPLE.rental.rows = rows.map(r => ({ _id: r.id, _rowId: r.id, ...r }));
 
   // ── history 테이블에서 적용시작월 기준 관코드 이력 로드 ──
   let historyRows = [];
@@ -5779,19 +5778,11 @@ async function parseLMSExcel(file) {
     const ym = getCurYearMonth();
     const kwanAmts = {};
 
-    // 헤더 행 찾기 (업체명/품목/금액 등이 있는 행)
-    const headerIdx = rows.findIndex(r =>
-      r.some(c => /품목|업체명|금액|관코드/.test(String(c||'')))
-    );
-    const dataRows = headerIdx >= 0 ? rows.slice(headerIdx + 1) : rows;
-
-    for(const row of dataRows) {
-      // 템플릿 기준: B열(index 1)=품목, C열(index 2)=금액(VAT포함), G열(index 6)=관코드
-      const kwanCode = String(row[6]||'').trim(); // G열 = 관코드
-      const amtRaw   = row[2];                    // C열 = 금액(VAT포함)
+    for(const row of rows) {
+      const kwanCode = String(row[1]||'').trim(); // B열 = 수익코드/관코드
+      const amtRaw   = row[6];                    // G열 = 금액(VAT+)
       if(!kwanCode || isNaN(Number(kwanCode))) continue;
-      const amtStr = String(amtRaw||'').replace(/[^0-9.-]/g,'');
-      const amt = Number(amtStr) || 0;
+      const amt = Number(String(amtRaw).replace(/[^0-9.-]/g,'')) || 0;
       if(!amt) continue;
       kwanAmts[kwanCode] = (kwanAmts[kwanCode]||0) + amt;
     }
