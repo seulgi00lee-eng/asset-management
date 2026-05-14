@@ -2146,8 +2146,8 @@ function loadCostSample(){
 }
 
 async function runCostCalc(){
-  // ── 고정 분류 컬럼 8개 ──
-  const FIXED_CATS = ['복합기','잉크젯','공기청정기','LMS','캡스','청소용역','청소용품'];
+  // ── 고정 분류 컬럼 9개 ──
+  const FIXED_CATS = ['복합기','잉크젯','공기청정기','정수기','LMS','캡스','청소용역','청소용품'];
 
   // ── 기준월 확인 (마감 모달에서 선택된 월 or 이번달) ──
   const baseDateEl = document.getElementById('costMonthSel');
@@ -2221,7 +2221,7 @@ async function runCostCalc(){
 
     // 분류 정규화 — 렌탈자산에서는 복합기·잉크젯·공기청정기·정수기만 배분
     // LMS·캡스·청소용역·청소용품은 지역별 입력으로만 반영
-    const RENTAL_ONLY_CATS = ['복합기','잉크젯','공기청정기'];
+    const RENTAL_ONLY_CATS = ['복합기','잉크젯','공기청정기','정수기'];
     const rawCat = String(row['분류']||'').trim();
     const matchedCat = RENTAL_ONLY_CATS.find(c => rawCat.includes(c) || c.includes(rawCat));
     if(!matchedCat) return; // LMS·캡스·청소용역·청소용품 등은 건너뜀
@@ -2485,7 +2485,7 @@ function renderCostSummaryFiltered() {
   const fmtN = n => Math.round(Number(n)).toLocaleString('ko-KR');
   const TD  = (txt, opts='') => `<td style="padding:8px 10px;white-space:nowrap;font-size:11px;${opts}">${txt}</td>`;
   const TDN = (n) => `<td style="padding:8px 10px;text-align:right;font-family:var(--mono);font-size:10px;white-space:nowrap">${n>0?fmtN(n):'—'}</td>`;
-  const CATS = ['복합기','잉크젯','공기청정기','LMS','캡스','청소용역','청소용품'];
+  const CATS = ['복합기','잉크젯','공기청정기','정수기','LMS','캡스','청소용역','청소용품'];
   const COLORS = ['#1a1a1a','#3a6a3a','#c8a96e','#6a5a8a','#2a6a6a','#8a2a2a'];
   const total = filtered.reduce((s,d) => s + d.총비용, 0);
 
@@ -2687,7 +2687,7 @@ function renderCostDetail(){
 
 function exportCostExcel(){
   if(!costResult.length){showToast('먼저 배분 계산을 실행해 주세요');return;}
-  const FIXED_CATS = ['복합기','잉크젯','공기청정기','LMS','캡스','청소용역','청소용품'];
+  const FIXED_CATS = ['복합기','잉크젯','공기청정기','정수기','LMS','캡스','청소용역','청소용품'];
   const now = new Date();
   const period = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}`;
   const wb = XLSX.utils.book_new();
@@ -5776,40 +5776,80 @@ async function parseLMSExcel(file) {
     const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
 
     const ym = getCurYearMonth();
-    const kwanAmts = {};
 
-    for(const row of rows) {
-      const kwanCode = String(row[1]||'').trim(); // B열 = 수익코드/관코드
-      const amtRaw   = row[6];                    // G열 = 금액(VAT+)
+    // 헤더 행 자동 감지 (업체명/품목/금액/관코드 포함 행)
+    const headerIdx = rows.findIndex(r =>
+      r.some(c => /품목|업체명|금액|관코드/.test(String(c||'')))
+    );
+    const dataRows = headerIdx >= 0 ? rows.slice(headerIdx + 1) : rows;
+
+    // 헤더 기반 열 인덱스 추출
+    const headers = headerIdx >= 0 ? rows[headerIdx].map(c => String(c||'').trim()) : [];
+    const catIdx  = headers.findIndex(h => /품목/.test(h));
+    const amtIdx  = headers.findIndex(h => /금액/.test(h));
+    const kwanIdx = headers.findIndex(h => /관코드/.test(h));
+
+    // 폴백: 헤더 없으면 기존 방식 (B열=관코드, G열=금액, 분류=LMS)
+    const useFallback = catIdx < 0 || amtIdx < 0 || kwanIdx < 0;
+
+    // { 분류: { 관코드: 금액 } }
+    const kwanAmtsByCat = {};
+
+    for(const row of dataRows) {
+      let kwanCode, amt, cat;
+
+      if(useFallback) {
+        // 기존 LMS 방식
+        kwanCode = String(row[1]||'').trim();
+        amt = Number(String(row[6]||'').replace(/[^0-9.-]/g,'')) || 0;
+        cat = 'LMS';
+      } else {
+        kwanCode = String(row[kwanIdx]||'').trim();
+        amt = Number(String(row[amtIdx]||'').replace(/[^0-9.-]/g,'')) || 0;
+        cat = String(row[catIdx]||'').trim();
+        // 품목 정규화
+        if(/LMS|학습관리/.test(cat)) cat = 'LMS';
+        else if(/정수기|냉온수|워터/.test(cat)) cat = '정수기';
+        else if(/캡스|보안|CCTV/.test(cat)) cat = '캡스';
+        else if(/청소용역|청소|미화/.test(cat)) cat = '청소용역';
+        else if(/청소용품|소모품/.test(cat)) cat = '청소용품';
+        else cat = 'LMS'; // 기본값
+      }
+
       if(!kwanCode || isNaN(Number(kwanCode))) continue;
-      const amt = Number(String(amtRaw).replace(/[^0-9.-]/g,'')) || 0;
       if(!amt) continue;
-      kwanAmts[kwanCode] = (kwanAmts[kwanCode]||0) + amt;
+
+      if(!kwanAmtsByCat[cat]) kwanAmtsByCat[cat] = {};
+      kwanAmtsByCat[cat][kwanCode] = (kwanAmtsByCat[cat][kwanCode]||0) + amt;
     }
 
-    // Supabase에 저장 + additionalCostMap에도 반영
+    // Supabase cost_extra에 저장
     setLoading(true);
-    for(const [kwanCode, amt] of Object.entries(kwanAmts)) {
-      const existing = additionalCostMap[kwanCode]?.['LMS'];
-      let error;
-      if(existing?.id) {
-        ({ error } = await _supa.from('cost_extra')
-          .update({ 금액: Math.round(amt), 사유: 'LMS 파일 자동입력' })
-          .eq('id', existing.id));
-      } else {
-        ({ error } = await _supa.from('cost_extra')
-          .insert([{ year_month: ym, 관코드: kwanCode, 분류: 'LMS', 금액: Math.round(amt), 사유: 'LMS 파일 자동입력' }]));
-      }
-      if(!error) {
-        if(!additionalCostMap[kwanCode]) additionalCostMap[kwanCode] = {};
-        additionalCostMap[kwanCode]['LMS'] = { amt: Math.round(amt), reason: 'LMS 파일 자동입력', id: existing?.id || null };
+    let totalSaved = 0;
+    for(const [cat, kwanAmts] of Object.entries(kwanAmtsByCat)) {
+      for(const [kwanCode, amt] of Object.entries(kwanAmts)) {
+        const existing = additionalCostMap[kwanCode]?.[cat];
+        let error;
+        if(existing?.id) {
+          ({ error } = await _supa.from('cost_extra')
+            .update({ 금액: Math.round(amt), 사유: `${cat} 파일 자동입력` })
+            .eq('id', existing.id));
+        } else {
+          ({ error } = await _supa.from('cost_extra')
+            .insert([{ year_month: ym, 관코드: kwanCode, 분류: cat, 금액: Math.round(amt), 사유: `${cat} 파일 자동입력` }]));
+        }
+        if(!error) {
+          if(!additionalCostMap[kwanCode]) additionalCostMap[kwanCode] = {};
+          additionalCostMap[kwanCode][cat] = { amt: Math.round(amt), reason: `${cat} 파일 자동입력`, id: existing?.id || null };
+          totalSaved++;
+        }
       }
     }
     setLoading(false);
 
-    // additionalCostMap 최신 id로 갱신
     await loadAdditionalCostMap();
-    showToast(`✅ LMS ${Object.keys(kwanAmts).length}개 관코드 저장 및 반영됨`);
+    const cats = Object.keys(kwanAmtsByCat).join(', ');
+    showToast(`✅ ${cats} ${totalSaved}개 관코드 저장 완료`);
     return [];
   } catch(err) {
     setLoading(false);
@@ -6325,7 +6365,7 @@ document.addEventListener('click',e=>{if(!e.target.closest('#notifPanel')&&!e.ta
 
 // ── 테스트 모드: true이면 월 마감 시 메일 발송 안 함 ──
 const COST_MAIL_TEST_MODE = true;
-const FIXED_CATS_HIST = ['복합기','잉크젯','공기청정기','LMS','캡스','청소용역','청소용품'];
+const FIXED_CATS_HIST = ['복합기','잉크젯','공기청정기','정수기','LMS','캡스','청소용역','청소용품'];
 let costHistoryData = [];
 
 function closeCostMonth() {
