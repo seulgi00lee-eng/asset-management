@@ -5777,50 +5777,49 @@ async function parseLMSExcel(file) {
 
     const ym = getCurYearMonth();
 
-    // 헤더 행 자동 감지 (업체명/품목/금액/관코드 포함 행)
+    // 헤더 행 찾기 (품목/금액/관코드 포함 행)
     const headerIdx = rows.findIndex(r =>
       r.some(c => /품목|업체명|금액|관코드/.test(String(c||'')))
     );
-    const dataRows = headerIdx >= 0 ? rows.slice(headerIdx + 1) : rows;
+    if(headerIdx < 0) { showToast('❌ 헤더 행을 찾을 수 없습니다. 템플릿을 확인해주세요.'); return []; }
 
-    // 헤더 기반 열 인덱스 추출
-    const headers = headerIdx >= 0 ? rows[headerIdx].map(c => String(c||'').trim()) : [];
-    const catIdx  = headers.findIndex(h => /품목/.test(h));
-    const amtIdx  = headers.findIndex(h => /금액/.test(h));
-    const kwanIdx = headers.findIndex(h => /관코드/.test(h));
+    const headers = rows[headerIdx].map(c => String(c||'').trim());
+    const catIdx  = headers.findIndex(h => /품목/.test(h));   // B열
+    const amtIdx  = headers.findIndex(h => /금액/.test(h));   // C열
+    const kwanIdx = headers.findIndex(h => /관코드/.test(h)); // G열
 
-    // 폴백: 헤더 없으면 기존 방식 (B열=관코드, G열=금액, 분류=LMS)
-    const useFallback = catIdx < 0 || amtIdx < 0 || kwanIdx < 0;
+    const dataRows = rows.slice(headerIdx + 1);
 
     // { 분류: { 관코드: 금액 } }
     const kwanAmtsByCat = {};
 
     for(const row of dataRows) {
-      let kwanCode, amt, cat;
+      const kwanRaw = String(row[kwanIdx]||'').trim();
+      const amtRaw  = String(row[amtIdx]||'').replace(/[^0-9.-]/g,'');
+      const catRaw  = String(row[catIdx]||'').trim();
 
-      if(useFallback) {
-        // 기존 LMS 방식
-        kwanCode = String(row[1]||'').trim();
-        amt = Number(String(row[6]||'').replace(/[^0-9.-]/g,'')) || 0;
-        cat = 'LMS';
-      } else {
-        kwanCode = String(row[kwanIdx]||'').trim();
-        amt = Number(String(row[amtIdx]||'').replace(/[^0-9.-]/g,'')) || 0;
-        cat = String(row[catIdx]||'').trim();
-        // 품목 정규화
-        if(/LMS|학습관리/.test(cat)) cat = 'LMS';
-        else if(/정수기|냉온수|워터/.test(cat)) cat = '정수기';
-        else if(/캡스|보안|CCTV/.test(cat)) cat = '캡스';
-        else if(/청소용역|청소|미화/.test(cat)) cat = '청소용역';
-        else if(/청소용품|소모품/.test(cat)) cat = '청소용품';
-        else cat = 'LMS'; // 기본값
-      }
-
-      if(!kwanCode || isNaN(Number(kwanCode))) continue;
+      if(!kwanRaw || !amtRaw) continue;
+      const amt = Number(amtRaw) || 0;
       if(!amt) continue;
 
+      // 품목 정규화
+      let cat = catRaw;
+      if(/LMS|학습관리/.test(cat))         cat = 'LMS';
+      else if(/정수기|냉온수|워터/.test(cat)) cat = '정수기';
+      else if(/캡스|보안|CCTV/.test(cat))   cat = '캡스';
+      else if(/청소용역|청소|미화/.test(cat)) cat = '청소용역';
+      else if(/청소용품|소모품/.test(cat))   cat = '청소용품';
+      else cat = catRaw || 'LMS';
+
+      // 관코드는 숫자(101, 224 등) 또는 문자 모두 허용
+      const kwanCode = kwanRaw;
       if(!kwanAmtsByCat[cat]) kwanAmtsByCat[cat] = {};
       kwanAmtsByCat[cat][kwanCode] = (kwanAmtsByCat[cat][kwanCode]||0) + amt;
+    }
+
+    if(!Object.keys(kwanAmtsByCat).length) {
+      showToast('❌ 파싱된 데이터가 없습니다. 파일 구조를 확인해주세요.');
+      return [];
     }
 
     // Supabase cost_extra에 저장
@@ -5849,7 +5848,7 @@ async function parseLMSExcel(file) {
 
     await loadAdditionalCostMap();
     const cats = Object.keys(kwanAmtsByCat).join(', ');
-    showToast(`✅ ${cats} ${totalSaved}개 관코드 저장 완료`);
+    showToast(`✅ ${cats} — ${totalSaved}개 관코드 저장 완료`);
     return [];
   } catch(err) {
     setLoading(false);
