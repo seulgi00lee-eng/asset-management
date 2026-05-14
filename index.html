@@ -5541,13 +5541,21 @@ async function handleRegionFiles(files) {
 
   for(let i=0; i<fileArr.length; i++) {
     const f = fileArr[i];
+    const ext = f.name.split('.').pop().toLowerCase();
     if(progText) progText.textContent = `분석 중 (${i+1}/${fileArr.length}): ${f.name}`;
     if(progBar)  progBar.style.width = Math.round((i/fileArr.length)*100) + '%';
     try {
-      const items = await analyzeRegionFile(f);
-      items.forEach(item => extracted.push(item));
-      const st = document.getElementById(`rfile-st-${i}`);
-      if(st) st.textContent = `✅ ${items.length}건`;
+      // 엑셀 파일은 관코드별 직접 저장 (팝업 없이)
+      if(['xlsx','xls'].includes(ext)) {
+        await parseLMSExcel(f);
+        const st = document.getElementById(`rfile-st-${i}`);
+        if(st) st.textContent = '✅ 저장완료';
+      } else {
+        const items = await analyzeRegionFile(f);
+        items.forEach(item => extracted.push(item));
+        const st = document.getElementById(`rfile-st-${i}`);
+        if(st) st.textContent = `✅ ${items.length}건`;
+      }
     } catch(err) {
       console.error(err);
       const st = document.getElementById(`rfile-st-${i}`);
@@ -5556,10 +5564,14 @@ async function handleRegionFiles(files) {
   }
 
   if(progBar) progBar.style.width = '100%';
-  if(progText) progText.textContent = `✅ 분석 완료 — ${extracted.length}개 항목 추출됨. 내용을 확인해주세요.`;
 
-  // 미리보기 팝업 표시
-  showRegionPreview(extracted);
+  // PDF/이미지 추출 결과만 팝업 표시
+  if(extracted.length > 0) {
+    if(progText) progText.textContent = `✅ 분석 완료 — ${extracted.length}개 항목 추출됨. 내용을 확인해주세요.`;
+    showRegionPreview(extracted);
+  } else {
+    if(progText) progText.textContent = `✅ 저장 완료 — 배분 계산 실행 버튼을 눌러주세요.`;
+  }
   document.getElementById('regionFileInput').value = '';
 }
 
