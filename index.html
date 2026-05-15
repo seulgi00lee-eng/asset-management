@@ -6376,7 +6376,7 @@ document.addEventListener('click', (e) => {
 document.addEventListener('click',e=>{if(!e.target.closest('#notifPanel')&&!e.target.closest('.tb-bell'))closeNotif();});
 
 // ── 테스트 모드: true이면 월 마감 시 메일 발송 안 함 ──
-const COST_MAIL_TEST_MODE = true;
+const COST_MAIL_TEST_MODE = false;
 const FIXED_CATS_HIST = ['복합기','잉크젯','공기청정기','정수기','LMS','캡스','청소용역','청소용품'];
 let costHistoryData = [];
 
