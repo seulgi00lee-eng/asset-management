@@ -914,8 +914,18 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
         <div id="ctab-content-list">
           <div id="campusStats" style="margin-bottom:14px;display:flex;gap:20px;font-size:12px;color:var(--text2)"></div>
           <div class="sec">
-            <div style="padding:14px 18px 0">
-              <input id="campusSearch" style="border:1px solid var(--border);padding:8px 14px;font-size:12px;font-family:var(--font);background:var(--cream2);outline:none;width:240px" placeholder="검색..." oninput="filterCampus()">
+            <!-- 검색 + 필터 -->
+            <div style="padding:14px 18px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-bottom:1px solid var(--cream2)">
+              <input id="campusSearch" style="border:1px solid var(--border);padding:8px 14px;font-size:12px;font-family:var(--font);background:var(--cream2);outline:none;width:200px" placeholder="검색..." oninput="filterCampus()">
+              <select id="cf-법인명" style="border:1px solid var(--border);padding:7px 10px;font-size:11px;font-family:var(--font);background:var(--cream2);outline:none" onchange="filterCampus()"><option value="">전체 법인명</option></select>
+              <select id="cf-지역" style="border:1px solid var(--border);padding:7px 10px;font-size:11px;font-family:var(--font);background:var(--cream2);outline:none" onchange="filterCampus()"><option value="">전체 지역</option></select>
+              <select id="cf-사업부" style="border:1px solid var(--border);padding:7px 10px;font-size:11px;font-family:var(--font);background:var(--cream2);outline:none" onchange="filterCampus()"><option value="">전체 사업부</option></select>
+              <select id="cf-브랜드" style="border:1px solid var(--border);padding:7px 10px;font-size:11px;font-family:var(--font);background:var(--cream2);outline:none" onchange="filterCampus()"><option value="">전체 브랜드</option></select>
+              <select id="cf-건물명" style="border:1px solid var(--border);padding:7px 10px;font-size:11px;font-family:var(--font);background:var(--cream2);outline:none" onchange="filterCampus()"><option value="">전체 건물명</option></select>
+              <select id="cf-층수" style="border:1px solid var(--border);padding:7px 10px;font-size:11px;font-family:var(--font);background:var(--cream2);outline:none" onchange="filterCampus()"><option value="">전체 층수</option></select>
+              <select id="cf-관코드" style="border:1px solid var(--border);padding:7px 10px;font-size:11px;font-family:var(--mono);background:var(--cream2);outline:none" onchange="filterCampus()"><option value="">전체 관코드</option></select>
+              <button class="btn btn-ghost btn-sm" onclick="resetCampusFilter()" style="font-size:11px;color:#8a2a2a">✕ 초기화</button>
+              <span id="campusFilterCount" style="font-size:11px;color:var(--text3);margin-left:4px"></span>
             </div>
             <div style="overflow-x:auto">
               <table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -2146,8 +2156,8 @@ function loadCostSample(){
 }
 
 async function runCostCalc(){
-  // ── 고정 분류 컬럼 9개 ──
-  const FIXED_CATS = ['복합기','잉크젯','공기청정기','정수기','LMS','캡스','청소용역','청소용품'];
+  // ── 고정 분류 컬럼 8개 ──
+  const FIXED_CATS = ['복합기','잉크젯','공기청정기','LMS','캡스','청소용역','청소용품'];
 
   // ── 기준월 확인 (마감 모달에서 선택된 월 or 이번달) ──
   const baseDateEl = document.getElementById('costMonthSel');
@@ -2156,10 +2166,11 @@ async function runCostCalc(){
     return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
   })();
 
-  // ── Supabase 렌탈자산 항상 최신으로 로드 (렌탈자산 수정 시 즉시 반영) ──
+  // ── Supabase 렌탈자산 로드 ──
   setLoading(true);
-  const rows = await sbSelect('rental');
-  SAMPLE.rental.rows = rows.map(r => ({ _id: r.id, _rowId: r.id, ...r }));
+  const rows = SAMPLE.rental.rows.length > 0
+    ? SAMPLE.rental.rows
+    : await sbSelect('rental');
 
   // ── history 테이블에서 적용시작월 기준 관코드 이력 로드 ──
   let historyRows = [];
@@ -2221,7 +2232,7 @@ async function runCostCalc(){
 
     // 분류 정규화 — 렌탈자산에서는 복합기·잉크젯·공기청정기·정수기만 배분
     // LMS·캡스·청소용역·청소용품은 지역별 입력으로만 반영
-    const RENTAL_ONLY_CATS = ['복합기','잉크젯','공기청정기','정수기'];
+    const RENTAL_ONLY_CATS = ['복합기','잉크젯','공기청정기'];
     const rawCat = String(row['분류']||'').trim();
     const matchedCat = RENTAL_ONLY_CATS.find(c => rawCat.includes(c) || c.includes(rawCat));
     if(!matchedCat) return; // LMS·캡스·청소용역·청소용품 등은 건너뜀
@@ -2485,7 +2496,7 @@ function renderCostSummaryFiltered() {
   const fmtN = n => Math.round(Number(n)).toLocaleString('ko-KR');
   const TD  = (txt, opts='') => `<td style="padding:8px 10px;white-space:nowrap;font-size:11px;${opts}">${txt}</td>`;
   const TDN = (n) => `<td style="padding:8px 10px;text-align:right;font-family:var(--mono);font-size:10px;white-space:nowrap">${n>0?fmtN(n):'—'}</td>`;
-  const CATS = ['복합기','잉크젯','공기청정기','정수기','LMS','캡스','청소용역','청소용품'];
+  const CATS = ['복합기','잉크젯','공기청정기','LMS','캡스','청소용역','청소용품'];
   const COLORS = ['#1a1a1a','#3a6a3a','#c8a96e','#6a5a8a','#2a6a6a','#8a2a2a'];
   const total = filtered.reduce((s,d) => s + d.총비용, 0);
 
@@ -2687,7 +2698,7 @@ function renderCostDetail(){
 
 function exportCostExcel(){
   if(!costResult.length){showToast('먼저 배분 계산을 실행해 주세요');return;}
-  const FIXED_CATS = ['복합기','잉크젯','공기청정기','정수기','LMS','캡스','청소용역','청소용품'];
+  const FIXED_CATS = ['복합기','잉크젯','공기청정기','LMS','캡스','청소용역','청소용품'];
   const now = new Date();
   const period = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}`;
   const wb = XLSX.utils.book_new();
@@ -3639,6 +3650,7 @@ async function initCampusPage() {
   renderCampusStats();
   renderCampusTable(CAMPUS_ROWS);
   syncKwanFromCampus(); // 관코드 목록 자동 동기화
+  initCampusFilters();  // 필터 드롭다운 옵션 초기화
 }
 
 function renderCampusStats() {
@@ -3689,11 +3701,59 @@ function renderCampusTable(rows) {
     </tr>`).join('');
 }
 
+function initCampusFilters() {
+  const fields = ['법인명','지역','사업부','브랜드','건물명','층수','관코드'];
+  fields.forEach(f => {
+    const sel = document.getElementById('cf-' + f);
+    if(!sel) return;
+    const cur = sel.value;
+    const vals = [...new Set(CAMPUS_ROWS.map(r => String(r[f]||'')).filter(Boolean))].sort((a,b) => {
+      const na = Number(a), nb = Number(b);
+      if(!isNaN(na) && !isNaN(nb)) return na - nb;
+      return a.localeCompare(b, 'ko');
+    });
+    sel.innerHTML = `<option value="">전체 ${f}</option>` + vals.map(v => `<option value="${v}" ${v===cur?'selected':''}>${v}</option>`).join('');
+  });
+}
+
 function filterCampus() {
   const q = document.getElementById('campusSearch').value.toLowerCase();
-  let rows = q ? CAMPUS_ROWS.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q))) : CAMPUS_ROWS;
+  const fields = ['법인명','지역','사업부','브랜드','건물명','층수','관코드'];
+  const filters = {};
+  fields.forEach(f => {
+    const el = document.getElementById('cf-' + f);
+    if(el && el.value) filters[f] = el.value;
+  });
+
+  let rows = CAMPUS_ROWS.filter(r => {
+    if(q && !Object.values(r).some(v => String(v).toLowerCase().includes(q))) return false;
+    for(const [f, v] of Object.entries(filters)) {
+      if(String(r[f]||'') !== v) return false;
+    }
+    return true;
+  });
+
   rows = applyCampusSort(rows);
+
+  // 필터 카운트 표시
+  const countEl = document.getElementById('campusFilterCount');
+  if(countEl) {
+    const activeFilters = Object.keys(filters).length + (q ? 1 : 0);
+    countEl.textContent = activeFilters > 0 ? `${rows.length}건 표시 중` : '';
+  }
+
   renderCampusTable(rows);
+}
+
+function resetCampusFilter() {
+  document.getElementById('campusSearch').value = '';
+  ['법인명','지역','사업부','브랜드','건물명','층수','관코드'].forEach(f => {
+    const el = document.getElementById('cf-' + f);
+    if(el) el.value = '';
+  });
+  const countEl = document.getElementById('campusFilterCount');
+  if(countEl) countEl.textContent = '';
+  filterCampus();
 }
 
 function sortCampus(col) {
@@ -5468,13 +5528,12 @@ function downloadRegionTemplate() {
     ['클린업','청소용역',330000,'수내','수내동빌딩','3층','101','3개층 합산'],
     ['LMS코리아','LMS',55000,'광교','광교빌딩','5층','301',''],
     ['문구나라','청소용품',22000,'수내','','','','소모품'],
-    ['코웨이','정수기',28800,'수내','','','101',''],
   ];
   const wsData = [
     ['📋 비용 관별 배분 — 파일 자동입력 템플릿'],
     [],
     ['※ 작성 안내'],
-    ['  · 품목: LMS / 캡스 / 청소용역 / 청소용품 / 정수기 중 하나만 입력'],
+    ['  · 품목: LMS / 캡스 / 청소용역 / 청소용품 중 하나만 입력'],
     ['  · 금액: VAT포함 최종금액 (숫자만, 원단위)'],
     ['  · 관코드: 숫자 3자리 (예: 101, 224, 301)'],
     ['  · 지역/건물명/층수: 없으면 빈칸'],
@@ -5542,21 +5601,13 @@ async function handleRegionFiles(files) {
 
   for(let i=0; i<fileArr.length; i++) {
     const f = fileArr[i];
-    const ext = f.name.split('.').pop().toLowerCase();
     if(progText) progText.textContent = `분석 중 (${i+1}/${fileArr.length}): ${f.name}`;
     if(progBar)  progBar.style.width = Math.round((i/fileArr.length)*100) + '%';
     try {
-      // 엑셀 파일은 관코드별 직접 저장 (팝업 없이)
-      if(['xlsx','xls'].includes(ext)) {
-        await parseLMSExcel(f);
-        const st = document.getElementById(`rfile-st-${i}`);
-        if(st) st.textContent = '✅ 저장완료';
-      } else {
-        const items = await analyzeRegionFile(f);
-        items.forEach(item => extracted.push(item));
-        const st = document.getElementById(`rfile-st-${i}`);
-        if(st) st.textContent = `✅ ${items.length}건`;
-      }
+      const items = await analyzeRegionFile(f);
+      items.forEach(item => extracted.push(item));
+      const st = document.getElementById(`rfile-st-${i}`);
+      if(st) st.textContent = `✅ ${items.length}건`;
     } catch(err) {
       console.error(err);
       const st = document.getElementById(`rfile-st-${i}`);
@@ -5565,14 +5616,10 @@ async function handleRegionFiles(files) {
   }
 
   if(progBar) progBar.style.width = '100%';
+  if(progText) progText.textContent = `✅ 분석 완료 — ${extracted.length}개 항목 추출됨. 내용을 확인해주세요.`;
 
-  // PDF/이미지 추출 결과만 팝업 표시
-  if(extracted.length > 0) {
-    if(progText) progText.textContent = `✅ 분석 완료 — ${extracted.length}개 항목 추출됨. 내용을 확인해주세요.`;
-    showRegionPreview(extracted);
-  } else {
-    if(progText) progText.textContent = `✅ 저장 완료 — 배분 계산 실행 버튼을 눌러주세요.`;
-  }
+  // 미리보기 팝업 표시
+  showRegionPreview(extracted);
   document.getElementById('regionFileInput').value = '';
 }
 
@@ -5789,79 +5836,40 @@ async function parseLMSExcel(file) {
     const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
 
     const ym = getCurYearMonth();
+    const kwanAmts = {};
 
-    // 헤더 행 찾기 (품목/금액/관코드 포함 행)
-    const headerIdx = rows.findIndex(r =>
-      r.some(c => /품목|업체명|금액|관코드/.test(String(c||'')))
-    );
-    if(headerIdx < 0) { showToast('❌ 헤더 행을 찾을 수 없습니다. 템플릿을 확인해주세요.'); return []; }
-
-    const headers = rows[headerIdx].map(c => String(c||'').trim());
-    const catIdx  = headers.findIndex(h => /품목/.test(h));   // B열
-    const amtIdx  = headers.findIndex(h => /금액/.test(h));   // C열
-    const kwanIdx = headers.findIndex(h => /관코드/.test(h)); // G열
-
-    const dataRows = rows.slice(headerIdx + 1);
-
-    // { 분류: { 관코드: 금액 } }
-    const kwanAmtsByCat = {};
-
-    for(const row of dataRows) {
-      const kwanRaw = String(row[kwanIdx]||'').trim();
-      const amtRaw  = String(row[amtIdx]||'').replace(/[^0-9.-]/g,'');
-      const catRaw  = String(row[catIdx]||'').trim();
-
-      if(!kwanRaw || !amtRaw) continue;
-      const amt = Number(amtRaw) || 0;
+    for(const row of rows) {
+      const kwanCode = String(row[1]||'').trim(); // B열 = 수익코드/관코드
+      const amtRaw   = row[6];                    // G열 = 금액(VAT+)
+      if(!kwanCode || isNaN(Number(kwanCode))) continue;
+      const amt = Number(String(amtRaw).replace(/[^0-9.-]/g,'')) || 0;
       if(!amt) continue;
-
-      // 품목 정규화
-      let cat = catRaw;
-      if(/LMS|학습관리/.test(cat))         cat = 'LMS';
-      else if(/정수기|냉온수|워터/.test(cat)) cat = '정수기';
-      else if(/캡스|보안|CCTV/.test(cat))   cat = '캡스';
-      else if(/청소용역|청소|미화/.test(cat)) cat = '청소용역';
-      else if(/청소용품|소모품/.test(cat))   cat = '청소용품';
-      else cat = catRaw || 'LMS';
-
-      // 관코드는 숫자(101, 224 등) 또는 문자 모두 허용
-      const kwanCode = kwanRaw;
-      if(!kwanAmtsByCat[cat]) kwanAmtsByCat[cat] = {};
-      kwanAmtsByCat[cat][kwanCode] = (kwanAmtsByCat[cat][kwanCode]||0) + amt;
+      kwanAmts[kwanCode] = (kwanAmts[kwanCode]||0) + amt;
     }
 
-    if(!Object.keys(kwanAmtsByCat).length) {
-      showToast('❌ 파싱된 데이터가 없습니다. 파일 구조를 확인해주세요.');
-      return [];
-    }
-
-    // Supabase cost_extra에 저장
+    // Supabase에 저장 + additionalCostMap에도 반영
     setLoading(true);
-    let totalSaved = 0;
-    for(const [cat, kwanAmts] of Object.entries(kwanAmtsByCat)) {
-      for(const [kwanCode, amt] of Object.entries(kwanAmts)) {
-        const existing = additionalCostMap[kwanCode]?.[cat];
-        let error;
-        if(existing?.id) {
-          ({ error } = await _supa.from('cost_extra')
-            .update({ 금액: Math.round(amt), 사유: `${cat} 파일 자동입력` })
-            .eq('id', existing.id));
-        } else {
-          ({ error } = await _supa.from('cost_extra')
-            .insert([{ year_month: ym, 관코드: kwanCode, 분류: cat, 금액: Math.round(amt), 사유: `${cat} 파일 자동입력` }]));
-        }
-        if(!error) {
-          if(!additionalCostMap[kwanCode]) additionalCostMap[kwanCode] = {};
-          additionalCostMap[kwanCode][cat] = { amt: Math.round(amt), reason: `${cat} 파일 자동입력`, id: existing?.id || null };
-          totalSaved++;
-        }
+    for(const [kwanCode, amt] of Object.entries(kwanAmts)) {
+      const existing = additionalCostMap[kwanCode]?.['LMS'];
+      let error;
+      if(existing?.id) {
+        ({ error } = await _supa.from('cost_extra')
+          .update({ 금액: Math.round(amt), 사유: 'LMS 파일 자동입력' })
+          .eq('id', existing.id));
+      } else {
+        ({ error } = await _supa.from('cost_extra')
+          .insert([{ year_month: ym, 관코드: kwanCode, 분류: 'LMS', 금액: Math.round(amt), 사유: 'LMS 파일 자동입력' }]));
+      }
+      if(!error) {
+        if(!additionalCostMap[kwanCode]) additionalCostMap[kwanCode] = {};
+        additionalCostMap[kwanCode]['LMS'] = { amt: Math.round(amt), reason: 'LMS 파일 자동입력', id: existing?.id || null };
       }
     }
     setLoading(false);
 
+    // additionalCostMap 최신 id로 갱신
     await loadAdditionalCostMap();
-    const cats = Object.keys(kwanAmtsByCat).join(', ');
-    showToast(`✅ ${cats} — ${totalSaved}개 관코드 저장 완료`);
+    showToast(`✅ LMS ${Object.keys(kwanAmts).length}개 관코드 저장 및 반영됨`);
     return [];
   } catch(err) {
     setLoading(false);
@@ -6376,8 +6384,8 @@ document.addEventListener('click', (e) => {
 document.addEventListener('click',e=>{if(!e.target.closest('#notifPanel')&&!e.target.closest('.tb-bell'))closeNotif();});
 
 // ── 테스트 모드: true이면 월 마감 시 메일 발송 안 함 ──
-const COST_MAIL_TEST_MODE = false;
-const FIXED_CATS_HIST = ['복합기','잉크젯','공기청정기','정수기','LMS','캡스','청소용역','청소용품'];
+const COST_MAIL_TEST_MODE = true;
+const FIXED_CATS_HIST = ['복합기','잉크젯','공기청정기','LMS','캡스','청소용역','청소용품'];
 let costHistoryData = [];
 
 function closeCostMonth() {
