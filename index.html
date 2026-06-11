@@ -2656,26 +2656,34 @@ function renderVendorVerify(){
   const bodyEl = document.getElementById('vendorVerifyBody');
   if(!sumEl || !bodyEl) return;
   const fmtN = n => Math.round(n).toLocaleString('ko-KR');
-  const vmap = {};         // 업체\u0001분류 -> {업체,분류,청구,배분}
-  const seen = new Set();  // 청구는 자산당 1회만 합산
+  const vmap = {};
   costResult.forEach(d => (d.items||[]).forEach(it=>{
     if(it.isExtra) return;  // 수기 추가비용은 업체 청구 원천이 아니므로 제외
     const vendor = it.업체명 || '미상';
     const cat = it.분류 || it.matchedCat || '미분류';
-    const key = vendor + '\u0001' + cat;
-    const v = vmap[key] = vmap[key] || {업체:vendor, 분류:cat, 청구:0, 배분:0};
+    const vkey = vendor + '\u0001' + cat;
+    const v = vmap[vkey] = vmap[vkey] || {업체:vendor, 분류:cat, 배분:0, assets:{}};
     v.배분 += (it.splitAmt||0);
-    const sig = [vendor, cat, it.SN||'', it.기종||'', it.건물명||'', it.층수||'', Math.round(it.origAmt||0), it.관코드||''].join('\u0001');
-    if(!seen.has(sig)){ seen.add(sig); v.청구 += (it.origAmt||0); }
+    // 자산 식별: Supabase 행 id 우선(정확), 없으면 속성 조합
+    const akey = (it.id!=null) ? 'i'+it.id
+      : 's'+[it.SN||'', it.기종||'', it.건물명||'', it.층수||'', Math.round(it.origAmt||0), it.관코드||''].join('|');
+    const a = v.assets[akey] = v.assets[akey] || {origAmt: it.origAmt||0, kwanCount: it.kwanCount||1, 관코드: it.관코드||'', 기종: it.기종||'', 건물명: it.건물명||'', 층수: it.층수||'', copies:0, sumSplit:0};
+    a.copies += 1; a.sumSplit += (it.splitAmt||0);
   }));
-  const rows = Object.values(vmap).sort((a,b)=> b.청구 - a.청구);
+  const rows = Object.values(vmap).map(v=>{
+    const assets = Object.values(v.assets);
+    v.청구 = assets.reduce((s,a)=>s+a.origAmt, 0);
+    v.차이 = v.배분 - v.청구;
+    v.assetsArr = assets;
+    return v;
+  }).sort((a,b)=> b.청구 - a.청구);
   const totClaim = rows.reduce((s,r)=>s+r.청구,0);
   const totAlloc = rows.reduce((s,r)=>s+r.배분,0);
-  const tdiff = totAlloc - totClaim;
-  const tOk = Math.abs(tdiff) < 1;
+  const tdiff = totAlloc - totClaim, tOk = Math.abs(tdiff) < 1;
   sumEl.innerHTML = `청구 ${fmtN(totClaim)} · 배분 ${fmtN(totAlloc)} · 차이 <b style="color:${tOk?'#2a6a2a':'#991b1b'}">${tOk?'0 (일치)':fmtN(tdiff)}</b>`;
   if(!rows.length){ bodyEl.innerHTML = '<div style="padding:14px;color:var(--text3);font-size:11px">데이터가 없습니다</div>'; return; }
-  bodyEl.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">
+  bodyEl.innerHTML = `<div style="padding:6px 12px;font-size:10px;color:var(--text3)">행을 클릭하면 자산별 청구·배분 분해가 열립니다 (차이 나는 자산은 빨갛게 표시)</div>
+  <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">
     <thead><tr style="background:var(--cream);border-bottom:1px solid var(--border)">
       <th style="padding:7px 12px;text-align:left;font-size:9px;color:var(--text3)">업체명</th>
       <th style="padding:7px 12px;text-align:left;font-size:9px;color:var(--text3)">분류</th>
@@ -2683,17 +2691,33 @@ function renderVendorVerify(){
       <th style="padding:7px 12px;text-align:right;font-size:9px;color:var(--text3)">관별 배분 합</th>
       <th style="padding:7px 12px;text-align:right;font-size:9px;color:var(--text3)">차이</th>
     </tr></thead>
-    <tbody>${rows.map(r=>{
-      const dd = r.배분 - r.청구, ok = Math.abs(dd) < 1;
-      return `<tr style="border-bottom:1px solid var(--cream2)">
+    <tbody>${rows.map((r,vi)=>{
+      const ok = Math.abs(r.차이) < 1;
+      const adetail = r.assetsArr.slice()
+        .sort((a,b)=> Math.abs(b.sumSplit-b.origAmt) - Math.abs(a.sumSplit-a.origAmt))
+        .map(a=>{
+          const ad = a.sumSplit - a.origAmt, aok = Math.abs(ad) < 1;
+          return `<div style="padding:6px 10px;border-bottom:1px dashed var(--border);${aok?'':'background:#fdecec'}">
+            <div style="font-size:11px;font-weight:600">${a.기종||a.관코드||'—'} <span style="font-weight:400;color:var(--text3)">· ${a.건물명||''} ${a.층수||''}</span></div>
+            <div style="font-size:10px;color:var(--text2);margin-top:2px">청구 ${fmtN(a.origAmt)} · 배분합 <b>${fmtN(a.sumSplit)}</b> · 관 ${a.copies}/${a.kwanCount}개${aok?'':` · <b style="color:#991b1b">차이 ${fmtN(ad)}</b>`}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:2px;font-family:var(--mono)">관코드: ${a.관코드||'—'}</div>
+          </div>`;
+        }).join('');
+      return `<tr onclick="toggleVendorRow('${vi}')" style="border-bottom:1px solid var(--cream2);cursor:pointer">
         <td style="padding:6px 12px;font-weight:600">${r.업체}</td>
         <td style="padding:6px 12px"><span style="font-size:10px;padding:1px 7px;background:#f0e8fa;color:#5a1a8a;border-radius:10px">${r.분류}</span></td>
         <td style="padding:6px 12px;text-align:right;font-family:var(--mono)">${fmtN(r.청구)}</td>
         <td style="padding:6px 12px;text-align:right;font-family:var(--mono);font-weight:700">${fmtN(r.배분)}</td>
-        <td style="padding:6px 12px;text-align:right;font-family:var(--mono);font-weight:700;color:${ok?'#2a6a2a':'#991b1b'}">${ok?'일치':fmtN(dd)}</td>
-      </tr>`;
+        <td style="padding:6px 12px;text-align:right;font-family:var(--mono);font-weight:700;color:${ok?'#2a6a2a':'#991b1b'}">${ok?'일치':fmtN(r.차이)+' 🔍'}</td>
+      </tr>
+      <tr id="vv-detail-${vi}" style="display:none"><td colspan="5" style="padding:0;background:var(--cream)">${adetail}</td></tr>`;
     }).join('')}</tbody>
   </table></div>`;
+}
+
+function toggleVendorRow(vi){
+  const el = document.getElementById('vv-detail-'+vi);
+  if(el) el.style.display = (el.style.display==='none') ? '' : 'none';
 }
 
 function openKwanItems(kwanCode) {
