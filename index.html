@@ -6729,10 +6729,15 @@ async function loadAssetMoves(){
 function renderAssetMoves(){
   const el = document.getElementById('assetMovesBody');
   if(!el) return;
-  // 자산코드 → 분류 매핑 (렌탈자산 탭 데이터)
-  const catByCode = {};
-  (SAMPLE.rental.rows||[]).forEach(r=>{ if(r['자산코드']) catByCode[r['자산코드']] = r['분류']||''; });
   const splitK = s => String(s||'').split(/[,，\s]+/).map(x=>x.trim()).filter(Boolean);
+  const normK = s => splitK(s).sort().join(',');
+  const catByCode = {}, catByKwan = {};
+  (SAMPLE.rental.rows||[]).forEach(r=>{
+    const cat = r['분류']||'';
+    if(!cat) return;
+    if(r['자산코드']) catByCode[String(r['자산코드']).trim()] = cat;
+    if(r['관코드']) catByKwan[normK(r['관코드'])] = cat;
+  });
 
   const moves = (assetMoveData||[]).filter(h=>{
     const a=(h['이전관코드']||'').trim(), b=(h['이후관코드']||'').trim();
@@ -6746,32 +6751,46 @@ function renderAssetMoves(){
     const ka=(a['적용시작월']||a['일시']||''), kb=(b['적용시작월']||b['일시']||'');
     return kb.localeCompare(ka);
   });
+
+  // 분류 전파: rental 현재상태를 시드로, 이전↔이후 관코드 세트를 따라 같은 자산 체인에 분류 채움
+  const setCat = {...catByKwan};
+  let changed = true, guard = 0;
+  while(changed && guard++ < 30){
+    changed = false;
+    moves.forEach(h=>{
+      const pk = normK(h['이전관코드']), nk = normK(h['이후관코드']);
+      const c = setCat[pk] || setCat[nk];
+      if(c){
+        if(pk && !setCat[pk]){ setCat[pk] = c; changed = true; }
+        if(nk && !setCat[nk]){ setCat[nk] = c; changed = true; }
+      }
+    });
+  }
+
   const esc = s => String(s||'').replace(/"/g,'&quot;');
+  const chips = (list) => list.length
+    ? list.map(x=>`<span style="display:inline-block;background:var(--cream2);font-family:var(--mono);font-size:11px;padding:1px 7px;border-radius:5px;margin:1px 2px">${x}</span>`).join('')
+    : '<span style="color:var(--text3);font-size:11px">미지정</span>';
+
   el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">
-    <colgroup><col style="width:20%"><col style="width:30%"><col style="width:12%"><col style="width:26%"><col style="width:12%"></colgroup>
+    <colgroup><col style="width:16%"><col style="width:22%"><col style="width:22%"><col style="width:10%"><col style="width:20%"><col style="width:10%"></colgroup>
     <thead><tr style="background:var(--cream2);border-bottom:1px solid var(--border)">
       <th style="padding:9px 14px;text-align:left;font-size:9px;color:var(--text3)">자산 (분류)</th>
-      <th style="padding:9px 14px;text-align:left;font-size:9px;color:var(--text3)">관코드 변경</th>
+      <th style="padding:9px 14px;text-align:left;font-size:9px;color:var(--text3)">변경 전 관코드</th>
+      <th style="padding:9px 14px;text-align:left;font-size:9px;color:var(--text3)">변경 후 관코드</th>
       <th style="padding:9px 14px;text-align:center;font-size:9px;color:var(--text3)">변경월</th>
       <th style="padding:9px 14px;text-align:left;font-size:9px;color:var(--text3)">변경 사유</th>
       <th style="padding:9px 14px;text-align:right;font-size:9px;color:var(--text3)">기록일</th>
     </tr></thead>
     <tbody>${moves.map(h=>{
       const name = h['자산명']||'—';
-      const cat = h['분류'] || catByCode[h['자산코드']] || '';
-      const prevList = splitK(h['이전관코드']), nextList = splitK(h['이후관코드']);
-      const added = nextList.filter(x=>!prevList.includes(x));
-      const removed = prevList.filter(x=>!nextList.includes(x));
-      const fullTitle = `${h['이전관코드']||'미지정'} → ${h['이후관코드']||'미지정'}`;
-      let moveHtml;
-      if(added.length || removed.length){
-        moveHtml = [
-          ...added.map(x=>`<span style="display:inline-block;background:#e8f3e8;color:#2a6a2a;font-family:var(--mono);font-weight:700;font-size:11px;padding:1px 7px;border-radius:10px;margin:1px 2px">+${x}</span>`),
-          ...removed.map(x=>`<span style="display:inline-block;background:#f7e8e8;color:#8a2a2a;font-family:var(--mono);font-weight:700;font-size:11px;padding:1px 7px;border-radius:10px;margin:1px 2px">−${x}</span>`)
-        ].join('');
-      } else {
-        moveHtml = `<span style="font-family:var(--mono);font-size:11px;color:var(--text2)">${fullTitle}</span>`;
-      }
+      const cat = h['분류']
+        || catByCode[String(h['자산코드']||'').trim()]
+        || setCat[normK(h['이후관코드'])]
+        || setCat[normK(h['이전관코드'])]
+        || '';
+      const prevHtml = chips(splitK(h['이전관코드']));
+      const nextHtml = chips(splitK(h['이후관코드']));
       const reason = h['이동사유']||'';
       const isAuto = /^관코드 변경:/.test(reason);
       const reasonHtml = !reason ? '<span style="color:var(--text3)">—</span>'
@@ -6782,11 +6801,12 @@ function renderAssetMoves(){
         ? `<span style="display:inline-block;font-size:10px;font-weight:700;padding:1px 8px;border-radius:10px;background:#eef0f5;color:#3a4a6a">${cat}</span>`
         : `<span style="font-size:10px;color:var(--text3)">분류 미상</span>`;
       return `<tr style="border-bottom:1px solid var(--cream2)">
-        <td style="padding:9px 14px">${catChip}<div style="font-size:10px;color:var(--text3);margin-top:3px">${name}</div></td>
-        <td style="padding:9px 14px" title="${esc(fullTitle)}">${moveHtml}</td>
-        <td style="padding:9px 14px;text-align:center;font-family:var(--mono);font-weight:600">${h['적용시작월']||'—'}</td>
-        <td style="padding:9px 14px;color:var(--text2)">${reasonHtml}</td>
-        <td style="padding:9px 14px;text-align:right;font-family:var(--mono);font-size:10px;color:var(--text3)">${ts}</td>
+        <td style="padding:9px 14px;vertical-align:top">${catChip}<div style="font-size:10px;color:var(--text3);margin-top:3px">${name}</div></td>
+        <td style="padding:9px 14px;vertical-align:top">${prevHtml}</td>
+        <td style="padding:9px 14px;vertical-align:top">${nextHtml}</td>
+        <td style="padding:9px 14px;text-align:center;font-family:var(--mono);font-weight:600;vertical-align:top">${h['적용시작월']||'—'}</td>
+        <td style="padding:9px 14px;color:var(--text2);vertical-align:top">${reasonHtml}</td>
+        <td style="padding:9px 14px;text-align:right;font-family:var(--mono);font-size:10px;color:var(--text3);vertical-align:top">${ts}</td>
       </tr>`;
     }).join('')}</tbody>
   </table>`;
