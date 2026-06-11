@@ -2622,6 +2622,11 @@ document.addEventListener('click', function(e) {
   }
 });
 
+function toggleSubSplit(si){
+  const el = document.getElementById('subsplit-'+si);
+  if(el) el.style.display = (el.style.display==='none') ? '' : 'none';
+}
+
 function openKwanItems(kwanCode) {
   const d = costResult.find(r => r.code === kwanCode);
   if(!d) return;
@@ -2643,7 +2648,7 @@ function openKwanItems(kwanCode) {
   const subRows = Object.entries(bySub).sort((a,b)=>b[1].배분 - a[1].배분);
   const subHtml = subRows.length ? `
     <div style="margin-bottom:14px">
-      <div style="font-size:10px;color:var(--text3);letter-spacing:1px;margin-bottom:6px">분류별 소계</div>
+      <div style="font-size:10px;color:var(--text3);letter-spacing:1px;margin-bottom:6px">분류별 소계 <span style="font-weight:400">· 배분금액 합 클릭 시 N분의1 상세</span></div>
       <table style="width:100%;border-collapse:collapse;font-size:11px">
         <thead><tr style="background:var(--cream2);border-bottom:1px solid var(--border)">
           <th style="padding:7px 10px;text-align:left;font-size:9px;color:var(--text3)">분류</th>
@@ -2651,13 +2656,26 @@ function openKwanItems(kwanCode) {
           <th style="padding:7px 10px;text-align:right;font-size:9px;color:var(--text3)">청구금액 합</th>
           <th style="padding:7px 10px;text-align:right;font-size:9px;color:var(--text3)">배분금액 합</th>
         </tr></thead>
-        <tbody>${subRows.map(([c,v])=>`
+        <tbody>${subRows.map(([c,v],si)=>{
+          const its = (d.items||[]).filter(it => (it.분류||'미분류')===c);
+          const split = Math.round(v.청구) !== Math.round(v.배분);
+          const breakdown = its.map(it=>{
+            const oa = Math.round(it.origAmt||0), sa = Math.round(it.splitAmt||0), kc = it.kwanCount||1;
+            return `<div style="padding:6px 8px;border-bottom:1px dashed var(--border)">
+              <div style="font-size:11px;font-weight:600">${it.업체명||'—'} <span style="font-weight:400;color:var(--text3)">· ${it.건물명||''} ${it.층수||''}</span></div>
+              <div style="font-size:10px;color:var(--text2);margin-top:2px">청구 ${fmt(oa)} ${kc>1?`÷ ${kc}개 관 N분의1`:'· 단독(100%)'} = 배분 <b>${fmt(sa)}</b></div>
+              <div style="font-size:10px;color:var(--text3);margin-top:2px;font-family:var(--mono)">공유 관코드: ${it.관코드||'—'}</div>
+            </div>`;
+          }).join('');
+          return `
           <tr style="border-bottom:1px solid var(--cream2)">
             <td style="padding:7px 10px"><span style="font-size:10px;padding:2px 7px;background:#f0e8fa;color:#5a1a8a;border-radius:10px">${c}</span></td>
             <td style="padding:7px 10px;text-align:center;color:var(--text3)">${v.건수}건</td>
             <td style="padding:7px 10px;text-align:right;font-family:var(--mono)">${fmt(Math.round(v.청구))}</td>
-            <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-weight:700">${fmt(Math.round(v.배분))}</td>
-          </tr>`).join('')}</tbody>
+            <td onclick="toggleSubSplit('${si}')" style="padding:7px 10px;text-align:right;font-family:var(--mono);font-weight:700;cursor:pointer;${split?'color:#5a1a8a;text-decoration:underline':''}" title="N분의1 배분 상세 보기">${fmt(Math.round(v.배분))}${split?' 🔍':''}</td>
+          </tr>
+          <tr id="subsplit-${si}" style="display:none"><td colspan="4" style="padding:4px 10px 10px;background:var(--cream)">${breakdown}</td></tr>`;
+        }).join('')}</tbody>
       </table>
     </div>` : '';
   document.getElementById('moKwanItemsBody').innerHTML = `
