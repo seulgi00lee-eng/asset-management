@@ -2712,6 +2712,12 @@ function renderVendorVerify(){
       </tr>
       <tr id="vv-detail-${vi}" style="display:none"><td colspan="5" style="padding:0;background:var(--cream)">${adetail}</td></tr>`;
     }).join('')}</tbody>
+    <tfoot><tr style="background:var(--cream2);border-top:2px solid var(--text)">
+      <td colspan="2" style="padding:8px 12px;font-weight:700;font-size:12px">합계</td>
+      <td style="padding:8px 12px;text-align:right;font-family:var(--mono);font-weight:700">${fmtN(totClaim)}</td>
+      <td style="padding:8px 12px;text-align:right;font-family:var(--mono);font-weight:700">${fmtN(totAlloc)}</td>
+      <td style="padding:8px 12px;text-align:right;font-family:var(--mono);font-weight:700;color:${tOk?'#2a6a2a':'#991b1b'}">${tOk?'일치':fmtN(tdiff)}</td>
+    </tr></tfoot>
   </table></div>`;
 }
 
