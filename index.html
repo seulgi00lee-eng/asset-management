@@ -846,15 +846,22 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
         <!-- 월별 요약 카드 -->
         <div id="costHistoryKpi" style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);margin-bottom:16px"></div>
 
-        <!-- 누적 테이블 -->
-        <div class="sec">
+        <!-- 탭 -->
+        <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:16px">
+          <button id="chtab-alloc" onclick="switchCostHistTab('alloc')" style="padding:10px 20px;font-size:12px;font-weight:600;font-family:var(--font);border:none;background:none;cursor:pointer;border-bottom:2px solid var(--text);margin-bottom:-2px;color:var(--text)">📊 월별 배분 이력</button>
+          <button id="chtab-moves" onclick="switchCostHistTab('moves')" style="padding:10px 20px;font-size:12px;font-weight:600;font-family:var(--font);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--text3)">🔀 자산 이동 흐름</button>
+          <button id="chtab-compare" onclick="switchCostHistTab('compare')" style="padding:10px 20px;font-size:12px;font-weight:600;font-family:var(--font);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--text3)">📈 전월·당월 비용 비교</button>
+        </div>
+
+        <!-- 탭1: 월별 배분 이력 -->
+        <div id="chpane-alloc" class="sec">
           <div class="sec-hd">
             <div class="sec-t">월별 관코드 배분 이력
               <span class="badge bd-navy" id="costHistoryCnt">0건</span>
             </div>
             <div style="display:flex;gap:8px;align-items:center">
-              <select id="costHistoryYearFilter" style="border:1px solid var(--border);padding:5px 10px;font-size:11px;font-family:var(--font);background:var(--cream);outline:none" onchange="renderCostHistoryTable()">
-                <option value="">전체 연도</option>
+              <select id="costHistoryMonthFilter" style="border:1px solid var(--border);padding:5px 10px;font-size:11px;font-family:var(--mono);background:var(--cream);outline:none" onchange="renderCostHistoryTable()">
+                <option value="">전체 마감월</option>
               </select>
               <select id="costHistoryKwanFilter" style="border:1px solid var(--border);padding:5px 10px;font-size:11px;font-family:var(--font);background:var(--cream);outline:none" onchange="renderCostHistoryTable()">
                 <option value="">전체 관코드</option>
@@ -869,15 +876,26 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
           </div>
         </div>
 
-        <!-- 변동 이력 -->
-        <div class="sec" style="margin-top:12px">
+        <!-- 탭2: 자산 이동 흐름 -->
+        <div id="chpane-moves" class="sec" style="display:none">
           <div class="sec-hd">
-            <div class="sec-t">렌탈자산 이동 변동 이력
-              <span class="badge bd-gold">관코드 기준</span>
+            <div class="sec-t">자산 이동 흐름
+              <span class="badge bd-gold">관코드 변경 기준</span>
+            </div>
+            <div style="font-size:11px;color:var(--text3)">관코드가 실제 변경된 자산만 표시</div>
+          </div>
+          <div style="overflow-x:auto" id="assetMovesBody"></div>
+        </div>
+
+        <!-- 탭3: 전월·당월 비용 비교 -->
+        <div id="chpane-compare" class="sec" style="display:none">
+          <div class="sec-hd">
+            <div class="sec-t">전월·당월 비용 비교
+              <span class="badge bd-gold">관별</span>
             </div>
           </div>
           <div id="costHistoryChanges">
-            <div class="empty"><div class="ei">📋</div><div class="et">마감 시 변동 이력이 자동으로 기록됩니다</div></div>
+            <div class="empty"><div class="ei">📋</div><div class="et">마감 데이터가 2개월 이상이면 비교가 표시됩니다</div></div>
           </div>
         </div>
       </div>
@@ -6412,6 +6430,7 @@ document.addEventListener('click',e=>{if(!e.target.closest('#notifPanel')&&!e.ta
 const COST_MAIL_TEST_MODE = true;
 const FIXED_CATS_HIST = ['복합기','잉크젯','공기청정기','LMS','캡스','청소용역','청소용품'];
 let costHistoryData = [];
+let assetMoveData = [];
 
 function closeCostMonth() {
   if(!costResult.length){
@@ -6521,13 +6540,16 @@ async function loadCostHistory() {
   setLoading(false);
   costHistoryData = data.sort((a,b) => b['year_month']?.localeCompare(a['year_month']));
 
-  // 필터 옵션 업데이트
-  const years = [...new Set(data.map(r => (r['year_month']||'').slice(0,4)))].sort().reverse();
-  const kwans = [...new Set(data.map(r => r['관코드']||''))].filter(Boolean).sort();
+  // 필터 옵션 업데이트 (마감월 선택 — 기본값 최신월)
+  const monthList = [...new Set(data.map(r => r['year_month']||''))].filter(Boolean).sort().reverse();
+  const kwans = [...new Set(data.map(r => r['관코드']||''))].filter(Boolean).sort(cmpKwan);
 
-  const yf = document.getElementById('costHistoryYearFilter');
+  const mf = document.getElementById('costHistoryMonthFilter');
   const kf = document.getElementById('costHistoryKwanFilter');
-  if(yf) yf.innerHTML = '<option value="">전체 연도</option>' + years.map(y=>`<option value="${y}">${y}년</option>`).join('');
+  if(mf){
+    mf.innerHTML = '<option value="">전체 마감월</option>' + monthList.map(m=>`<option value="${m}">${m}</option>`).join('');
+    if(!mf.value) mf.value = monthList[0] || '';
+  }
   if(kf) kf.innerHTML = '<option value="">전체 관코드</option>' + kwans.map(k=>`<option value="${k}">${k}</option>`).join('');
 
   // KPI 카드 (최근 마감월 vs 전월 비교)
@@ -6562,6 +6584,9 @@ async function loadCostHistory() {
   // 변동 이력 (관코드 이동 감지)
   renderCostHistoryChanges(data);
 
+  // 자산 이동 흐름 (history 테이블)
+  loadAssetMoves();
+
   // 배지
   const badge = document.getElementById('nb-cost-history');
   if(badge && months.length > 0){ badge.textContent=months.length; badge.style.display='inline'; }
@@ -6570,11 +6595,17 @@ async function loadCostHistory() {
 }
 
 function renderCostHistoryTable() {
-  const yf = document.getElementById('costHistoryYearFilter')?.value || '';
+  const mf = document.getElementById('costHistoryMonthFilter')?.value || '';
   const kf = document.getElementById('costHistoryKwanFilter')?.value || '';
   let filtered = costHistoryData;
-  if(yf) filtered = filtered.filter(r=>(r['year_month']||'').startsWith(yf));
+  if(mf) filtered = filtered.filter(r=>(r['year_month']||'')===mf);
   if(kf) filtered = filtered.filter(r=>r['관코드']===kf);
+  // 정렬: 최신 마감월 → 공통 최상단 → 101,102,103… 오름차순
+  filtered = [...filtered].sort((a,b)=>{
+    const ma=a['year_month']||'', mb=b['year_month']||'';
+    if(ma!==mb) return mb.localeCompare(ma);
+    return cmpKwan(a['관코드'], b['관코드']);
+  });
 
   const thead = document.getElementById('costHistoryHead');
   const tbody = document.getElementById('costHistoryBody');
@@ -6650,6 +6681,85 @@ function openCostHistItems(ym, kwan) {
   document.getElementById('moKwanItems').classList.add('open');
 }
 
+// 관코드 정렬 비교자: '공통' 포함 → 최상단, 그다음 숫자 오름차순(101,102,…), 나머지는 뒤
+function cmpKwan(a, b){
+  const sv = (c)=>{
+    const s = String(c||'').trim();
+    if(s.includes('공통')) return [0,0,s];
+    const n = parseInt(s.replace(/[^0-9]/g,''),10);
+    if(/\d/.test(s) && !isNaN(n)) return [1,n,s];
+    return [2,0,s];
+  };
+  const ka=sv(a), kb=sv(b);
+  if(ka[0]!==kb[0]) return ka[0]-kb[0];
+  if(ka[1]!==kb[1]) return ka[1]-kb[1];
+  return ka[2].localeCompare(kb[2],'ko');
+}
+
+// 누적 관리 탭 전환
+function switchCostHistTab(tab){
+  const panes = {alloc:'chpane-alloc', moves:'chpane-moves', compare:'chpane-compare'};
+  Object.entries(panes).forEach(([k,id])=>{
+    const el = document.getElementById(id);
+    if(el) el.style.display = (k===tab)?'':'none';
+    const btn = document.getElementById('chtab-'+k);
+    if(btn){
+      const on = (k===tab);
+      btn.style.borderBottom = on ? '2px solid var(--text)' : '2px solid transparent';
+      btn.style.color = on ? 'var(--text)' : 'var(--text3)';
+    }
+  });
+}
+
+// 자산 이동 흐름 — history 테이블 로드
+async function loadAssetMoves(){
+  try { assetMoveData = await sbSelect('history') || []; }
+  catch(e){ console.warn('이동 이력 로드 오류:', e); assetMoveData = []; }
+  renderAssetMoves();
+}
+
+// 자산 이동 흐름 렌더 (관코드가 실제 변경된 건만)
+function renderAssetMoves(){
+  const el = document.getElementById('assetMovesBody');
+  if(!el) return;
+  const moves = (assetMoveData||[]).filter(h=>{
+    const a=(h['이전관코드']||'').trim(), b=(h['이후관코드']||'').trim();
+    return (a||b) && a!==b;
+  });
+  if(!moves.length){
+    el.innerHTML = '<div class="empty"><div class="ei">🔀</div><div class="et">관코드가 변경된 자산 이동 내역이 없습니다</div></div>';
+    return;
+  }
+  moves.sort((a,b)=>{
+    const ka=(a['적용시작월']||a['일시']||''), kb=(b['적용시작월']||b['일시']||'');
+    return kb.localeCompare(ka);
+  });
+  el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:var(--cream2);border-bottom:1px solid var(--border)">
+      <th style="padding:9px 14px;text-align:left;font-size:9px;color:var(--text3)">자산</th>
+      <th style="padding:9px 14px;text-align:center;font-size:9px;color:var(--text3)">이동 (이전 → 이후)</th>
+      <th style="padding:9px 14px;text-align:center;font-size:9px;color:var(--text3)">변경월</th>
+      <th style="padding:9px 14px;text-align:left;font-size:9px;color:var(--text3)">변경 사유</th>
+      <th style="padding:9px 14px;text-align:right;font-size:9px;color:var(--text3)">기록일</th>
+    </tr></thead>
+    <tbody>${moves.map(h=>{
+      const name=h['자산명']||h['자산코드']||'—';
+      const code=h['자산코드']?`<div style="font-size:9px;color:var(--text3);font-family:var(--mono)">${h['자산코드']}</div>`:'';
+      const from=h['이전관코드']||'미지정', to=h['이후관코드']||'미지정';
+      const ym=h['적용시작월']||'—';
+      const reason=h['이동사유']||'—';
+      const ts=(h['일시']||'').slice(0,10)||'—';
+      return `<tr style="border-bottom:1px solid var(--cream2)">
+        <td style="padding:9px 14px"><div style="font-weight:600">${name}</div>${code}</td>
+        <td style="padding:9px 14px;text-align:center;font-family:var(--mono)"><span style="color:var(--text3)">${from}</span><span style="margin:0 6px;color:var(--gold)">→</span><span style="font-weight:700">${to}</span></td>
+        <td style="padding:9px 14px;text-align:center;font-family:var(--mono);font-weight:600">${ym}</td>
+        <td style="padding:9px 14px;color:var(--text2)">${reason}</td>
+        <td style="padding:9px 14px;text-align:right;font-family:var(--mono);font-size:10px;color:var(--text3)">${ts}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
 function renderCostHistoryChanges(data) {
   const el = document.getElementById('costHistoryChanges');
   if(!el) return;
@@ -6691,7 +6801,7 @@ function renderCostHistoryChanges(data) {
       <th style="padding:9px 14px;text-align:right;font-size:9px;color:var(--text3)">당월 비용</th>
       <th style="padding:9px 14px;text-align:right;font-size:9px;color:var(--text3)">변동</th>
     </tr></thead>
-    <tbody>${changes.sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff)).map(c=>`
+    <tbody>${changes.sort((a,b)=>cmpKwan(a.kwan,b.kwan)).map(c=>`
       <tr style="border-bottom:1px solid var(--cream2)">
         <td style="padding:9px 14px;font-family:var(--mono);font-weight:700">${c.kwan}</td>
         <td style="padding:9px 14px;color:var(--text3);font-family:var(--mono)">${c.prev}</td>
