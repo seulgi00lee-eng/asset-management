@@ -2344,7 +2344,7 @@ async function runCostCalc(){
   });
 
   costResult = Object.values(deptMap)
-    .sort((a,b) => b.총비용 - a.총비용);
+    .sort((a,b) => cmpKwan(a.code, b.code));
 
   // ── KPI 카드 ──
   const setEl = (id, html) => { const el = document.getElementById(id); if(el) el.innerHTML = html; };
@@ -2381,6 +2381,8 @@ async function runCostCalc(){
       va = a.총비용; vb = b.총비용;
     } else if(costSortCol === '항목수') {
       va = a.항목수; vb = b.항목수;
+    } else if(costSortCol === 'code') {
+      return costSortAsc ? cmpKwan(a.code, b.code) : cmpKwan(b.code, a.code);
     } else {
       va = String(a[costSortCol]||''); vb = String(b[costSortCol]||'');
       return costSortAsc ? va.localeCompare(vb,'ko') : vb.localeCompare(va,'ko');
@@ -5492,8 +5494,8 @@ function autoMapRentalKwan(rows) {
 }
 
 // ── 비용 피벗 테이블 정렬 상태 ──
-let costSortCol = '비용합계';  // 기본: 비용합계 내림차순
-let costSortAsc = false;
+let costSortCol = 'code';  // 기본: 관코드 오름차순 (공통 최상단 → 101,102,103…)
+let costSortAsc = true;
 
 function setCostSort(col) {
   if(costSortCol === col) {
@@ -6731,13 +6733,22 @@ function renderAssetMoves(){
   if(!el) return;
   const splitK = s => String(s||'').split(/[,，\s]+/).map(x=>x.trim()).filter(Boolean);
   const normK = s => splitK(s).sort().join(',');
-  const catByCode = {}, catByKwan = {};
+  const catByCode = {}, catBySig = {};
+  const nameOf = r => r['렌탈품목'] || r['자산명'] || '';
   (SAMPLE.rental.rows||[]).forEach(r=>{
     const cat = r['분류']||'';
     if(!cat) return;
     if(r['자산코드']) catByCode[String(r['자산코드']).trim()] = cat;
-    if(r['관코드']) catByKwan[normK(r['관코드'])] = cat;
+    if(r['관코드']){
+      const sig = nameOf(r) + '|' + normK(r['관코드']);
+      (catBySig[sig] = catBySig[sig] || new Set()).add(cat);
+    }
   });
+  // 자산명 + 관코드 세트가 일치하고 결과가 모호하지 않을 때만 분류 반환 (틀린 라벨 방지)
+  const sigCat = (name, kwan) => {
+    const set = catBySig[(name||'') + '|' + normK(kwan)];
+    return (set && set.size === 1) ? [...set][0] : '';
+  };
 
   const moves = (assetMoveData||[]).filter(h=>{
     const a=(h['이전관코드']||'').trim(), b=(h['이후관코드']||'').trim();
@@ -6751,21 +6762,6 @@ function renderAssetMoves(){
     const ka=(a['적용시작월']||a['일시']||''), kb=(b['적용시작월']||b['일시']||'');
     return kb.localeCompare(ka);
   });
-
-  // 분류 전파: rental 현재상태를 시드로, 이전↔이후 관코드 세트를 따라 같은 자산 체인에 분류 채움
-  const setCat = {...catByKwan};
-  let changed = true, guard = 0;
-  while(changed && guard++ < 30){
-    changed = false;
-    moves.forEach(h=>{
-      const pk = normK(h['이전관코드']), nk = normK(h['이후관코드']);
-      const c = setCat[pk] || setCat[nk];
-      if(c){
-        if(pk && !setCat[pk]){ setCat[pk] = c; changed = true; }
-        if(nk && !setCat[nk]){ setCat[nk] = c; changed = true; }
-      }
-    });
-  }
 
   const esc = s => String(s||'').replace(/"/g,'&quot;');
   const chips = (list) => list.length
@@ -6786,8 +6782,8 @@ function renderAssetMoves(){
       const name = h['자산명']||'—';
       const cat = h['분류']
         || catByCode[String(h['자산코드']||'').trim()]
-        || setCat[normK(h['이후관코드'])]
-        || setCat[normK(h['이전관코드'])]
+        || sigCat(h['자산명'], h['이후관코드'])
+        || sigCat(h['자산명'], h['이전관코드'])
         || '';
       const prevHtml = chips(splitK(h['이전관코드']));
       const nextHtml = chips(splitK(h['이후관코드']));
