@@ -2436,7 +2436,7 @@ async function runCostCalc(){
   });
   const totalItemCount = costResult.reduce((s,d) => s + d.항목수, 0);
   if(tfoot) tfoot.innerHTML = `<tr style="background:var(--cream2);border-top:2px solid var(--text)">
-    <td colspan="4" style="padding:9px 10px;font-weight:700;font-size:12px">합계</td>
+    <td colspan="5" style="padding:9px 10px;font-weight:700;font-size:12px">합계</td>
     ${FIXED_CATS.map(c=>TDN(catTotals[c])).join('')}
     ${TD(fmt(Math.round(totalAmt)), 'text-align:right;font-family:var(--mono);font-weight:700;')}
     ${TD(totalItemCount+'건', 'font-weight:700;')}
