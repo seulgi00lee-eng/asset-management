@@ -2433,8 +2433,15 @@ async function runCostCalc(){
 
   renderCostDetail();
 
-  // 관코드 드롭다운 체크박스 초기화
-  const kwanCodes = costResult.map(d => d.code);
+  // 관코드 드롭다운 체크박스 초기화 (오름차순 정렬: 숫자 우선 101,102,103…, 비숫자는 뒤로)
+  const kwanCodes = costResult.map(d => d.code).sort((a, b) => {
+    const sa = String(a).trim(), sb = String(b).trim();
+    const aNum = /^\d+$/.test(sa), bNum = /^\d+$/.test(sb);
+    if(aNum && bNum) return Number(sa) - Number(sb);
+    if(aNum) return -1;
+    if(bNum) return 1;
+    return sa.localeCompare(sb, 'ko');
+  });
   const wrap = document.getElementById('kwanFilterWrap');
   const boxes = document.getElementById('kwanFilterBoxes');
   if(wrap && boxes && kwanCodes.length) {
