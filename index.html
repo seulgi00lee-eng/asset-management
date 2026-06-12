@@ -2726,16 +2726,28 @@ function renderVendorVerify(){
     </tr></thead>
     <tbody>${rows.map((r,vi)=>{
       const ok = Math.abs(r.차이) < 1;
-      const adetail = r.assetsArr.slice()
-        .sort((a,b)=> Math.abs(b.sumSplit-b.origAmt) - Math.abs(a.sumSplit-a.origAmt))
-        .map(a=>{
-          const ad = a.sumSplit - a.origAmt, aok = Math.abs(ad) < 1;
-          return `<div style="padding:6px 10px;border-bottom:1px dashed var(--border);${aok?'':'background:#fdecec'}">
-            <div style="font-size:11px;font-weight:600">${a.기종||a.관코드||'—'} <span style="font-weight:400;color:var(--text3)">· ${a.건물명||''} ${a.층수||''}</span></div>
-            <div style="font-size:10px;color:var(--text2);margin-top:2px">청구 ${fmtN(a.origAmt)} · 배분합 <b>${fmtN(a.sumSplit)}</b> · 관 ${a.copies}/${a.kwanCount}개${aok?'':` · <b style="color:#991b1b">차이 ${fmtN(ad)}</b>`}</div>
-            <div style="font-size:10px;color:var(--text3);margin-top:2px;font-family:var(--mono)">관코드: ${a.관코드||'—'}</div>
-          </div>`;
-        }).join('');
+      const adetail = `<div style="padding:4px 0"><table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="background:var(--cream2)">
+          <th style="padding:5px 14px;text-align:left;font-size:9px;color:var(--text3);font-weight:600">자산 (건물·층)</th>
+          <th style="padding:5px 14px;text-align:right;font-size:9px;color:var(--text3);font-weight:600">청구금액</th>
+          <th style="padding:5px 14px;text-align:right;font-size:9px;color:var(--text3);font-weight:600">배분합</th>
+          <th style="padding:5px 14px;text-align:center;font-size:9px;color:var(--text3);font-weight:600">관 수</th>
+          <th style="padding:5px 14px;text-align:left;font-size:9px;color:var(--text3);font-weight:600">관코드</th>
+        </tr></thead>
+        <tbody>${r.assetsArr.slice()
+          .sort((a,b)=> Math.abs(b.sumSplit-b.origAmt) - Math.abs(a.sumSplit-a.origAmt))
+          .map(a=>{
+            const ad = a.sumSplit - a.origAmt, aok = Math.abs(ad) < 1;
+            const loc = [a.건물명||'', a.층수||''].filter(Boolean).join(' ') || '—';
+            return `<tr style="border-bottom:1px solid var(--border);${aok?'':'background:#fdecec'}">
+              <td style="padding:5px 14px">${a.기종?`<b>${a.기종}</b> `:''}<span style="color:var(--text3)">${loc}</span></td>
+              <td style="padding:5px 14px;text-align:right;font-family:var(--mono)">${fmtN(a.origAmt)}</td>
+              <td style="padding:5px 14px;text-align:right;font-family:var(--mono);font-weight:700">${fmtN(a.sumSplit)}${aok?'':`<span style="color:#991b1b;font-size:9px"> (차이 ${fmtN(ad)})</span>`}</td>
+              <td style="padding:5px 14px;text-align:center;font-family:var(--mono);color:${a.copies<a.kwanCount?'#991b1b':'var(--text3)'}">${a.copies}/${a.kwanCount}</td>
+              <td style="padding:5px 14px;font-family:var(--mono);font-size:10px;color:var(--text3)">${a.관코드||'—'}</td>
+            </tr>`;
+          }).join('')}</tbody>
+      </table></div>`;
       return `<tr onclick="toggleVendorRow('${vi}')" style="border-bottom:1px solid var(--cream2);cursor:pointer">
         <td style="padding:6px 12px;font-weight:600">${r.업체}</td>
         <td style="padding:6px 12px"><span style="font-size:10px;padding:1px 7px;background:#f0e8fa;color:#5a1a8a;border-radius:10px">${r.분류}</span></td>
