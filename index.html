@@ -2196,11 +2196,11 @@ async function runCostCalc(){
     return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
   })();
 
-  // ── Supabase 렌탈자산 로드 ──
+  // ── Supabase 렌탈자산 로드 (항상 최신 저장 데이터를 다시 조회 — 캐시 사용 안 함) ──
   setLoading(true);
-  const rows = SAMPLE.rental.rows.length > 0
-    ? SAMPLE.rental.rows
-    : await sbSelect('rental');
+  const rows = await sbSelect('rental');
+  // 메모리 캐시는 원본(관코드 미변형) 사본으로 동기화 — 이력 덮어쓰기가 캐시를 오염시키지 않도록
+  SAMPLE.rental.rows = rows.map(r => ({ ...r }));
 
   // ── history 테이블에서 적용시작월 기준 관코드 이력 로드 ──
   let historyRows = [];
@@ -6809,10 +6809,43 @@ async function confirmCostMonthClose() {
     const ok = await sbInsert('cost_history', row);
     if(ok) success++;
   }
+
+  // ── 항목 명세 저장 (cost_history_items) — 누적 관리에서 항목 단위 상세 조회용 ──
+  let itemSaved = 0, itemFailed = false;
+  try {
+    await _supa.from('cost_history_items').delete().eq('year_month', ym); // 덮어쓰기 안전: 기존 항목 제거
+    const itemRows = [];
+    costResult.forEach(d => {
+      (d.items||[]).forEach(it => {
+        itemRows.push({
+          year_month: ym,
+          관코드: d.code,
+          업체명: it.업체명 || '',
+          분류: it.분류 || it.matchedCat || '',
+          기종: it.기종 || '',
+          건물명: it.건물명 || '',
+          층수: String(it.층수 || ''),
+          청구금액: Math.round(it.origAmt || 0),
+          배분금액: Math.round(it.splitAmt || 0),
+          관개수: it.kwanCount || 1,
+          공유관코드: Array.isArray(it.관코드) ? it.관코드.join(',') : String(it.관코드 || ''),
+          is_extra: !!it.isExtra
+        });
+      });
+    });
+    for(let i=0; i<itemRows.length; i+=500){
+      const chunk = itemRows.slice(i, i+500);
+      const { error } = await _supa.from('cost_history_items').insert(chunk);
+      if(error){ itemFailed = true; console.error('항목 저장 오류:', error.message); }
+      else itemSaved += chunk.length;
+    }
+  } catch(e){ itemFailed = true; console.error('항목 명세 저장 실패:', e); }
+
   setLoading(false);
   const badge = document.getElementById('nb-cost-history');
   if(badge){ badge.textContent='NEW'; badge.style.display='inline'; }
-  showToast(`✅ ${ym} 월 마감 완료 — ${success}개 관 저장됨`);
+  if(itemFailed) showToast(`✅ ${ym} 마감 완료(${success}개 관) · ⚠️ 항목명세 저장 실패 — cost_history_items 테이블 확인`);
+  else showToast(`✅ ${ym} 월 마감 완료 — ${success}개 관 · ${itemSaved}개 항목 저장됨`);
   await deleteDraftCost(); // 마감 완료 후 임시저장 자동 삭제
   if(!COST_MAIL_TEST_MODE){
     const totalAmt = costResult.reduce((s,d)=>s+d.총비용,0);
@@ -6964,21 +6997,113 @@ function renderCostHistoryTable() {
 }
 
 // 누적 관리 항목수 클릭 → 저장된 카테고리별 금액 상세 (읽기 전용, 재계산/저장 없음)
-function openCostHistItems(ym, kwan) {
+async function openCostHistItems(ym, kwan) {
   const r = costHistoryData.find(x => String(x['year_month'])===String(ym) && String(x['관코드'])===String(kwan));
   if(!r) { showToast('데이터를 찾을 수 없습니다'); return; }
+  const fmtn = n => Math.round(n).toLocaleString('ko-KR');
+  const total = Number(r['총비용'])||0;
+  const cnt = Number(r['항목수'])||0;
+  document.getElementById('moKwanItemsTitle').textContent = `관코드 ${kwan} — 항목 상세`;
+  document.getElementById('moKwanItemsSubtitle').textContent =
+    `${r['year_month']||''} 마감 · ${r['법인명']||'—'} · ${r['사업부']||'—'} · 총 ${cnt}건 · ${fmtn(total)}원`;
+  document.getElementById('moKwanItemsBody').innerHTML = `<div style="padding:24px;text-align:center;color:var(--text3)">불러오는 중…</div>`;
+  document.getElementById('moKwanItems').classList.add('open');
+
+  // 저장된 항목 명세 조회 (cost_history_items)
+  let items = [];
+  try {
+    const { data } = await _supa.from('cost_history_items')
+      .select('*').eq('year_month', ym).eq('관코드', String(kwan)).order('id');
+    items = data || [];
+  } catch(e){ console.warn('항목 명세 조회 실패:', e); }
+
+  if(items.length) renderCostHistItemDetail(kwan, items);
+  else             renderCostHistCatFallback(kwan, r, total, cnt);
+}
+
+// 저장된 항목 명세 → 메인과 동일한 항목 상세 표
+function renderCostHistItemDetail(kwan, items){
+  const fmt = n => Math.round(Number(n)||0).toLocaleString('ko-KR');
+  document.getElementById('moKwanItemsTitle').textContent = `관코드 ${kwan} — 항목 상세`;
+  // 분류별 소계
+  const bySub = {};
+  items.forEach(it=>{
+    const c = it['분류'] || '미분류';
+    (bySub[c] = bySub[c] || {청구:0, 배분:0, 건수:0});
+    bySub[c].청구 += Number(it['청구금액'])||0;
+    bySub[c].배분 += Number(it['배분금액'])||0;
+    bySub[c].건수 += 1;
+  });
+  const subRows = Object.entries(bySub).sort((a,b)=>b[1].배분 - a[1].배분);
+  const subHtml = subRows.length ? `
+    <div style="margin-bottom:14px">
+      <div style="font-size:10px;color:var(--text3);letter-spacing:1px;margin-bottom:6px">분류별 소계</div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="background:var(--cream2);border-bottom:1px solid var(--border)">
+          <th style="padding:7px 10px;text-align:left;font-size:9px;color:var(--text3)">분류</th>
+          <th style="padding:7px 10px;text-align:center;font-size:9px;color:var(--text3)">건수</th>
+          <th style="padding:7px 10px;text-align:right;font-size:9px;color:var(--text3)">청구금액 합</th>
+          <th style="padding:7px 10px;text-align:right;font-size:9px;color:var(--text3)">배분금액 합</th>
+        </tr></thead>
+        <tbody>${subRows.map(([c,v])=>`
+          <tr style="border-bottom:1px solid var(--cream2)">
+            <td style="padding:7px 10px"><span style="font-size:10px;padding:2px 7px;background:#f0e8fa;color:#5a1a8a;border-radius:10px">${c}</span></td>
+            <td style="padding:7px 10px;text-align:center;color:var(--text3)">${v.건수}건</td>
+            <td style="padding:7px 10px;text-align:right;font-family:var(--mono)">${fmt(v.청구)}</td>
+            <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-weight:700">${fmt(v.배분)}</td>
+          </tr>`).join('')}</tbody>
+      </table>
+    </div>` : '';
+  const totOrig  = items.reduce((s,it)=>s+(Number(it['청구금액'])||0),0);
+  const totSplit = items.reduce((s,it)=>s+(Number(it['배분금액'])||0),0);
+  document.getElementById('moKwanItemsBody').innerHTML = `
+    ${subHtml}
+    <table style="width:100%;border-collapse:collapse;font-size:11px">
+      <thead><tr style="background:var(--cream2);border-bottom:2px solid var(--text)">
+        <th style="padding:8px 10px;text-align:left">NO</th>
+        <th style="padding:8px 10px;text-align:left">업체명</th>
+        <th style="padding:8px 10px;text-align:left">분류</th>
+        <th style="padding:8px 10px;text-align:left">기종</th>
+        <th style="padding:8px 10px;text-align:left">건물명</th>
+        <th style="padding:8px 10px;text-align:left">층수</th>
+        <th style="padding:8px 10px;text-align:right">청구금액</th>
+        <th style="padding:8px 10px;text-align:right">배분금액</th>
+      </tr></thead>
+      <tbody>
+        ${items.map((it,idx)=>{
+          const ex = it['is_extra']===true || it['is_extra']==='true';
+          const sa = Number(it['배분금액'])||0;
+          const kc = Number(it['관개수'])||1;
+          return `<tr style="border-bottom:1px solid var(--cream2);${idx%2===1?'background:var(--cream2)':''}">
+            <td style="padding:7px 10px;color:var(--text3)">${idx+1}</td>
+            <td style="padding:7px 10px">${it['업체명']||'—'}</td>
+            <td style="padding:7px 10px"><span style="font-size:10px;padding:2px 7px;background:#f0e8fa;color:#5a1a8a;border-radius:10px">${it['분류']||'—'}</span></td>
+            <td style="padding:7px 10px">${it['기종']||'—'}</td>
+            <td style="padding:7px 10px">${it['건물명']||'—'}</td>
+            <td style="padding:7px 10px">${it['층수']||'—'}</td>
+            <td style="padding:7px 10px;text-align:right;font-family:var(--mono);${ex?'color:#5a1a8a':''}">${fmt(it['청구금액'])}${kc>1?` <span style="font-size:9px;color:var(--text3)">÷${kc}</span>`:''}</td>
+            <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-weight:700;${ex?(sa<0?'color:#991b1b':'color:#5a1a8a'):''}">${fmt(sa)}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+      <tfoot><tr style="background:var(--cream2);border-top:2px solid var(--text)">
+        <td colspan="6" style="padding:8px 10px;font-weight:700">합계</td>
+        <td style="padding:8px 10px;text-align:right;font-family:var(--mono);font-weight:700">${fmt(totOrig)}</td>
+        <td style="padding:8px 10px;text-align:right;font-family:var(--mono);font-weight:700">${fmt(totSplit)}</td>
+      </tr></tfoot>
+    </table>`;
+}
+
+// 항목 명세 미저장 달 → 카테고리별 합계 폴백
+function renderCostHistCatFallback(kwan, r, total, cnt){
+  const fmtn = n => Math.round(n).toLocaleString('ko-KR');
+  document.getElementById('moKwanItemsTitle').textContent = `관코드 ${kwan} — 카테고리별 상세`;
   const cats = FIXED_CATS_HIST.map(c => {
     const key = c==='LMS'?'lms':c;
     return { name:c, amt: Number(r[key])||0 };
   }).filter(x => x.amt>0);
-  const total = Number(r['총비용'])||0;
-  const cnt = Number(r['항목수'])||0;
-  const fmtn = n => Math.round(n).toLocaleString('ko-KR');
-  document.getElementById('moKwanItemsTitle').textContent = `관코드 ${kwan} — 카테고리별 상세`;
-  document.getElementById('moKwanItemsSubtitle').textContent =
-    `${r['year_month']||''} 마감 · ${r['법인명']||'—'} · ${r['사업부']||'—'} · 총 ${cnt}건 · ${fmtn(total)}원`;
   document.getElementById('moKwanItemsBody').innerHTML = `
-    <div style="font-size:11px;color:var(--text3);margin-bottom:10px;padding:8px 10px;background:var(--cream2);border-left:3px solid var(--gold)">※ 이 달은 항목 명세가 저장되지 않아 <b>카테고리별 합계</b>로 표시합니다 (저장된 마감값 그대로 · 재계산 없음).</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px;padding:8px 10px;background:var(--cream2);border-left:3px solid var(--gold)">※ 이 달은 항목 명세가 저장되지 않아 <b>카테고리별 합계</b>로 표시합니다. 항목 단위로 보려면 해당 월을 다시 마감(덮어쓰기)하세요.</div>
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr style="background:var(--cream2);border-bottom:2px solid var(--text)">
         <th style="padding:8px 10px;text-align:left">카테고리</th>
@@ -6999,7 +7124,6 @@ function openCostHistItems(ym, kwan) {
         <td style="padding:8px 10px;text-align:right;color:var(--text3)">${cnt}건</td>
       </tr></tfoot>
     </table>`;
-  document.getElementById('moKwanItems').classList.add('open');
 }
 
 // 관코드 정렬 비교자: '공통' 포함 → 최상단, 그다음 숫자 오름차순(101,102,…), 나머지는 뒤
