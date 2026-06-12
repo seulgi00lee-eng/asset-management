@@ -2683,12 +2683,17 @@ function renderVendorVerify(){
   const vmap = {};
   const extras = [];
   costResult.forEach(d => (d.items||[]).forEach(it=>{
-    if(it.isExtra){ extras.push({
-      관코드: it.deptCode || d.code || '',
-      분류: it.분류 || it.matchedCat || '',
-      사유: String(it.업체명||'').replace(/^\[추가\/상계\]\s*/,'').replace(/^\[추가비용\]$/,'(사유 미입력)'),
-      금액: it.splitAmt || 0
-    }); return; }
+    if(it.isExtra){
+      if(!/^\[공통반영\]/.test(String(it.업체명||''))){
+        extras.push({
+          관코드: it.deptCode || d.code || '',
+          분류: it.분류 || it.matchedCat || '',
+          사유: String(it.업체명||'').replace(/^\[추가\/상계\]\s*/,'').replace(/^\[추가비용\]$/,'(사유 미입력)'),
+          금액: it.splitAmt || 0
+        });
+      }
+      return;
+    }
     const vendor = it.업체명 || '미상';
     const cat = it.분류 || it.matchedCat || '미분류';
     const vkey = vendor + '\u0001' + cat;
@@ -2713,9 +2718,7 @@ function renderVendorVerify(){
   const addTot = extras.filter(e=>e.금액>0).reduce((s,e)=>s+e.금액,0);
   const offTot = extras.filter(e=>e.금액<0).reduce((s,e)=>s+e.금액,0);
   const extraTot = addTot + offTot;
-  const netAlloc = totAlloc + extraTot;
-  sumEl.innerHTML = `청구 ${fmtN(totClaim)} · 배분 ${fmtN(totAlloc)} · 차이 <b style="color:${tOk?'#2a6a2a':'#991b1b'}">${tOk?'0 (일치)':fmtN(tdiff)}</b>`
-    + (extras.length ? ` <span style="color:var(--text3)">·</span> 추가·상계 <b style="color:${extraTot<0?'#991b1b':'#5a1a8a'}">${fmtN(extraTot)}</b> <span style="color:var(--text3)">·</span> 최종 배분 <b>${fmtN(netAlloc)}</b>` : '');
+  sumEl.innerHTML = `청구 ${fmtN(totClaim)} · 배분 ${fmtN(totAlloc)} · 차이 <b style="color:${tOk?'#2a6a2a':'#991b1b'}">${tOk?'0 (일치)':fmtN(tdiff)}</b>`;
   const extrasHtml = extras.length ? `
     <div style="border-top:1px solid var(--border);padding:10px 12px;background:var(--cream)">
       <div style="font-size:10px;color:var(--text3);letter-spacing:1px;margin-bottom:6px">추가·상계 내역 <span style="font-weight:400">· 위 검증 합계에는 포함되지 않음</span></div>
@@ -2796,27 +2799,12 @@ function renderVendorVerify(){
       </tr>
       <tr id="vv-detail-${vi}" style="display:none"><td colspan="5" style="padding:0;background:var(--cream)">${adetail}</td></tr>`;
     }).join('')}</tbody>
-    <tfoot>
-    <tr style="background:var(--cream2);border-top:2px solid var(--text)">
-      <td colspan="2" style="padding:8px 12px;font-weight:700;font-size:12px">업체 청구·배분 합계</td>
+    <tfoot><tr style="background:var(--cream2);border-top:2px solid var(--text)">
+      <td colspan="2" style="padding:8px 12px;font-weight:700;font-size:12px">합계</td>
       <td style="padding:8px 12px;text-align:right;font-family:var(--mono);font-weight:700">${fmtN(totClaim)}</td>
       <td style="padding:8px 12px;text-align:right;font-family:var(--mono);font-weight:700">${fmtN(totAlloc)}</td>
       <td style="padding:8px 12px;text-align:right;font-family:var(--mono);font-weight:700;color:${tOk?'#2a6a2a':'#991b1b'}">${tOk?'일치':fmtN(tdiff)}</td>
-    </tr>
-    ${extras.length ? `
-    <tr style="background:var(--cream)">
-      <td colspan="2" style="padding:7px 12px;color:var(--text2)">＋ 공통 (추가·상계)</td>
-      <td style="padding:7px 12px"></td>
-      <td style="padding:7px 12px;text-align:right;font-family:var(--mono);font-weight:700;color:${extraTot<0?'#991b1b':'#5a1a8a'}">${extraTot<0?'':'+'}${fmtN(extraTot)}</td>
-      <td style="padding:7px 12px"></td>
-    </tr>
-    <tr style="background:var(--cream2);border-top:1px solid var(--border)">
-      <td colspan="2" style="padding:8px 12px;font-weight:700">= 최종 배분 합계 <span style="font-weight:400;color:var(--text3);font-size:10px">(하단 써머리 합계와 동일)</span></td>
-      <td style="padding:8px 12px"></td>
-      <td style="padding:8px 12px;text-align:right;font-family:var(--mono);font-weight:700">${fmtN(netAlloc)}</td>
-      <td style="padding:8px 12px"></td>
-    </tr>` : ''}
-    </tfoot>
+    </tr></tfoot>
   </table></div>${extrasHtml}`;
 }
 
@@ -5934,11 +5922,17 @@ async function handleRegionFiles(files) {
     const f = fileArr[i];
     if(progText) progText.textContent = `분석 중 (${i+1}/${fileArr.length}): ${f.name}`;
     if(progBar)  progBar.style.width = Math.round((i/fileArr.length)*100) + '%';
+    const ext = f.name.split('.').pop().toLowerCase();
     try {
       const items = await analyzeRegionFile(f);
-      items.forEach(item => extracted.push(item));
       const st = document.getElementById(`rfile-st-${i}`);
-      if(st) st.textContent = `✅ ${items.length}건`;
+      if(['xlsx','xls','csv'].includes(ext)){
+        // 구조화 템플릿 → parseLMSExcel이 메인 써머리에 직접 반영 (지역 미리보기 불필요)
+        if(st) st.textContent = '✅ 반영됨';
+      } else {
+        items.forEach(item => extracted.push(item));
+        if(st) st.textContent = `✅ ${items.length}건`;
+      }
     } catch(err) {
       console.error(err);
       const st = document.getElementById(`rfile-st-${i}`);
@@ -5947,10 +5941,12 @@ async function handleRegionFiles(files) {
   }
 
   if(progBar) progBar.style.width = '100%';
-  if(progText) progText.textContent = `✅ 분석 완료 — ${extracted.length}개 항목 추출됨. 내용을 확인해주세요.`;
-
-  // 미리보기 팝업 표시
-  showRegionPreview(extracted);
+  if(extracted.length){
+    if(progText) progText.textContent = `✅ 분석 완료 — ${extracted.length}개 항목 추출됨. 내용을 확인해주세요.`;
+    showRegionPreview(extracted);
+  } else {
+    if(progText) progText.textContent = `✅ 처리 완료`;
+  }
   document.getElementById('regionFileInput').value = '';
 }
 
@@ -6166,41 +6162,71 @@ async function parseLMSExcel(file) {
     const ws = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
 
+    const VALID_CATS = ['LMS','캡스','청소용역','청소용품'];
     const ym = getCurYearMonth();
-    const kwanAmts = {};
 
-    for(const row of rows) {
-      const kwanCode = String(row[1]||'').trim(); // B열 = 수익코드/관코드
-      const amtRaw   = row[6];                    // G열 = 금액(VAT+)
+    // ── 헤더행 자동 탐지 (품목·금액·관코드 컬럼을 이름으로 매핑 — 열 순서 바뀌어도 안전) ──
+    let col = null;
+    for(let i=0; i<rows.length; i++){
+      const r = (rows[i]||[]).map(c => String(c==null?'':c).replace(/\s/g,''));
+      const ciItem = r.findIndex(c => c === '품목');
+      const ciAmt  = r.findIndex(c => c.includes('금액'));
+      const ciKwan = r.findIndex(c => c.includes('관코드'));
+      if(ciItem>=0 && ciAmt>=0 && ciKwan>=0){ col = {item:ciItem, amt:ciAmt, kwan:ciKwan, start:i+1}; break; }
+    }
+    if(!col){ showToast('❌ 템플릿 헤더(품목·금액·관코드)를 찾을 수 없습니다'); return []; }
+
+    // ── (관코드 × 품목) 단위로 금액 합산 ──
+    const agg = {};   // `${관코드}|${분류}` → 금액
+    for(let i=col.start; i<rows.length; i++){
+      const row = rows[i] || [];
+      const cat = String(row[col.item]||'').trim();
+      const kwanCode = String(row[col.kwan]||'').trim();
+      const amt = Number(String(row[col.amt]).replace(/[^0-9.-]/g,'')) || 0;
+      if(!VALID_CATS.includes(cat)) continue;
       if(!kwanCode || isNaN(Number(kwanCode))) continue;
-      const amt = Number(String(amtRaw).replace(/[^0-9.-]/g,'')) || 0;
       if(!amt) continue;
-      kwanAmts[kwanCode] = (kwanAmts[kwanCode]||0) + amt;
+      const key = kwanCode + '|' + cat;
+      agg[key] = (agg[key]||0) + amt;
     }
 
-    // Supabase에 저장 + additionalCostMap에도 반영
+    const entries = Object.entries(agg);
+    if(!entries.length){ showToast('❌ 반영할 항목이 없습니다 — 품목(LMS/캡스/청소용역/청소용품)·금액·관코드를 확인하세요'); return []; }
+
+    const total   = entries.reduce((s,[,v])=>s+v, 0);
+    const kwanSet = new Set(entries.map(([k])=>k.split('|')[0]));
+    const catSet  = new Set(entries.map(([k])=>k.split('|')[1]));
+    if(!confirm(
+      `📋 파일 반영 확인\n\n· 관코드 ${kwanSet.size}개\n· 분류 ${[...catSet].join(', ')}\n· 항목 ${entries.length}건\n· 합계 ${Math.round(total).toLocaleString()}원\n\n메인 써머리(관별 비용 배분)에 반영합니다.\n동일 관코드·분류의 기존 금액은 덮어씁니다.`
+    )){ return []; }
+
+    // ── Supabase 저장 + additionalCostMap 반영 ──
     setLoading(true);
-    for(const [kwanCode, amt] of Object.entries(kwanAmts)) {
-      const existing = additionalCostMap[kwanCode]?.['LMS'];
+    let okCnt = 0;
+    for(const [key, amtv] of entries){
+      const [kwanCode, cat] = key.split('|');
+      const amt = Math.round(amtv);
+      const existing = additionalCostMap[kwanCode]?.[cat];
       let error;
-      if(existing?.id) {
+      if(existing?.id){
         ({ error } = await _supa.from('cost_extra')
-          .update({ 금액: Math.round(amt), 사유: 'LMS 파일 자동입력' })
+          .update({ 금액: amt, 사유: '파일 자동입력' })
           .eq('id', existing.id));
       } else {
         ({ error } = await _supa.from('cost_extra')
-          .insert([{ year_month: ym, 관코드: kwanCode, 분류: 'LMS', 금액: Math.round(amt), 사유: 'LMS 파일 자동입력' }]));
+          .insert([{ year_month: ym, 관코드: kwanCode, 분류: cat, 금액: amt, 사유: '파일 자동입력' }]));
       }
-      if(!error) {
+      if(!error){
         if(!additionalCostMap[kwanCode]) additionalCostMap[kwanCode] = {};
-        additionalCostMap[kwanCode]['LMS'] = { amt: Math.round(amt), reason: 'LMS 파일 자동입력', id: existing?.id || null };
+        additionalCostMap[kwanCode][cat] = { amt, reason: '파일 자동입력', id: existing?.id || null };
+        okCnt++;
       }
     }
     setLoading(false);
 
-    // additionalCostMap 최신 id로 갱신
+    // 최신 id 갱신 + 메인 써머리 재계산·반영
     await loadAdditionalCostMap();
-    showToast(`✅ LMS ${Object.keys(kwanAmts).length}개 관코드 저장 및 반영됨`);
+    showToast(`✅ ${kwanSet.size}개 관코드 · ${okCnt}건 반영 (합계 ${Math.round(total).toLocaleString()}원)`);
     return [];
   } catch(err) {
     setLoading(false);
