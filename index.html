@@ -2658,8 +2658,14 @@ function renderVendorVerify(){
   if(!sumEl || !bodyEl) return;
   const fmtN = n => Math.round(n).toLocaleString('ko-KR');
   const vmap = {};
+  const extras = [];
   costResult.forEach(d => (d.items||[]).forEach(it=>{
-    if(it.isExtra) return;  // 수기 추가비용은 업체 청구 원천이 아니므로 제외
+    if(it.isExtra){ extras.push({
+      관코드: it.deptCode || d.code || '',
+      분류: it.분류 || it.matchedCat || '',
+      사유: String(it.업체명||'').replace(/^\[추가\/상계\]\s*/,'').replace(/^\[추가비용\]$/,'(사유 미입력)'),
+      금액: it.splitAmt || 0
+    }); return; }
     const vendor = it.업체명 || '미상';
     const cat = it.분류 || it.matchedCat || '미분류';
     const vkey = vendor + '\u0001' + cat;
@@ -2682,7 +2688,33 @@ function renderVendorVerify(){
   const totAlloc = rows.reduce((s,r)=>s+r.배분,0);
   const tdiff = totAlloc - totClaim, tOk = Math.abs(tdiff) < 1;
   sumEl.innerHTML = `청구 ${fmtN(totClaim)} · 배분 ${fmtN(totAlloc)} · 차이 <b style="color:${tOk?'#2a6a2a':'#991b1b'}">${tOk?'0 (일치)':fmtN(tdiff)}</b>`;
-  if(!rows.length){ bodyEl.innerHTML = '<div style="padding:14px;color:var(--text3);font-size:11px">데이터가 없습니다</div>'; return; }
+  const extraTot = extras.reduce((s,e)=>s+e.금액,0);
+  const addTot = extras.filter(e=>e.금액>0).reduce((s,e)=>s+e.금액,0);
+  const offTot = extras.filter(e=>e.금액<0).reduce((s,e)=>s+e.금액,0);
+  const extrasHtml = extras.length ? `
+    <div style="border-top:1px solid var(--border);padding:10px 12px;background:var(--cream)">
+      <div style="font-size:10px;color:var(--text3);letter-spacing:1px;margin-bottom:6px">추가·상계 내역 <span style="font-weight:400">· 위 검증 합계에는 포함되지 않음</span></div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="border-bottom:1px solid var(--border)">
+          <th style="padding:5px 10px;text-align:left;font-size:9px;color:var(--text3)">관코드</th>
+          <th style="padding:5px 10px;text-align:left;font-size:9px;color:var(--text3)">분류</th>
+          <th style="padding:5px 10px;text-align:left;font-size:9px;color:var(--text3)">사유</th>
+          <th style="padding:5px 10px;text-align:right;font-size:9px;color:var(--text3)">금액</th>
+        </tr></thead>
+        <tbody>${extras.slice().sort((a,b)=>cmpKwan(a.관코드,b.관코드)).map(e=>`
+          <tr style="border-bottom:1px solid var(--cream2)">
+            <td style="padding:5px 10px;font-family:var(--mono);font-weight:600">${e.관코드}</td>
+            <td style="padding:5px 10px">${e.분류||'—'}</td>
+            <td style="padding:5px 10px;color:var(--text2)">${e.사유}</td>
+            <td style="padding:5px 10px;text-align:right;font-family:var(--mono);font-weight:700;color:${e.금액<0?'#991b1b':'#5a1a8a'}">${e.금액<0?'':'+'}${fmtN(e.금액)}</td>
+          </tr>`).join('')}</tbody>
+        <tfoot><tr style="border-top:1px solid var(--border)">
+          <td colspan="3" style="padding:6px 10px;font-weight:700">소계 · 추가 +${fmtN(addTot)} / 상계 ${fmtN(offTot)}</td>
+          <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-weight:700;color:${extraTot<0?'#991b1b':'#5a1a8a'}">${extraTot<0?'':'+'}${fmtN(extraTot)}</td>
+        </tr></tfoot>
+      </table>
+    </div>` : '';
+  if(!rows.length){ bodyEl.innerHTML = '<div style="padding:14px;color:var(--text3);font-size:11px">검증할 청구 데이터가 없습니다</div>' + extrasHtml; return; }
   bodyEl.innerHTML = `<div style="padding:6px 12px;font-size:10px;color:var(--text3)">행을 클릭하면 자산별 청구·배분 분해가 열립니다 (차이 나는 자산은 빨갛게 표시)</div>
   <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">
     <thead><tr style="background:var(--cream);border-bottom:1px solid var(--border)">
@@ -2719,7 +2751,7 @@ function renderVendorVerify(){
       <td style="padding:8px 12px;text-align:right;font-family:var(--mono);font-weight:700">${fmtN(totAlloc)}</td>
       <td style="padding:8px 12px;text-align:right;font-family:var(--mono);font-weight:700;color:${tOk?'#2a6a2a':'#991b1b'}">${tOk?'일치':fmtN(tdiff)}</td>
     </tr></tfoot>
-  </table></div>`;
+  </table></div>${extrasHtml}`;
 }
 
 function toggleVendorRow(vi){
