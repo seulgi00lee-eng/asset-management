@@ -7432,59 +7432,95 @@ function renderAssetMoves(){
   </table>`;
 }
 
+let _cmpKwanMonths = {}, _cmpAllMonths = [];
+
 function renderCostHistoryChanges(data) {
   const el = document.getElementById('costHistoryChanges');
   if(!el) return;
 
-  // 관코드별로 월별 총비용 비교 → 변동 감지
+  // 관코드별 월별 총비용 집계 + 마감월 목록
   const kwanMonths = {};
+  const monthSet = new Set();
   data.forEach(r => {
-    const k = r['관코드'];
-    const m = r['year_month'];
+    const k = r['관코드'], m = r['year_month'];
     if(!k||!m) return;
+    monthSet.add(m);
     if(!kwanMonths[k]) kwanMonths[k] = {};
-    kwanMonths[k][m] = (kwanMonths[k][m]||0) + (r['총비용']||0);
+    kwanMonths[k][m] = (kwanMonths[k][m]||0) + (Number(r['총비용'])||0);
   });
+  _cmpKwanMonths = kwanMonths;
+  _cmpAllMonths = [...monthSet].sort();
 
-  const changes = [];
-  Object.entries(kwanMonths).forEach(([kwan, months]) => {
-    const sortedM = Object.keys(months).sort();
-    for(let i=1;i<sortedM.length;i++){
-      const prev = sortedM[i-1];
-      const curr = sortedM[i];
-      const diff = months[curr] - months[prev];
-      if(Math.abs(diff) > 0){
-        changes.push({ kwan, prev, curr, prevAmt:months[prev], currAmt:months[curr], diff });
-      }
-    }
-  });
-
-  if(!changes.length){
-    el.innerHTML = '<div class="empty"><div class="ei">📋</div><div class="et">마감 데이터가 2개월 이상이면 변동 이력이 표시됩니다</div></div>';
+  if(_cmpAllMonths.length < 2){
+    el.innerHTML = '<div class="empty"><div class="ei">📋</div><div class="et">마감 데이터가 2개월 이상이면 비교가 표시됩니다</div></div>';
     return;
   }
 
-  el.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+  // 당월 후보: 전월이 있는 달(2번째~최신), 최신이 기본 선택
+  const latest = _cmpAllMonths[_cmpAllMonths.length-1];
+  const candMonths = _cmpAllMonths.slice(1).reverse(); // 최신 먼저
+  const optHtml = candMonths.map(m=>{
+    const prev = _cmpAllMonths[_cmpAllMonths.indexOf(m)-1];
+    return `<option value="${m}" ${m===latest?'selected':''}>${m} (전월 ${prev})</option>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+      <span style="font-size:11px;color:var(--text3)">비교 당월</span>
+      <select id="costCompareMonthSel" onchange="renderCostCompare()" style="border:1px solid var(--border);padding:6px 12px;font-size:12px;font-family:var(--mono);background:var(--cream);outline:none;font-weight:600">
+        ${optHtml}
+      </select>
+      <span id="costCompareHint" style="font-size:11px;color:var(--text3)"></span>
+    </div>
+    <div id="costCompareTable"></div>`;
+  renderCostCompare();
+}
+
+function renderCostCompare(){
+  const wrap = document.getElementById('costCompareTable');
+  if(!wrap) return;
+  const curr = document.getElementById('costCompareMonthSel')?.value || _cmpAllMonths[_cmpAllMonths.length-1];
+  const idx = _cmpAllMonths.indexOf(curr);
+  const prev = idx>0 ? _cmpAllMonths[idx-1] : null;
+  const hint = document.getElementById('costCompareHint');
+  if(hint) hint.textContent = prev ? `전월 ${prev} → 당월 ${curr}` : '';
+  if(!prev){ wrap.innerHTML = '<div class="empty"><div class="et">전월 데이터가 없습니다</div></div>'; return; }
+
+  // 두 달 중 하나라도 등장한 모든 관코드
+  const kwans = Object.keys(_cmpKwanMonths).filter(k => (_cmpKwanMonths[k][curr]!=null) || (_cmpKwanMonths[k][prev]!=null));
+  const rows = kwans.map(k=>{
+    const prevAmt = Number(_cmpKwanMonths[k][prev]||0);
+    const currAmt = Number(_cmpKwanMonths[k][curr]||0);
+    return { kwan:k, prevAmt, currAmt, diff: currAmt-prevAmt };
+  }).sort((a,b)=>cmpKwan(a.kwan,b.kwan));
+
+  const totPrev = rows.reduce((s,r)=>s+r.prevAmt,0);
+  const totCurr = rows.reduce((s,r)=>s+r.currAmt,0);
+  const totDiff = totCurr - totPrev;
+  const dcol = d => d>0?'#8a2a2a':d<0?'#2a6a2a':'var(--text3)';
+  const dsym = d => d>0?'▲':d<0?'▼':'—';
+
+  wrap.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
     <thead><tr style="background:var(--cream2);border-bottom:1px solid var(--border)">
-      <th style="padding:9px 14px;font-size:9px;color:var(--text3)">관코드</th>
-      <th style="padding:9px 14px;font-size:9px;color:var(--text3)">전월</th>
-      <th style="padding:9px 14px;font-size:9px;color:var(--text3)">당월</th>
-      <th style="padding:9px 14px;text-align:right;font-size:9px;color:var(--text3)">전월 비용</th>
-      <th style="padding:9px 14px;text-align:right;font-size:9px;color:var(--text3)">당월 비용</th>
+      <th style="padding:9px 14px;text-align:left;font-size:9px;color:var(--text3)">관코드</th>
+      <th style="padding:9px 14px;text-align:right;font-size:9px;color:var(--text3)">전월 (${prev})</th>
+      <th style="padding:9px 14px;text-align:right;font-size:9px;color:var(--text3)">당월 (${curr})</th>
       <th style="padding:9px 14px;text-align:right;font-size:9px;color:var(--text3)">변동</th>
     </tr></thead>
-    <tbody>${changes.sort((a,b)=>cmpKwan(a.kwan,b.kwan)).map(c=>`
+    <tbody>${rows.map(c=>`
       <tr style="border-bottom:1px solid var(--cream2)">
         <td style="padding:9px 14px;font-family:var(--mono);font-weight:700">${c.kwan}</td>
-        <td style="padding:9px 14px;color:var(--text3);font-family:var(--mono)">${c.prev}</td>
-        <td style="padding:9px 14px;font-family:var(--mono)">${c.curr}</td>
-        <td style="padding:9px 14px;text-align:right;font-family:var(--mono)">${fmt(Math.round(c.prevAmt))}원</td>
+        <td style="padding:9px 14px;text-align:right;font-family:var(--mono);color:var(--text3)">${fmt(Math.round(c.prevAmt))}원</td>
         <td style="padding:9px 14px;text-align:right;font-family:var(--mono);font-weight:700">${fmt(Math.round(c.currAmt))}원</td>
-        <td style="padding:9px 14px;text-align:right;font-family:var(--mono);font-weight:700;color:${c.diff>0?'#8a2a2a':'#2a6a2a'}">
-          ${c.diff>0?'▲':'▼'} ${fmt(Math.abs(Math.round(c.diff)))}원
-        </td>
+        <td style="padding:9px 14px;text-align:right;font-family:var(--mono);font-weight:700;color:${dcol(c.diff)}">${dsym(c.diff)} ${c.diff!==0?fmt(Math.abs(Math.round(c.diff)))+'원':''}</td>
       </tr>`).join('')}
     </tbody>
+    <tfoot><tr style="background:var(--cream2);border-top:2px solid var(--text)">
+      <td style="padding:9px 14px;font-weight:700">합계</td>
+      <td style="padding:9px 14px;text-align:right;font-family:var(--mono);font-weight:700">${fmt(Math.round(totPrev))}원</td>
+      <td style="padding:9px 14px;text-align:right;font-family:var(--mono);font-weight:700">${fmt(Math.round(totCurr))}원</td>
+      <td style="padding:9px 14px;text-align:right;font-family:var(--mono);font-weight:700;color:${dcol(totDiff)}">${dsym(totDiff)} ${totDiff!==0?fmt(Math.abs(Math.round(totDiff)))+'원':''}</td>
+    </tr></tfoot>
   </table></div>`;
 }
 
