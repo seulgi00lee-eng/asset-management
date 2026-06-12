@@ -2352,6 +2352,28 @@ async function runCostCalc(){
         matchedCat: cat,
         isExtra: true
       });
+
+      // ★ 상계(음수)는 비용 감소가 아니라 재배분 — 특정 관에서 뺀 금액을 '공통' 관코드에 +로 반영
+      //    (업체엔 실제 청구되므로 총액은 그대로 유지됨. 컬럼=분류 일치)
+      if(entry.amt < 0){
+        const CK = '공통';
+        if(!deptMap[CK]){
+          deptMap[CK] = { code: CK, 법인명: '—', 사업부: '공통', 브랜드: '—', catAmts: {}, 총비용: 0, 항목수: 0, items: [] };
+          FIXED_CATS.forEach(c => deptMap[CK].catAmts[c] = 0);
+        }
+        const off = -entry.amt;
+        deptMap[CK].catAmts[cat] = (deptMap[CK].catAmts[cat]||0) + off;
+        deptMap[CK].총비용 += off;
+        totalAmt += off;
+        deptMap[CK].항목수 += 1;
+        deptMap[CK].items.push({
+          deptCode: CK,
+          업체명: `[공통반영] ${entry.reason || '상계'} (${kwan} 상계분)`,
+          분류: cat, 렌탈품목: cat, 캠퍼스명: '', 건물명: '', 층수: '',
+          법인명: deptMap[CK].법인명 || '—',
+          origAmt: off, splitAmt: off, kwanCount: 1, matchedCat: cat, isExtra: true
+        });
+      }
     });
   });
 
