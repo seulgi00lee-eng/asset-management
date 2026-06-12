@@ -6740,8 +6740,8 @@ document.addEventListener('click', (e) => {
 
 document.addEventListener('click',e=>{if(!e.target.closest('#notifPanel')&&!e.target.closest('.tb-bell'))closeNotif();});
 
-// ── 테스트 모드: true이면 월 마감 시 메일 발송 안 함 ──
-const COST_MAIL_TEST_MODE = true;
+// ── 테스트 모드: true이면 월 마감 시 메일 발송 안 함 (false = 담당자 메일 발송 ON) ──
+const COST_MAIL_TEST_MODE = false;
 const FIXED_CATS_HIST = ['복합기','잉크젯','공기청정기','LMS','캡스','청소용역','청소용품'];
 let costHistoryData = [];
 let assetMoveData = [];
@@ -6814,7 +6814,14 @@ async function confirmCostMonthClose() {
   if(badge){ badge.textContent='NEW'; badge.style.display='inline'; }
   showToast(`✅ ${ym} 월 마감 완료 — ${success}개 관 저장됨`);
   await deleteDraftCost(); // 마감 완료 후 임시저장 자동 삭제
-  if(!COST_MAIL_TEST_MODE) await sendCostReportEmail(ym);
+  if(!COST_MAIL_TEST_MODE){
+    const totalAmt = costResult.reduce((s,d)=>s+d.총비용,0);
+    if(confirm(`📧 마감 메일 발송\n\n${ym} 월 마감이 저장되었습니다.\n담당자들에게 마감 결과 메일을 발송할까요?\n\n· 배분 관 ${costResult.length}개\n· 총 비용 ${fmt(Math.round(totalAmt))}원\n· 항목 ${costResult.reduce((s,d)=>s+d.항목수,0)}건`)){
+      await sendCostReportEmail(ym);
+    } else {
+      showToast('📭 메일 발송을 건너뛰었습니다 (마감은 저장됨)');
+    }
+  }
 }
 
 async function sendCostReportEmail(ym) {
