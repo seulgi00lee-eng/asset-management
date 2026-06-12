@@ -2657,6 +2657,7 @@ function renderVendorVerify(){
   const bodyEl = document.getElementById('vendorVerifyBody');
   if(!sumEl || !bodyEl) return;
   const fmtN = n => Math.round(n).toLocaleString('ko-KR');
+  const splitK = s => String(s||'').split(/[,，\s]+/).map(x=>x.trim()).filter(Boolean);
   const vmap = {};
   const extras = [];
   costResult.forEach(d => (d.items||[]).forEach(it=>{
@@ -2726,7 +2727,18 @@ function renderVendorVerify(){
     </tr></thead>
     <tbody>${rows.map((r,vi)=>{
       const ok = Math.abs(r.차이) < 1;
-      const adetail = `<div style="padding:4px 0"><table style="width:100%;border-collapse:collapse;font-size:11px">
+      const _kset = new Set();
+      r.assetsArr.forEach(a => splitK(a.관코드).forEach(k=>_kset.add(k)));
+      const kopts = [..._kset].sort(cmpKwan);
+      const adetail = `<div style="padding:6px 14px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+          <input type="text" id="vvf-${vi}" oninput="filterVendorDetail('${vi}')" placeholder="🔍 건물·층·관코드 검색" style="flex:1;min-width:170px;max-width:280px;border:1px solid var(--border);padding:5px 10px;font-size:11px;font-family:var(--font);background:#fff;outline:none">
+          <select id="vvd-${vi}" onchange="filterVendorDetail('${vi}')" style="border:1px solid var(--border);padding:5px 10px;font-size:11px;font-family:var(--mono);background:#fff;outline:none">
+            <option value="">전체 관코드</option>
+            ${kopts.map(k=>`<option value="${k}">${k}</option>`).join('')}
+          </select>
+        </div>
+        <table id="vvtbl-${vi}" style="width:100%;border-collapse:collapse;font-size:11px">
         <thead><tr style="background:var(--cream2)">
           <th style="padding:5px 14px;text-align:left;font-size:9px;color:var(--text3);font-weight:600">자산 (건물·층)</th>
           <th style="padding:5px 14px;text-align:right;font-size:9px;color:var(--text3);font-weight:600">청구금액</th>
@@ -2739,7 +2751,8 @@ function renderVendorVerify(){
           .map(a=>{
             const ad = a.sumSplit - a.origAmt, aok = Math.abs(ad) < 1;
             const loc = [a.건물명||'', a.층수||''].filter(Boolean).join(' ') || '—';
-            return `<tr style="border-bottom:1px solid var(--border);${aok?'':'background:#fdecec'}">
+            const skey = [a.기종||'', a.건물명||'', a.층수||'', a.관코드||''].join(' ').toLowerCase().replace(/"/g,'');
+            return `<tr data-s="${skey}" data-k="${splitK(a.관코드).join(',')}" style="border-bottom:1px solid var(--border);${aok?'':'background:#fdecec'}">
               <td style="padding:5px 14px">${a.기종?`<b>${a.기종}</b> `:''}<span style="color:var(--text3)">${loc}</span></td>
               <td style="padding:5px 14px;text-align:right;font-family:var(--mono)">${fmtN(a.origAmt)}</td>
               <td style="padding:5px 14px;text-align:right;font-family:var(--mono);font-weight:700">${fmtN(a.sumSplit)}${aok?'':`<span style="color:#991b1b;font-size:9px"> (차이 ${fmtN(ad)})</span>`}</td>
@@ -2747,7 +2760,9 @@ function renderVendorVerify(){
               <td style="padding:5px 14px;font-family:var(--mono);font-size:10px;color:var(--text3)">${a.관코드||'—'}</td>
             </tr>`;
           }).join('')}</tbody>
-      </table></div>`;
+        </table>
+        <div id="vvf-empty-${vi}" style="display:none;padding:8px 4px;font-size:11px;color:var(--text3)">검색 결과가 없습니다</div>
+      </div>`;
       return `<tr onclick="toggleVendorRow('${vi}')" style="border-bottom:1px solid var(--cream2);cursor:pointer">
         <td style="padding:6px 12px;font-weight:600">${r.업체}</td>
         <td style="padding:6px 12px"><span style="font-size:10px;padding:1px 7px;background:#f0e8fa;color:#5a1a8a;border-radius:10px">${r.분류}</span></td>
@@ -2769,6 +2784,23 @@ function renderVendorVerify(){
 function toggleVendorRow(vi){
   const el = document.getElementById('vv-detail-'+vi);
   if(el) el.style.display = (el.style.display==='none') ? '' : 'none';
+}
+
+function filterVendorDetail(vi){
+  const q = (document.getElementById('vvf-'+vi)?.value||'').trim().toLowerCase();
+  const kv = (document.getElementById('vvd-'+vi)?.value||'').trim();
+  const tbl = document.getElementById('vvtbl-'+vi);
+  if(!tbl) return;
+  let shown = 0;
+  tbl.querySelectorAll('tbody tr').forEach(tr=>{
+    const s = tr.getAttribute('data-s')||'';
+    const ks = (tr.getAttribute('data-k')||'').split(',');
+    const hit = (!q || s.includes(q)) && (!kv || ks.includes(kv));
+    tr.style.display = hit ? '' : 'none';
+    if(hit) shown++;
+  });
+  const emp = document.getElementById('vvf-empty-'+vi);
+  if(emp) emp.style.display = shown ? 'none' : '';
 }
 
 function openKwanItems(kwanCode) {
