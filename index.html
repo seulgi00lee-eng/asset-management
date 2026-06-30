@@ -650,8 +650,8 @@ select:focus, .inp-select:focus { border-color: var(--accent); }
 .rcell.sel{border-color:var(--accent);background:rgba(0,212,255,0.05)}
 .rcell.sel::after{content:"";position:absolute;top:0;left:0;right:0;height:0.5px;background:var(--accent);box-shadow:0 0 6px var(--accent)}
 @keyframes dangerPulse{
-  0%,100%{transform:scale(1);box-shadow:0 0 10px 0 rgba(255,59,59,0.35),inset 0 0 0 0 rgba(255,59,59,0);border-color:rgba(255,70,70,0.9);background:rgba(34,5,5,0.55)}
-  50%{transform:scale(1.016);box-shadow:0 0 40px 8px rgba(255,59,59,0.78),inset 0 0 24px rgba(255,59,59,0.22);border-color:rgba(255,95,95,1);background:rgba(72,9,9,0.62)}
+  0%,100%{transform:scale(1);box-shadow:0 0 12px 0 rgba(255,59,59,0.4),inset 0 0 0 0 rgba(255,59,59,0);border-color:rgba(255,70,70,0.9);background:rgba(34,5,5,0.55)}
+  50%{transform:scale(0.972);box-shadow:0 0 46px 9px rgba(255,59,59,0.85),inset 0 0 28px rgba(255,59,59,0.3);border-color:rgba(255,100,100,1);background:rgba(82,10,10,0.68)}
 }
 .rcell.anom-danger{border:2.5px solid rgba(255,70,70,0.9);animation:dangerPulse 1.05s ease-in-out infinite;will-change:transform,box-shadow;z-index:2}
 .rcell.anom-warn{border:1.5px solid rgba(255,184,0,0.65);box-shadow:0 0 10px rgba(255,184,0,0.18)}
