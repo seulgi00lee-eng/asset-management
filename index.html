@@ -638,7 +638,8 @@ select:focus, .inp-select:focus { border-color: var(--accent); }
 .room-grid::-webkit-scrollbar-thumb{background:var(--line-a)}
 
 .rcell{
-  background:rgba(5,7,9,0.42);border:0.5px solid var(--line);
+  background:rgba(5,7,9,0.42);border:1px solid rgba(255,255,255,0.22);
+  box-sizing:border-box;
   padding:9px 9px 6px;cursor:pointer;transition:all .15s;
   position:relative;overflow:hidden;
 }
@@ -648,11 +649,11 @@ select:focus, .inp-select:focus { border-color: var(--accent); }
 .rcell.sel{border-color:var(--accent);background:rgba(0,212,255,0.05)}
 .rcell.sel::after{content:"";position:absolute;top:0;left:0;right:0;height:0.5px;background:var(--accent);box-shadow:0 0 6px var(--accent)}
 @keyframes dangerPulse{
-  0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(255,59,59,0);border-color:rgba(255,59,59,0.45)}
-  50%{transform:scale(1.012);box-shadow:0 0 16px 2px rgba(255,59,59,0.4);border-color:rgba(255,59,59,0.95)}
+  0%,100%{transform:scale(1);box-shadow:0 0 6px 0 rgba(255,59,59,0.25),inset 0 0 0 0 rgba(255,59,59,0);border-color:rgba(255,59,59,0.75)}
+  50%{transform:scale(1.014);box-shadow:0 0 28px 5px rgba(255,59,59,0.6),inset 0 0 16px rgba(255,59,59,0.14);border-color:rgba(255,59,59,1)}
 }
-.rcell.anom-danger{border-color:rgba(255,59,59,0.45);animation:dangerPulse 1.1s ease-in-out infinite;will-change:transform;z-index:2}
-.rcell.anom-warn{border-color:rgba(255,184,0,0.3)}
+.rcell.anom-danger{border:2px solid rgba(255,59,59,0.8);animation:dangerPulse 1.1s ease-in-out infinite;will-change:transform,box-shadow;z-index:2}
+.rcell.anom-warn{border:1.5px solid rgba(255,184,0,0.65);box-shadow:0 0 10px rgba(255,184,0,0.18)}
 
 /* 스캔 */
 .scan-bar{display:none;position:absolute;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:scan .35s ease-out forwards}
