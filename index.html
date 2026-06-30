@@ -636,6 +636,9 @@ select:focus, .inp-select:focus { border-color: var(--accent); }
 .room-grid.panel-open{right:370px;grid-template-columns:repeat(3,1fr)}
 .room-grid::-webkit-scrollbar{width:2px}
 .room-grid::-webkit-scrollbar:horizontal{height:0;display:none}
+/* 콘솔 내부 모든 가로 스크롤바 강제 제거(청록 하단 바 차단) */
+#tab-ops_console ::-webkit-scrollbar:horizontal{height:0 !important;display:none !important}
+#tab-ops_console *{scrollbar-width:thin}
 .room-grid::-webkit-scrollbar-thumb{background:var(--line-a)}
 
 .rcell{
