@@ -1452,6 +1452,62 @@ async function sbDelete(table, id) {
   return true;
 }
 
+// ═══════════ 공유 상태 (app_state) — Phase 1: localStorage 서버 동기화 ═══════════
+// 원칙: "부팅 시 서버→로컬 워밍, 저장 시 로컬+서버 동시 기록"
+// app_state 테이블이 아직 없어도 기존 localStorage 방식으로 그대로 동작(폴백)합니다.
+async function stateSet(key, value) {
+  try {
+    const { error } = await _supa.from('app_state')
+      .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    if(error) { console.warn('app_state 저장 실패(로컬만 저장됨):', key, error.message); return false; }
+    return true;
+  } catch(e) { console.warn('app_state 저장 오류:', key, e); return false; }
+}
+
+function persistKwanCodes() {
+  localStorage.setItem('kwanCodes', JSON.stringify(KWAN_CODES));
+  stateSet('kwanCodes', KWAN_CODES);
+}
+
+// 서버 history → 화면 이력(HIST) 동기화: 어느 PC에서 열어도 같은 이력이 보이게
+async function loadHistFromServer() {
+  const rows = await sbSelect('history');
+  if(!rows || !rows.length) return;
+  const list = rows.map(r => {
+    if(r.raw) { try { const p = JSON.parse(r.raw); if(p && p.ts) return p; } catch(e) {} }
+    return {
+      id: r.id, ts: r['일시'] || '', assetType: r['자산유형'] || '', assetName: r['자산명'] || '',
+      assetCode: r['자산코드'] || '', field: '변경',
+      from: r['이전위치'] || r['이전관코드'] || '—', to: r['이후위치'] || r['이후관코드'] || '—',
+      worker: r['요청자'] || '', source: '대시보드', memo: r['이동사유'] || '',
+      건물명: r['건물명'] || '', 층수: r['층수'] || '', 분류: r['분류'] || ''
+    };
+  }).filter(h => h.ts);
+  list.sort((a, b) => (a.ts < b.ts ? 1 : -1));
+  HIST = list.slice(0, 500);
+  try { localStorage.setItem('ah', JSON.stringify(HIST)); } catch(e) {}
+  refreshHBadge();
+  if(typeof renderDashHist === 'function' && document.getElementById('dashHistList')) renderDashHist();
+  if(typeof renderHPage === 'function' && document.getElementById('hPageList')) renderHPage();
+}
+
+// 부팅 시 1회: 공유 상태(rentalCats/kwanCodes/prevCost) + 이력을 서버 기준으로 맞춤
+async function syncSharedState() {
+  try {
+    const rows = await sbSelect('app_state');
+    (rows || []).forEach(r => {
+      if(!r || !r.key) return;
+      let v = r.value;
+      if(typeof v === 'string') { try { v = JSON.parse(v); } catch(e) {} }
+      if(v === null || v === undefined) return;
+      try { localStorage.setItem(r.key, JSON.stringify(v)); } catch(e) {}
+      if(r.key === 'rentalCats' && Array.isArray(v) && v.length) RENTAL_CATS = v;
+      if(r.key === 'kwanCodes' && Array.isArray(v)) KWAN_CODES = v;
+    });
+  } catch(e) { console.warn('공유 상태 동기화 실패(로컬 값으로 동작):', e); }
+  try { await loadHistFromServer(); } catch(e) { console.warn('이력 동기화 실패:', e); }
+}
+
 // ═══════════════════════ DATA ═══════════════════════
 const SAMPLE={
   lease:{label:'임대차계약',tc:'tg-lease',icon:'🏢',color:'#0f2d5c',dbTable:'lease',
@@ -1495,7 +1551,7 @@ function addHist(e){
   refreshHBadge();
   // Supabase history 테이블에 저장
   if(typeof sbInsert === 'function') {
-    sbInsert('history', {
+    const histPayload = {
       일시: entry.ts,
       자산코드: entry.assetCode || '',
       자산명: entry.assetName || '',
@@ -1510,7 +1566,11 @@ function addHist(e){
       건물명: entry.건물명 || '',
       층수: entry.층수 || '',
       분류: entry.분류 || '',
-    }).catch(err => console.warn('이력 저장 오류:', err));
+    };
+    // raw: 화면 이력 전체 보존(팀 공유 복원용). raw 컬럼이 아직 없으면 자동으로 빼고 재시도.
+    sbInsert('history', { ...histPayload, raw: JSON.stringify(entry) })
+      .then(ok => { if(!ok) return sbInsert('history', histPayload); })
+      .catch(err => console.warn('이력 저장 오류:', err));
   }
 }
 
@@ -1527,6 +1587,7 @@ const USERS=[
   {id:'ahn', pw:'flow2025!', name:'안희운', role:'user'},
   {id:'kim', pw:'flow2025!', name:'김영진', role:'user'},
   {id:'park',pw:'flow2025!', name:'박윤규', role:'user'},
+  {id:'wonjaelee880212', pw:'flow2025!', name:'이원재', role:'admin'},
 ];
 function doLogin(){
   const id=document.getElementById('lid').value.trim();
@@ -1580,6 +1641,7 @@ async function initApp(){
 
   // 로그인 시 모든 Supabase 데이터 미리 로드 → 대시보드 통계 반영
   (async () => {
+    await syncSharedState(); // Phase 1: 공유 상태·이력을 서버 기준으로 동기화
     try {
       const tables = ['lease','tangible','rental','intangible','insurance'];
       await Promise.all(tables.map(async t => {
@@ -1890,6 +1952,7 @@ function savePrevCost() {
     insurance: Number(document.getElementById('prev-insurance').value) || 0,
   };
   localStorage.setItem('prevCost', JSON.stringify(prev));
+  stateSet('prevCost', prev); // 팀 공유: 어느 PC에서도 같은 전월 비교 기준
   closeMo('moCostEdit');
   renderMonthlyCost();
   showToast('✅ 전월 비용 저장 완료 — 비교 반영됨');
@@ -3073,7 +3136,7 @@ const DEFAULT_RENTAL_CATS = [
   { key:'인터넷',       icon:'🌐', color:'#2a6a6a' },
 ];
 let RENTAL_CATS = JSON.parse(localStorage.getItem('rentalCats') || 'null') || DEFAULT_RENTAL_CATS;
-function saveRentalCats(){ localStorage.setItem('rentalCats', JSON.stringify(RENTAL_CATS)); }
+function saveRentalCats(){ localStorage.setItem('rentalCats', JSON.stringify(RENTAL_CATS)); stateSet('rentalCats', RENTAL_CATS); }
 
 let rentalCatFilter = '전체';
 
@@ -3090,7 +3153,7 @@ function getCatForRow(row) {
   if (/인터넷|wifi|회선|랜/.test(name))             return '인터넷';
   // 등록된 카테고리 중 이름이 포함되면 매핑
   const found = RENTAL_CATS.find(c => name.includes(c.key.toLowerCase()));
-  return found ? found.key : (RENTAL_CATS[0]?.key || '기타');
+  return found ? found.key : '기타'; // 미분류는 '기타'로 정직하게 표시 (첫 카테고리 위장 방지)
 }
 
 async function loadAsset(type){
@@ -4297,7 +4360,7 @@ function deleteKwanFromMgr(idx) {
 }
 
 function saveKwanMgr() {
-  localStorage.setItem('kwanCodes', JSON.stringify(KWAN_CODES));
+  persistKwanCodes();
   closeMo('moKwanMgr');
   showToast('✅ 관 코드 저장 완료');
 }
@@ -4374,7 +4437,7 @@ async function saveKwanPicker() {
     if(!kwanPickerSelected.includes(c)) kwanPickerSelected.push(c);
     if(!KWAN_CODES.find(k=>k.code===c)) {
       KWAN_CODES.push({ code:c, name:c });
-      localStorage.setItem('kwanCodes', JSON.stringify(KWAN_CODES));
+      persistKwanCodes();
     }
   }
 
@@ -4436,7 +4499,7 @@ function inlineKwanChange(rowId, newCode) {
     const c = code.toUpperCase();
     if(!KWAN_CODES.find(k=>k.code===c)){
       KWAN_CODES.push({ code:c, name });
-      localStorage.setItem('kwanCodes', JSON.stringify(KWAN_CODES));
+      persistKwanCodes();
     }
     // 새 코드로 재시도
     inlineKwanChange(rowId, c);
@@ -4702,7 +4765,7 @@ function saveKwanEdit() {
   // 새 관코드 빠른 선택 목록에 자동 추가
   if(!KWAN_CODES.find(k=>k.code===toCode)) {
     KWAN_CODES.push({ code:toCode, name:toCode });
-    localStorage.setItem('kwanCodes', JSON.stringify(KWAN_CODES));
+    persistKwanCodes();
   }
 
   // 이동이력 자동 기록
@@ -4732,7 +4795,7 @@ function addKwanCode() {
   const c = code.toUpperCase();
   if(!KWAN_CODES.find(k=>k.code===c)) {
     KWAN_CODES.push({ code:c, name });
-    localStorage.setItem('kwanCodes', JSON.stringify(KWAN_CODES));
+    persistKwanCodes();
   }
   renderKwanQuickBtns();
   selectKwan(c);
