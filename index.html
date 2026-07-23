@@ -4586,6 +4586,73 @@ async function saveKwanPicker() {
   closeMo('moKwanPicker');
   filterAsset();
   showToast(`✅ 관코드 저장 완료 — ${newVal || '미지정'} (${document.getElementById('kwanPickerApplyMonth')?.value||''}부터 적용)`);
+
+  // ★ 2단계: 마스터 반영 확인 (자동 덮어쓰기 금지 — 사용자 확인 후에만)
+  if(oldVal !== newVal) {
+    setTimeout(() => promptMasterSync(row, newVal), 400);
+  }
+}
+
+// ═══════════ 2단계: 시스템 → 마스터(building_kwan_map) 저장 ═══════════
+// 원칙: 자동으로 덮어쓰지 않는다. 마스터와 다를 때만 물어보고, 확인받아야 반영.
+async function promptMasterSync(row, newVal) {
+  const b = String(row['건물명']||'').trim();
+  const f = String(row['층수']||'').trim();
+  if(!b || !f) return;                        // 건물·층 없으면 판단 불가 → 조용히 통과
+  const codes = String(newVal||'').split(/[,，\s]+/).map(s=>s.trim()).filter(Boolean);
+  if(!codes.length) return;
+
+  const cur = (MASTER_TREE[b] && MASTER_TREE[b][f]) ? MASTER_TREE[b][f] : null;
+  const isNew = !cur;
+  const same = cur && cur.length === codes.length && cur.every(c => codes.includes(c));
+  if(same) return;                            // 마스터와 동일 → 물어볼 필요 없음
+
+  const msg = isNew
+    ? `🗂️ 마스터에 새로 추가할까요?\n\n${b} ${f}\n관코드: ${codes.join(', ')}\n\n· [확인] 마스터에 추가 (앞으로 이 건물·층은 자동 선택됨)\n· [취소] 이 자산에만 적용`
+    : `🗂️ 마스터를 수정할까요?\n\n${b} ${f}\n현재 마스터: ${cur.join(', ')}\n변경 후:    ${codes.join(', ')}\n\n⚠️ 이 층을 쓰는 다른 자산의 자동선택도 함께 바뀝니다.\n\n· [확인] 마스터 수정\n· [취소] 이 자산에만 적용 (마스터 유지)`;
+
+  if(!confirm(msg)) return;
+
+  const ok = await saveMasterRows(b, f, codes, row);
+  if(ok) {
+    await loadMasterMap();                    // 메모리 갱신
+    showToast(`🗂️ 마스터 반영 완료 — ${b} ${f} → ${codes.join(', ')}`);
+  } else {
+    showToast('⚠️ 마스터 반영 실패 — 자산 저장은 정상 완료됨');
+  }
+}
+
+// 마스터 행 교체 저장 (해당 건물·층의 기존 행 삭제 후 새 관코드로 재작성)
+async function saveMasterRows(b, f, codes, row) {
+  try {
+    const all = await sbSelect('building_kwan_map');
+    const olds = (all||[]).filter(r =>
+      String(r['건물']||'').trim() === b && String(r['층']||'').trim() === f);
+
+    // 기존 값 승계 (공유그룹·캠퍼스·사업부 등은 유지)
+    const base = olds[0] || {};
+    const grp = String(base['공유그룹']||'') || (codes.length > 1 ? (b + f) : '');
+
+    for(const o of olds) { await sbDelete('building_kwan_map', o.id); }
+
+    for(const c of codes) {
+      await sbInsert('building_kwan_map', {
+        건물: b, 층: f, 관코드: c,
+        공유그룹: codes.length > 1 ? grp : '',
+        캠퍼스: String(base['캠퍼스']||row['지역']||''),
+        별칭: String(base['별칭']||''),
+        사업부: String(base['사업부']||''),
+        브랜드: String(base['브랜드']||''),
+        적용시작월: String(base['적용시작월']||'2026-01'),
+        비고: String(base['비고']||''),
+        upsert_key: b + '|' + f + '|' + c
+      });
+    }
+    return true;
+  } catch(e) {
+    console.error('마스터 저장 오류:', e);
+    return false;
+  }
 }
 
 // ═══════════════════════ 관코드 빠른 수정 ═══════════════════════
