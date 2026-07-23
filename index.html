@@ -4556,6 +4556,14 @@ async function saveKwanPicker() {
   if(!row) return;
 
   const oldVal = row['관코드'] || '';
+
+  // ★ 저장 전 확인 (A안): 마스터 반영 여부 + 저장 취소를 여기서 결정
+  let masterAction = 'skip';
+  if(oldVal !== newVal) {
+    masterAction = await askMasterAction(row, newVal);
+    if(masterAction === 'cancel') return;   // 저장 자체를 취소 — 아무것도 바뀌지 않음
+  }
+
   row['관코드'] = newVal;
 
   // Supabase 업데이트
@@ -4587,39 +4595,69 @@ async function saveKwanPicker() {
   filterAsset();
   showToast(`✅ 관코드 저장 완료 — ${newVal || '미지정'} (${document.getElementById('kwanPickerApplyMonth')?.value||''}부터 적용)`);
 
-  // ★ 2단계: 마스터 반영 확인 (자동 덮어쓰기 금지 — 사용자 확인 후에만)
-  if(oldVal !== newVal) {
-    setTimeout(() => promptMasterSync(row, newVal), 400);
+  // 마스터 반영 (저장 전 확인에서 '반영'을 고른 경우에만)
+  if(masterAction === 'apply') {
+    const codes = String(newVal||'').split(/[,，\s]+/).map(s=>s.trim()).filter(Boolean);
+    const mb = resolveMasterBuilding(row['건물명']) || String(row['건물명']||'').trim();
+    const mf = resolveMasterFloor(mb, row['층수']) || String(row['층수']||'').trim();
+    const ok = await saveMasterRows(mb, mf, codes, row);
+    if(ok) { await loadMasterMap(); showToast(`🗂️ 마스터 반영 완료 — ${mb} ${mf} → ${codes.join(', ')}`); }
+    else showToast('⚠️ 마스터 반영 실패 — 자산 저장은 정상 완료됨');
   }
 }
 
 // ═══════════ 2단계: 시스템 → 마스터(building_kwan_map) 저장 ═══════════
-// 원칙: 자동으로 덮어쓰지 않는다. 마스터와 다를 때만 물어보고, 확인받아야 반영.
-async function promptMasterSync(row, newVal) {
-  const b = String(row['건물명']||'').trim();
-  const f = String(row['층수']||'').trim();
-  if(!b || !f) return;                        // 건물·층 없으면 판단 불가 → 조용히 통과
+// 원칙: 자동 덮어쓰기 금지. 저장 전에 물어보고, 저장 취소도 가능.
+
+// 자산 건물명 → 마스터 건물명 찾기 (표기 차이 흡수: "SK뷰레이크" ↔ "광교SK뷰레이크타워")
+function resolveMasterBuilding(assetBuilding) {
+  const ab = String(assetBuilding||'').trim();
+  if(!ab) return null;
+  const names = Object.keys(MASTER_TREE);
+  if(names.includes(ab)) return ab;                       // 정확히 일치
+  const hit = names.find(n => buildingMatch(n, ab));      // 기존 유연매칭 재사용
+  return hit || null;
+}
+
+// 마스터 층 찾기 (표기 차이 흡수: "6층" ↔ "6")
+function resolveMasterFloor(masterBuilding, assetFloor) {
+  if(!masterBuilding || !MASTER_TREE[masterBuilding]) return null;
+  const af = String(assetFloor||'').trim();
+  if(!af) return null;
+  const floors = Object.keys(MASTER_TREE[masterBuilding]);
+  if(floors.includes(af)) return af;
+  return floors.find(f => floorMatch(f, af)) || null;
+}
+
+// 저장 전 확인 — 반환값: 'apply'(마스터도 반영) | 'skip'(이 자산만) | 'cancel'(저장 취소)
+async function askMasterAction(row, newVal) {
+  const rawB = String(row['건물명']||'').trim();
+  const rawF = String(row['층수']||'').trim();
   const codes = String(newVal||'').split(/[,，\s]+/).map(s=>s.trim()).filter(Boolean);
-  if(!codes.length) return;
+  if(!rawB || !rawF || !codes.length) return 'skip';      // 판단 불가 → 조용히 자산만 저장
 
-  const cur = (MASTER_TREE[b] && MASTER_TREE[b][f]) ? MASTER_TREE[b][f] : null;
-  const isNew = !cur;
+  const mb = resolveMasterBuilding(rawB);
+  const mf = mb ? resolveMasterFloor(mb, rawF) : null;
+  const cur = (mb && mf && MASTER_TREE[mb] && MASTER_TREE[mb][mf]) ? MASTER_TREE[mb][mf] : null;
+
   const same = cur && cur.length === codes.length && cur.every(c => codes.includes(c));
-  if(same) return;                            // 마스터와 동일 → 물어볼 필요 없음
+  if(same) return 'skip';                                  // 마스터와 동일 → 묻지 않음
 
-  const msg = isNew
-    ? `🗂️ 마스터에 새로 추가할까요?\n\n${b} ${f}\n관코드: ${codes.join(', ')}\n\n· [확인] 마스터에 추가 (앞으로 이 건물·층은 자동 선택됨)\n· [취소] 이 자산에만 적용`
-    : `🗂️ 마스터를 수정할까요?\n\n${b} ${f}\n현재 마스터: ${cur.join(', ')}\n변경 후:    ${codes.join(', ')}\n\n⚠️ 이 층을 쓰는 다른 자산의 자동선택도 함께 바뀝니다.\n\n· [확인] 마스터 수정\n· [취소] 이 자산에만 적용 (마스터 유지)`;
+  const nameShown = mb ? (mb === rawB ? mb : `${mb}  (자산 표기: ${rawB})`) : rawB;
+  const floorShown = mf || rawF;
 
-  if(!confirm(msg)) return;
-
-  const ok = await saveMasterRows(b, f, codes, row);
-  if(ok) {
-    await loadMasterMap();                    // 메모리 갱신
-    showToast(`🗂️ 마스터 반영 완료 — ${b} ${f} → ${codes.join(', ')}`);
+  let msg;
+  if(cur) {
+    msg = `🗂️ 마스터를 수정할까요?\n\n${nameShown}  ${floorShown}\n현재 마스터: ${cur.join(', ')}\n변경 후:      ${codes.join(', ')}\n\n⚠️ 이 층을 쓰는 다른 자산의 자동선택도 함께 바뀝니다.\n\n[확인] 마스터도 수정하고 저장\n[취소] 마스터는 그대로 두고 계속`;
   } else {
-    showToast('⚠️ 마스터 반영 실패 — 자산 저장은 정상 완료됨');
+    msg = `🗂️ 마스터에 새로 추가할까요?\n\n${nameShown}  ${floorShown}\n관코드: ${codes.join(', ')}\n\n[확인] 마스터에 추가하고 저장\n[취소] 마스터에 넣지 않고 계속`;
   }
+
+  if(confirm(msg)) return 'apply';
+
+  // 두 번째 물음: 저장 자체를 취소할지
+  const undo = confirm(`이 자산의 관코드는 어떻게 할까요?\n\n${row['건물명']||''} ${row['층수']||''}\n관코드: ${codes.join(', ')}\n\n[확인] 이 자산에만 적용하고 저장\n[취소] 저장하지 않고 되돌리기`);
+  return undo ? 'skip' : 'cancel';
 }
 
 // 마스터 행 교체 저장 (해당 건물·층의 기존 행 삭제 후 새 관코드로 재작성)
