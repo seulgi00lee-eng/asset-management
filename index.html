@@ -4532,6 +4532,7 @@ function openMasterEdit(id) {
 
 async function saveMasterEdit() {
   const id = document.getElementById('mstEditId').value;
+  const prev = id ? MASTER_ROWS.find(x => String(x.id) === String(id)) : null;  // 수정 전 값 보관
   const g = k => (document.getElementById('mstF' + k)?.value || '').trim();
   const b = g('건물'), fl = g('층'), kc = g('관코드');
   if(!b || !fl || !kc) { showToast('건물·층·관코드는 필수입니다'); return; }
@@ -4558,7 +4559,91 @@ async function saveMasterEdit() {
   if(!ok) { showToast('저장 실패 — 다시 시도해 주세요'); return; }
   closeMo('moMasterEdit');
   showToast(`✅ 마스터 ${id ? '수정' : '추가'} 완료 — ${b} ${fl} ${kc}`);
+
+  // ★ 관 이전(건물·층 변경) 시 관련 자산 정리 제안
+  if(id && prev && (String(prev['건물']||'').trim() !== b || String(prev['층']||'').trim() !== fl)
+     && String(prev['관코드']||'').trim() === kc) {
+    await syncAssetsForKwanMove(kc, String(prev['건물']||'').trim(), String(prev['층']||'').trim(), b, fl);
+  }
+
   await loadMasterTable();
+}
+
+// ═══════════ 관 이전 시 관련 자산 정리 ═══════════
+// 규칙: ① 그 관 단독 자산 → 건물·층을 새 위치로 이동 (관코드 유지)
+//       ② 여러 관 공유 자산 → 관코드에서 그 관만 제외 (위치 유지, 배분 자동 정정)
+//       ③ 제외하면 관코드가 비는 자산 → 건드리지 않고 목록으로 안내
+async function syncAssetsForKwanMove(kwan, oldB, oldF, newB, newF) {
+  if(!kwan || !oldB || !oldF) return;
+
+  // 렌탈자산 전체에서 대상 조사
+  let rows = [];
+  try { rows = await sbSelect('rental') || []; }
+  catch(e) { showToast('⚠️ 자산 조회 실패 — 마스터만 수정됨'); return; }
+
+  const moveList = [], stripList = [], warnList = [];
+  rows.forEach(r => {
+    const codes = String(r['관코드']||'').split(/[,，\s]+/).map(s=>s.trim()).filter(Boolean);
+    if(!codes.includes(kwan)) return;
+    // 기존 위치가 마스터의 옛 위치와 맞는 자산만 대상
+    if(!buildingMatch(oldB, String(r['건물명']||'')) || !floorMatch(oldF, String(r['층수']||''))) return;
+
+    if(codes.length === 1) moveList.push(r);                  // 단독 → 이동
+    else {
+      const rest = codes.filter(c => c !== kwan);
+      if(rest.length) stripList.push({ row: r, rest });        // 공유 → 제외
+      else warnList.push(r);                                   // 빼면 빈칸 → 보류
+    }
+  });
+
+  const total = moveList.length + stripList.length;
+  if(!total && !warnList.length) return;
+
+  let msg = `📦 관련 자산 ${total}건을 정리할까요?\n\n${kwan} : ${oldB} ${oldF} → ${newB} ${newF}\n\n`;
+  if(moveList.length) msg += `▸ 함께 이동  ${moveList.length}건  (${kwan} 단독 사용)\n   건물·층을 ${newB} ${newF}로 변경\n\n`;
+  if(stripList.length) {
+    const ex = stripList[0];
+    msg += `▸ ${kwan} 제외  ${stripList.length}건  (다른 관과 공유)\n   예) "${String(ex.row['관코드'])}" → "${ex.rest.join(', ')}"\n\n`;
+  }
+  if(warnList.length) msg += `⚠️ 보류 ${warnList.length}건 — 제외하면 관코드가 비어 건드리지 않습니다\n\n`;
+  msg += `[확인] ${total}건 정리    [취소] 마스터만 수정`;
+
+  if(!confirm(msg)) { showToast('자산은 그대로 두었습니다 (마스터만 수정)'); return; }
+
+  setLoading(true);
+  let done = 0, fail = 0;
+  const worker = document.getElementById('uNm')?.textContent || '관리자';
+
+  for(const r of moveList) {
+    const ok2 = await sbUpdate('rental', r.id, { '건물명': newB, '층수': newF });
+    if(ok2) {
+      done++;
+      addHist({ assetType:'렌탈자산', assetName:r['렌탈품목']||r['자산명']||'—', assetCode:r['자산코드']||'—',
+        fromLoc:`${oldB} ${oldF}`, toLoc:`${newB} ${newF}`, worker, source:'마스터 관 이전',
+        memo:`관 ${kwan} 이전에 따른 위치 변경: ${oldB} ${oldF} → ${newB} ${newF}` });
+    } else fail++;
+  }
+  for(const s of stripList) {
+    const newVal = s.rest.join(', ');
+    const ok2 = await sbUpdate('rental', s.row.id, { '관코드': newVal });
+    if(ok2) {
+      done++;
+      addHist({ assetType:'렌탈자산', assetName:s.row['렌탈품목']||s.row['자산명']||'—', assetCode:s.row['자산코드']||'—',
+        fromLoc:String(s.row['관코드']||''), toLoc:newVal, worker, source:'마스터 관 이전',
+        memo:`관 ${kwan} 이전으로 제외: ${s.row['관코드']} → ${newVal} (배분 ÷${String(s.row['관코드']).split(/[,，\s]+/).filter(Boolean).length} → ÷${s.rest.length})` });
+    } else fail++;
+  }
+  setLoading(false);
+
+  showToast(`✅ 자산 ${done}건 정리 완료${fail?` (실패 ${fail}건)`:''}`);
+
+  if(warnList.length) {
+    const names = warnList.slice(0,10).map(r => `· ${r['렌탈품목']||r['자산명']||'—'} (${r['건물명']||''} ${r['층수']||''})`).join('\n');
+    alert(`⚠️ 아래 ${warnList.length}건은 직접 확인이 필요합니다\n(${kwan}을 빼면 관코드가 비어 자동 처리하지 않았습니다)\n\n${names}${warnList.length>10?'\n…':''}`);
+  }
+
+  // 메모리 갱신
+  try { if(typeof loadData === 'function') await loadData(); } catch(e) {}
 }
 
 async function deleteMasterRow(id) {
