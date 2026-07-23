@@ -946,6 +946,10 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
             style="padding:10px 22px;font-size:12px;font-weight:600;font-family:var(--font);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--text3)">
             🔄 관코드 일괄 수정
           </button>
+          <button id="ctab-master" onclick="switchCampusTab('master')"
+            style="padding:10px 22px;font-size:12px;font-weight:600;font-family:var(--font);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--text3)">
+            🗂️ 마스터 관리
+          </button>
         </div>
 
         <!-- 탭 1: 캠퍼스 목록 -->
@@ -971,6 +975,43 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
                 <tbody id="campusBody"></tbody>
               </table>
             </div>
+          </div>
+        </div>
+
+        <!-- 탭 3: 마스터 관리 (건물·층 ↔ 관코드) -->
+        <div id="ctab-content-master" style="display:none">
+          <div style="background:rgba(91,75,181,.07);border-left:3px solid #5b4bb5;padding:10px 16px;font-size:12px;color:var(--text2);margin-bottom:16px">
+            <strong>마스터</strong>는 업체 명세서의 "건물·층"을 우리 "관코드"로 번역하는 기준표입니다.
+            여기서 수정하면 관코드 선택 팝업의 자동선택에 바로 반영됩니다.
+          </div>
+
+          <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+            <input id="mstSearch" oninput="renderMasterTable()" placeholder="건물·층·관코드 검색…"
+              style="border:1px solid var(--border);padding:8px 12px;font-size:12px;width:220px;outline:none">
+            <span id="mstStats" style="font-size:12px;color:var(--text2)"></span>
+            <div style="margin-left:auto;display:flex;gap:8px">
+              <button class="btn btn-ghost btn-sm" onclick="openMasterEdit(null)">＋ 행 추가</button>
+              <button class="btn btn-ghost btn-sm" onclick="exportMasterCsv()">📤 CSV 내려받기</button>
+              <button class="btn btn-ghost btn-sm" onclick="loadMasterTable()">↻ 새로고침</button>
+            </div>
+          </div>
+
+          <div style="border:1px solid var(--border);max-height:520px;overflow:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:12px">
+              <thead style="position:sticky;top:0;background:var(--cream2);z-index:1">
+                <tr style="border-bottom:2px solid var(--border)">
+                  <th style="padding:9px 10px;text-align:left">건물</th>
+                  <th style="padding:9px 10px;text-align:left">층</th>
+                  <th style="padding:9px 10px;text-align:left">관코드</th>
+                  <th style="padding:9px 10px;text-align:left">공유그룹</th>
+                  <th style="padding:9px 10px;text-align:left">캠퍼스</th>
+                  <th style="padding:9px 10px;text-align:left">사업부</th>
+                  <th style="padding:9px 10px;text-align:left">브랜드</th>
+                  <th style="padding:9px 10px;text-align:center;width:96px">관리</th>
+                </tr>
+              </thead>
+              <tbody id="mstBody"></tbody>
+            </table>
           </div>
         </div>
 
@@ -1168,6 +1209,31 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
     <div class="mo-ft">
       <button class="btn btn-ghost" onclick="closeMo('moApplyMonth')">취소</button>
       <button class="btn btn-navy" onclick="confirmApplyMonth()">✅ 확인</button>
+    </div>
+  </div>
+</div>
+
+<!-- 마스터 행 추가/수정 모달 -->
+<div class="mo" id="moMasterEdit" onclick="closeMoBg(event,'moMasterEdit')">
+  <div class="mo-box" style="width:440px">
+    <div class="mo-t" id="mstEditTitle">마스터 행 추가</div>
+    <input type="hidden" id="mstEditId">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="fg"><label>건물 *</label><input id="mstF건물" placeholder="예: 광교SK뷰레이크타워"></div>
+      <div class="fg"><label>층 *</label><input id="mstF층" placeholder="예: 6층"></div>
+      <div class="fg"><label>관코드 *</label><input id="mstF관코드" placeholder="예: 108"></div>
+      <div class="fg"><label>공유그룹</label><input id="mstF공유그룹" placeholder="같은 층 공유 시 동일하게"></div>
+      <div class="fg"><label>캠퍼스</label><input id="mstF캠퍼스" placeholder="예: 광교"></div>
+      <div class="fg"><label>사업부</label><input id="mstF사업부" placeholder="예: 초등사업부"></div>
+      <div class="fg"><label>브랜드</label><input id="mstF브랜드" placeholder="예: 수아"></div>
+      <div class="fg"><label>적용시작월</label><input id="mstF적용시작월" placeholder="2026-01"></div>
+    </div>
+    <div style="font-size:10.5px;color:var(--text3);margin-top:8px">
+      ※ 관코드는 한 줄에 하나씩. 같은 층을 여러 관이 나눠 쓰면 행을 추가하고 공유그룹을 동일하게 입력하세요.
+    </div>
+    <div class="mo-ft">
+      <button class="btn btn-ghost" onclick="closeMo('moMasterEdit')">취소</button>
+      <button class="btn btn-navy" onclick="saveMasterEdit()">저장</button>
     </div>
   </div>
 </div>
@@ -4387,6 +4453,143 @@ function saveKwanMgr() {
 let kwanPickerRowId = null;
 let kwanPickerSelected = [];
 
+// ═══════════ 마스터 관리 화면 (탭: 🗂️ 마스터 관리) ═══════════
+let MASTER_ROWS = [];   // 원본 행 목록
+
+async function loadMasterTable() {
+  const body = document.getElementById('mstBody');
+  if(body) body.innerHTML = '<tr><td colspan="8" style="padding:18px;text-align:center;color:var(--text3)">불러오는 중…</td></tr>';
+  try {
+    const rows = await sbSelect('building_kwan_map');
+    MASTER_ROWS = (rows||[]).slice().sort((a,b) => {
+      const A = String(a['건물']||'') + String(a['층']||'') + String(a['관코드']||'');
+      const B = String(b['건물']||'') + String(b['층']||'') + String(b['관코드']||'');
+      return A.localeCompare(B, 'ko');
+    });
+  } catch(e) {
+    MASTER_ROWS = [];
+    if(body) body.innerHTML = '<tr><td colspan="8" style="padding:18px;text-align:center;color:#a02620">마스터를 불러오지 못했습니다</td></tr>';
+    return;
+  }
+  renderMasterTable();
+  await loadMasterMap();   // 자동선택용 메모리도 함께 갱신
+}
+
+function renderMasterTable() {
+  const body = document.getElementById('mstBody');
+  const stats = document.getElementById('mstStats');
+  if(!body) return;
+  const q = (document.getElementById('mstSearch')?.value || '').trim().toLowerCase();
+  const list = !q ? MASTER_ROWS : MASTER_ROWS.filter(r =>
+    ['건물','층','관코드','공유그룹','캠퍼스','사업부','브랜드'].some(k =>
+      String(r[k]||'').toLowerCase().includes(q)));
+
+  if(!list.length) {
+    body.innerHTML = '<tr><td colspan="8" style="padding:18px;text-align:center;color:var(--text3)">데이터가 없습니다</td></tr>';
+  } else {
+    body.innerHTML = list.map(r => `
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:8px 10px">${esc(r['건물'])}</td>
+        <td style="padding:8px 10px">${esc(r['층'])}</td>
+        <td style="padding:8px 10px;font-family:var(--mono);font-weight:700">${esc(r['관코드'])}</td>
+        <td style="padding:8px 10px;color:var(--text2)">${esc(r['공유그룹'])}</td>
+        <td style="padding:8px 10px;color:var(--text2)">${esc(r['캠퍼스'])}</td>
+        <td style="padding:8px 10px;color:var(--text2)">${esc(r['사업부'])}</td>
+        <td style="padding:8px 10px;color:var(--text2)">${esc(r['브랜드'])}</td>
+        <td style="padding:8px 10px;text-align:center;white-space:nowrap">
+          <button class="btn btn-ghost btn-sm" onclick="openMasterEdit(${r.id})">수정</button>
+          <button class="btn btn-ghost btn-sm" style="color:#a02620" onclick="deleteMasterRow(${r.id})">삭제</button>
+        </td>
+      </tr>`).join('');
+  }
+
+  if(stats) {
+    const bset = new Set(MASTER_ROWS.map(r => String(r['건물']||'')).filter(Boolean));
+    stats.textContent = `건물 ${bset.size}개 · 총 ${MASTER_ROWS.length}줄` + (q ? ` (검색 ${list.length}줄)` : '');
+  }
+}
+
+function esc(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// 추가/수정 모달 열기 (id가 null이면 신규)
+function openMasterEdit(id) {
+  const r = id ? MASTER_ROWS.find(x => String(x.id) === String(id)) : null;
+  document.getElementById('mstEditId').value = r ? r.id : '';
+  document.getElementById('mstEditTitle').textContent = r ? '마스터 행 수정' : '마스터 행 추가';
+  const f = {
+    '건물': 'mstF건물', '층': 'mstF층', '관코드': 'mstF관코드', '공유그룹': 'mstF공유그룹',
+    '캠퍼스': 'mstF캠퍼스', '사업부': 'mstF사업부', '브랜드': 'mstF브랜드', '적용시작월': 'mstF적용시작월'
+  };
+  Object.keys(f).forEach(k => {
+    const el = document.getElementById(f[k]);
+    if(el) el.value = r ? String(r[k] || '') : (k === '적용시작월' ? '2026-01' : '');
+  });
+  document.getElementById('moMasterEdit').classList.add('open');
+}
+
+async function saveMasterEdit() {
+  const id = document.getElementById('mstEditId').value;
+  const g = k => (document.getElementById('mstF' + k)?.value || '').trim();
+  const b = g('건물'), fl = g('층'), kc = g('관코드');
+  if(!b || !fl || !kc) { showToast('건물·층·관코드는 필수입니다'); return; }
+
+  const payload = {
+    건물: b, 층: fl, 관코드: kc,
+    공유그룹: g('공유그룹'), 캠퍼스: g('캠퍼스'),
+    사업부: g('사업부'), 브랜드: g('브랜드'),
+    적용시작월: g('적용시작월') || '2026-01',
+    upsert_key: b + '|' + fl + '|' + kc
+  };
+
+  // 중복 방지: 같은 건물·층·관코드가 이미 있으면 거부
+  const dup = MASTER_ROWS.find(r =>
+    String(r['건물']||'').trim() === b && String(r['층']||'').trim() === fl &&
+    String(r['관코드']||'').trim() === kc && String(r.id) !== String(id));
+  if(dup) { showToast('⚠️ 이미 같은 건물·층·관코드가 있습니다'); return; }
+
+  setLoading(true);
+  const ok = id ? await sbUpdate('building_kwan_map', id, payload)
+                : await sbInsert('building_kwan_map', payload);
+  setLoading(false);
+
+  if(!ok) { showToast('저장 실패 — 다시 시도해 주세요'); return; }
+  closeMo('moMasterEdit');
+  showToast(`✅ 마스터 ${id ? '수정' : '추가'} 완료 — ${b} ${fl} ${kc}`);
+  await loadMasterTable();
+}
+
+async function deleteMasterRow(id) {
+  const r = MASTER_ROWS.find(x => String(x.id) === String(id));
+  if(!r) return;
+  if(!confirm(`🗑️ 이 마스터 행을 삭제할까요?\n\n${r['건물']} ${r['층']} — 관코드 ${r['관코드']}\n\n※ 삭제하면 이 건물·층의 자동선택에서 제외됩니다.`)) return;
+  setLoading(true);
+  const ok = await sbDelete('building_kwan_map', id);
+  setLoading(false);
+  if(!ok) { showToast('삭제 실패'); return; }
+  showToast('🗑️ 삭제 완료');
+  await loadMasterTable();
+}
+
+function exportMasterCsv() {
+  const cols = ['건물','층','관코드','공유그룹','캠퍼스','별칭','사업부','브랜드','적용시작월','비고'];
+  const lines = [cols.join(',')];
+  MASTER_ROWS.forEach(r => {
+    lines.push(cols.map(c => {
+      const v = String(r[c] == null ? '' : r[c]);
+      return /[",\n]/.test(v) ? '"' + v.replace(/"/g,'""') + '"' : v;
+    }).join(','));
+  });
+  const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `마스터_건물층관코드_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  showToast('📤 CSV 내려받기 완료');
+}
+
 // ═══════════ 마스터(building_kwan_map) 자동선택 — 1단계 읽기 통합 ═══════════
 let MASTER_TREE = {};   // { 건물: { 층: [관코드...] } }
 let MASTER_GROUP = {};  // { "건물|층": 공유그룹명 }
@@ -5606,22 +5809,26 @@ function showToast(m){const t=document.getElementById('toast');t.textContent=m;t
 
 // ═══════════════════════ 캠퍼스 탭 전환 ═══════════════════════
 function switchCampusTab(tab) {
-  const isKwan = tab === 'kwan';
+  const tabs = ['list','kwan','master'];
+  if(!tabs.includes(tab)) tab = 'list';
 
-  // 탭 버튼 스타일
-  document.getElementById('ctab-list').style.borderBottomColor = isKwan ? 'transparent' : 'var(--text)';
-  document.getElementById('ctab-list').style.color = isKwan ? 'var(--text3)' : 'var(--text)';
-  document.getElementById('ctab-kwan').style.borderBottomColor = isKwan ? 'var(--text)' : 'transparent';
-  document.getElementById('ctab-kwan').style.color = isKwan ? 'var(--text)' : 'var(--text3)';
+  tabs.forEach(t => {
+    const btn = document.getElementById('ctab-' + t);
+    const box = document.getElementById('ctab-content-' + t);
+    const on = (t === tab);
+    if(btn) {
+      btn.style.borderBottomColor = on ? 'var(--text)' : 'transparent';
+      btn.style.color = on ? 'var(--text)' : 'var(--text3)';
+    }
+    if(box) box.style.display = on ? 'block' : 'none';
+  });
 
-  // 콘텐츠 표시
-  document.getElementById('ctab-content-list').style.display = isKwan ? 'none' : 'block';
-  document.getElementById('ctab-content-kwan').style.display = isKwan ? 'block' : 'none';
+  // 상단 버튼은 캠퍼스 목록에서만
+  const acts = document.getElementById('campusActsBtns');
+  if(acts) acts.style.display = (tab === 'list') ? 'flex' : 'none';
 
-  // 상단 버튼
-  document.getElementById('campusActsBtns').style.display = isKwan ? 'none' : 'flex';
-
-  if(isKwan) loadKwanBulkData();
+  if(tab === 'kwan') loadKwanBulkData();
+  if(tab === 'master') loadMasterTable();
 }
 
 // ═══════════════════════ 적용시작월 드롭다운 공통 초기화 ═══════════════════════
