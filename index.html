@@ -4727,8 +4727,23 @@ function inlineKwanChange(rowId, newCode) {
   const oldCode = row['관코드'] || '—';
   if(oldCode === newCode) return;
 
+  // ★ 마스터 반영 확인 (반영 전) — 취소 시 원래 값으로 복원
+  (async () => {
+    const act = await askMasterAction(row, newCode);
+    if(act === 'cancel') {
+      const sel0 = document.getElementById(`kwan-sel-${rowId}`);
+      if(sel0) sel0.value = oldCode === '—' ? '' : oldCode;
+      showToast('↩ 취소했습니다 — 관코드가 그대로입니다');
+      return;
+    }
+    proceedInlineKwanChange(rowId, newCode, oldCode, row, d, act);
+  })();
+}
+
+function proceedInlineKwanChange(rowId, newCode, oldCode, row, d, masterAction) {
   // 즉시 반영
   row['관코드'] = newCode;
+  row.__masterAction = masterAction;
 
   // 이동이력 기록
   const nameCol = d.headers.find(h =>
@@ -4820,6 +4835,21 @@ async function commitInlineKwanChange(oldCode, newCode, row, d, rowId, applyMont
 
   const kwanName = KWAN_CODES.find(k=>k.code===newCode)?.name || '';
   showToast(`✅ ${row[nameCol]||''} — 관코드 ${oldCode} → ${newCode}${applyMonth?' ('+applyMonth+'부터)':''}${kwanName?' ['+kwanName+']':''}`);
+
+  if(row.__masterAction === 'apply') { await applyMasterFromRow(row, newCode); }
+  delete row.__masterAction;
+}
+
+// 공통: 확인받은 내용을 마스터에 반영
+async function applyMasterFromRow(row, newVal) {
+  const codes = String(newVal||'').split(/[,，\s]+/).map(s=>s.trim()).filter(Boolean);
+  if(!codes.length) return;
+  const mb = resolveMasterBuilding(row['건물명']) || String(row['건물명']||'').trim();
+  const mf = resolveMasterFloor(mb, row['층수']) || String(row['층수']||'').trim();
+  if(!mb || !mf) return;
+  const ok = await saveMasterRows(mb, mf, codes, row);
+  if(ok) { await loadMasterMap(); showToast(`🗂️ 마스터 반영 완료 — ${mb} ${mf} → ${codes.join(', ')}`); }
+  else showToast('⚠️ 마스터 반영 실패 — 자산 저장은 정상 완료됨');
 }
 let KWAN_CODES = [];
 
@@ -5776,6 +5806,13 @@ async function saveInlineKwan(dbId, newKwan, type) {
 
   if(oldKwan === newKwan) { loadKwanBulkData(); return; }
 
+  // ★ 마스터 반영 확인 (저장 전)
+  let masterAction = 'skip';
+  if(row) {
+    masterAction = await askMasterAction(row, newKwan);
+    if(masterAction === 'cancel') { loadKwanBulkData(); return; }  // 저장 취소 — 원상복구
+  }
+
   setLoading(true);
   const { error } = await _supa.from(dbTable).update({ '관코드': newKwan }).eq('id', dbId);
   setLoading(false);
@@ -5805,6 +5842,7 @@ async function saveInlineKwan(dbId, newKwan, type) {
   });
 
   showToast(`✅ 관코드 → ${newKwan} 저장 완료${applyMonthBulk?' ('+applyMonthBulk+'부터 적용)':''}`);
+  if(masterAction === 'apply' && row) await applyMasterFromRow(row, newKwan);
   loadKwanBulkData();
 }
 
@@ -5818,7 +5856,7 @@ async function applyKwanBulkChange() {
   const type = document.getElementById('kwanBulkTypeFilter')?.value || 'rental';
   const dbTable = SAMPLE[type]?.dbTable || type;
 
-  if(!confirm(`선택한 ${checked.length}건의 관코드를 "${newKwan}"으로 일괄 변경하시겠습니까?\n\n이 작업은 Supabase에 즉시 반영됩니다.`)) return;
+  if(!confirm(`선택한 ${checked.length}건의 관코드를 "${newKwan}"으로 일괄 변경하시겠습니까?\n\n이 작업은 Supabase에 즉시 반영됩니다.\n\n※ 여러 건물·층이 섞일 수 있어 마스터(건물·층↔관코드)는 변경되지 않습니다.\n   마스터를 바꾸려면 구글 시트 또는 개별 수정을 이용하세요.`)) return;
 
   setLoading(true);
   let success = 0, fail = 0;
