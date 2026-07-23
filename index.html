@@ -608,10 +608,14 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
           <div class="ph-acts">
             <button class="btn btn-ghost btn-sm" onclick="openKwanMgr()">🏢 관 코드 설정</button>
             <button class="btn btn-ghost btn-sm" onclick="exportCostExcel()">⬇ 엑셀 다운로드</button>
+            <button class="btn btn-ghost btn-sm" onclick="requestCloseApproval()" style="color:#5b4bb5;border-color:#b9aee8">📤 마감 승인 요청</button>
             <button class="btn btn-ghost btn-sm" onclick="closeCostMonth()" style="color:#2a6a6a;border-color:#a0c8c8">📌 월 마감</button>
             <button class="btn btn-navy" onclick="runCostCalc()">📊 배분 계산 실행</button>
           </div>
         </div>
+
+        <!-- 승인 대기 배너 -->
+        <div id="approvalBanner" style="display:none;margin-bottom:16px"></div>
 
         <!-- KPI 카드 -->
         <!-- 지역별 비용 입력 (LMS·캡스·청소용역·청소용품) -->
@@ -2210,6 +2214,7 @@ const COST_MAP={
 };
 
 async function initCostPage(){
+  setTimeout(() => { try { loadPendingApprovals(); } catch(e) {} }, 300);
   const typeEl = document.getElementById('costPeriodType');
   const selEl  = document.getElementById('costPeriod');
   const bdgEl  = document.getElementById('costPeriodBadge');
@@ -7397,10 +7402,158 @@ function openCostMonthModal() {
   document.getElementById('moCostMonth').classList.add('open');
 }
 
+// ═══════════ 마감 승인 게이트 (승인 없이 마감 없음) ═══════════
+let PENDING_APPROVALS = [];
+
+// ① 승인 요청 — 현재 배분 결과를 스냅샷으로 저장하고 대기 상태로
+async function requestCloseApproval() {
+  if(!costResult || !costResult.length) { showToast('먼저 배분 계산을 실행해 주세요'); return; }
+
+  const ym = prompt('마감 기준월(출금월)을 입력하세요\n형식: YYYY-MM (예: 2026-07)',
+                    new Date().toISOString().slice(0,7));
+  if(!ym) return;
+  if(!/^\d{4}-\d{2}$/.test(ym)) { showToast('형식이 올바르지 않습니다 (YYYY-MM)'); return; }
+
+  // 이미 대기 중인 같은 월이 있으면 중복 방지
+  try {
+    const rows = await sbSelect('close_approval');
+    if((rows||[]).some(r => r.year_month === ym && r.status === 'pending')) {
+      showToast(`⚠️ ${ym} 승인 요청이 이미 대기 중입니다`); return;
+    }
+  } catch(e) {}
+
+  const totalAmt = costResult.reduce((s,d)=>s+(d.총비용||0),0);
+  const itemCnt  = costResult.reduce((s,d)=>s+(d.항목수||0),0);
+
+  // 이슈 수집 (검토 필요 항목)
+  const issues = [];
+  costResult.forEach(d => {
+    if(String(d.code||'').includes('공통')) issues.push(`${d.code} — 관코드 미지정 배분 ${fmt(Math.round(d.총비용))}원`);
+  });
+
+  // 전월 비교
+  let prevTotal = 0;
+  try {
+    const hist = await sbSelect('cost_history') || [];
+    const months = [...new Set(hist.map(r=>r['year_month']).filter(m=>m && m < ym))].sort();
+    const prevYm = months[months.length-1];
+    if(prevYm) prevTotal = hist.filter(r=>r['year_month']===prevYm)
+                               .reduce((s,r)=>s+(Number(r['총비용'])||0),0);
+  } catch(e) {}
+
+  const token = 'ap_' + Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+
+  setLoading(true);
+  const ok = await sbInsert('close_approval', {
+    year_month: ym, status: 'pending',
+    total_amount: Math.round(totalAmt), kwan_count: costResult.length, item_count: itemCnt,
+    prev_total: Math.round(prevTotal), issues: issues,
+    snapshot: costResult,
+    requester: document.getElementById('uNm')?.textContent || '관리자',
+    approve_token: token
+  });
+  setLoading(false);
+
+  if(!ok) { showToast('승인 요청 실패 — 다시 시도해 주세요'); return; }
+  showToast(`📤 ${ym} 마감 승인 요청 완료 — 승인 후 마감·메일이 진행됩니다`);
+  await loadPendingApprovals();
+}
+
+// ② 대기 목록 조회 + 배너 렌더
+async function loadPendingApprovals() {
+  const box = document.getElementById('approvalBanner');
+  if(!box) return;
+  try {
+    const rows = await sbSelect('close_approval') || [];
+    PENDING_APPROVALS = rows.filter(r => r.status === 'pending')
+                            .sort((a,b) => String(b.requested_at||'').localeCompare(String(a.requested_at||'')));
+  } catch(e) { PENDING_APPROVALS = []; }
+
+  if(!PENDING_APPROVALS.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+
+  box.style.display = 'block';
+  box.innerHTML = PENDING_APPROVALS.map(a => {
+    const diff = (Number(a.total_amount)||0) - (Number(a.prev_total)||0);
+    const pct = a.prev_total ? ((diff / a.prev_total) * 100).toFixed(1) : null;
+    const issues = Array.isArray(a.issues) ? a.issues : [];
+    return `
+    <div style="border:1px solid #b9aee8;border-left:4px solid #5b4bb5;background:#f6f4fd;padding:14px 18px;border-radius:0 6px 6px 0">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <span style="font-weight:800;font-size:14px;color:#3d3080">🔔 승인 대기 — ${esc(a.year_month)} 마감</span>
+        <span style="font-size:11px;color:var(--text3)">요청: ${esc(a.requester)} · ${String(a.requested_at||'').slice(0,16).replace('T',' ')}</span>
+      </div>
+      <div style="display:flex;gap:22px;flex-wrap:wrap;font-size:12.5px;margin-bottom:10px">
+        <span>총 비용 <strong style="font-family:var(--mono)">${fmt(Number(a.total_amount)||0)}원</strong></span>
+        <span>배분 관 <strong>${a.kwan_count}개</strong></span>
+        <span>항목 <strong>${a.item_count}건</strong></span>
+        ${pct!==null ? `<span>전월 대비 <strong style="color:${diff>=0?'#a02620':'#1d5f3f'}">${diff>=0?'▲':'▼'} ${fmt(Math.abs(Math.round(diff)))}원 (${pct}%)</strong></span>` : ''}
+      </div>
+      ${issues.length ? `<div style="background:#faf0dc;border-radius:4px;padding:8px 11px;font-size:11.5px;color:#7a5210;margin-bottom:10px">
+        ⚠️ 검토 필요 ${issues.length}건<br>${issues.slice(0,3).map(esc).join('<br>')}${issues.length>3?'<br>…':''}
+      </div>` : ''}
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-navy btn-sm" onclick="approveClose(${a.id})">✅ 승인 — 마감 + 메일 발송</button>
+        <button class="btn btn-ghost btn-sm" style="color:#a02620" onclick="rejectClose(${a.id})">↩ 반려</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ③ 승인 → 스냅샷으로 마감 실행 + 메일
+async function approveClose(id) {
+  const a = PENDING_APPROVALS.find(x => String(x.id) === String(id));
+  if(!a) { showToast('승인 건을 찾을 수 없습니다'); return; }
+
+  const issues = Array.isArray(a.issues) ? a.issues : [];
+  let msg = `✅ ${a.year_month} 마감을 승인할까요?\n\n· 총 비용 ${fmt(Number(a.total_amount)||0)}원\n· 배분 관 ${a.kwan_count}개 · 항목 ${a.item_count}건\n`;
+  if(issues.length) msg += `\n⚠️ 검토 필요 ${issues.length}건이 있습니다\n`;
+  msg += `\n승인하면 마감이 확정되고 담당자에게 메일이 발송됩니다.`;
+  if(!confirm(msg)) return;
+
+  // 스냅샷을 현재 결과로 복원해 마감 실행 (승인한 내용 그대로 마감)
+  const backup = costResult;
+  try {
+    if(Array.isArray(a.snapshot) && a.snapshot.length) costResult = a.snapshot;
+    await executeCostClose(a.year_month);
+  } finally {
+    costResult = backup;
+  }
+
+  await sbUpdate('close_approval', a.id, {
+    status: 'approved',
+    approver: document.getElementById('uNm')?.textContent || '관리자',
+    approved_at: new Date().toISOString()
+  });
+  await loadPendingApprovals();
+}
+
+// ④ 반려
+async function rejectClose(id) {
+  const a = PENDING_APPROVALS.find(x => String(x.id) === String(id));
+  if(!a) return;
+  const reason = prompt(`↩ ${a.year_month} 마감을 반려합니다.\n사유를 입력하세요 (선택)`);
+  if(reason === null) return;
+  setLoading(true);
+  await sbUpdate('close_approval', a.id, {
+    status: 'rejected',
+    approver: document.getElementById('uNm')?.textContent || '관리자',
+    approved_at: new Date().toISOString(),
+    reject_reason: reason || ''
+  });
+  setLoading(false);
+  showToast('↩ 반려 처리했습니다 — 마감은 진행되지 않습니다');
+  await loadPendingApprovals();
+}
+
 async function confirmCostMonthClose() {
   const ym = document.getElementById('costMonthSel')?.value;
   if(!ym) { showToast('기준월을 선택해 주세요'); return; }
   closeMo('moCostMonth');
+  await executeCostClose(ym);
+}
+
+// 마감 실행 본체 — 승인 화면에서도 동일하게 호출 (승인 없이 마감 없음)
+async function executeCostClose(ym) {
   const existing = await sbSelect('cost_history');
   const alreadyClosed = existing.some(r => r['year_month'] === ym);
   if(alreadyClosed) {
