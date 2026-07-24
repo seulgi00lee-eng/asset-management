@@ -1588,6 +1588,7 @@ async function syncSharedState() {
       try { localStorage.setItem(r.key, JSON.stringify(v)); } catch(e) {}
       if(r.key === 'rentalCats' && Array.isArray(v) && v.length) RENTAL_CATS = v;
       if(r.key === 'kwanCodes' && Array.isArray(v)) KWAN_CODES = v;
+      if(r.key === 'slack_webhook_url' && typeof v === 'string') SLACK_WEBHOOK_URL = v;
     });
   } catch(e) { console.warn('공유 상태 동기화 실패(로컬 값으로 동작):', e); }
   try { await loadHistFromServer(); } catch(e) { console.warn('이력 동기화 실패:', e); }
@@ -7402,6 +7403,52 @@ function openCostMonthModal() {
   document.getElementById('moCostMonth').classList.add('open');
 }
 
+// ═══════════ 슬랙 알림 (Webhook URL은 Supabase에 보관 — 소스 노출 방지) ═══════════
+let SLACK_WEBHOOK_URL = '';
+
+function buildSlackApprovalText(a) {
+  const total = Number(a.total_amount) || 0;
+  const prev  = Number(a.prev_total) || 0;
+  const diff  = total - prev;
+  const pct   = prev ? ((diff / prev) * 100).toFixed(1) : null;
+  const issues = Array.isArray(a.issues) ? a.issues : [];
+
+  let t = `📋 *관별손익 마감 승인 요청*\n\n`;
+  t += `🗓 기준월: *${a.year_month}*  _(출금월 기준)_\n`;
+  t += `💰 총 비용: *${fmt(Math.round(total))}원*\n`;
+  t += `📊 배분 관 ${a.kwan_count}개 · 항목 ${a.item_count}건\n`;
+  if(pct !== null) {
+    t += `📈 전월 대비: ${diff >= 0 ? '▲' : '▼'} ${fmt(Math.abs(Math.round(diff)))}원 (${pct}%)\n`;
+  }
+  if(issues.length) {
+    t += `\n⚠️ *검토 필요 ${issues.length}건*\n`;
+    issues.slice(0, 3).forEach(s => { t += `· ${s}\n`; });
+    if(issues.length > 3) t += `· … 외 ${issues.length - 3}건\n`;
+  }
+  t += `\n👉 <https://seulgi00lee-eng.github.io/asset-management/|시스템에서 승인하기>\n`;
+  t += `_요청: ${a.requester || '관리자'} · ${new Date().toLocaleString('ko-KR')}_`;
+  return t;
+}
+
+async function sendSlackApproval(a) {
+  if(!SLACK_WEBHOOK_URL) {
+    console.warn('슬랙 Webhook URL이 설정되지 않았습니다 (app_state: slack_webhook_url)');
+    return false;
+  }
+  try {
+    // Content-Type을 지정하지 않아 사전요청(preflight) 없이 전송
+    await fetch(SLACK_WEBHOOK_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      body: JSON.stringify({ text: buildSlackApprovalText(a) })
+    });
+    return true;
+  } catch(e) {
+    console.warn('슬랙 발송 실패:', e);
+    return false;
+  }
+}
+
 // ═══════════ 마감 승인 게이트 (승인 없이 마감 없음) ═══════════
 let PENDING_APPROVALS = [];
 
@@ -7455,7 +7502,24 @@ async function requestCloseApproval() {
   setLoading(false);
 
   if(!ok) { showToast('승인 요청 실패 — 다시 시도해 주세요'); return; }
-  showToast(`📤 ${ym} 마감 승인 요청 완료 — 승인 후 마감·메일이 진행됩니다`);
+
+  // 슬랙 알림 발송
+  const card = {
+    year_month: ym, total_amount: Math.round(totalAmt), kwan_count: costResult.length,
+    item_count: itemCnt, prev_total: Math.round(prevTotal), issues: issues,
+    requester: document.getElementById('uNm')?.textContent || '관리자'
+  };
+  const sent = await sendSlackApproval(card);
+  if(sent) {
+    try {
+      const rows2 = await sbSelect('close_approval') || [];
+      const mine = rows2.filter(r => r.year_month === ym && r.status === 'pending')
+                        .sort((x,y) => String(y.requested_at||'').localeCompare(String(x.requested_at||'')))[0];
+      if(mine) await sbUpdate('close_approval', mine.id, { slack_sent: true });
+    } catch(e) {}
+  }
+
+  showToast(`📤 ${ym} 마감 승인 요청 완료${sent ? ' · 슬랙 알림 발송됨' : ''} — 승인 후 마감·메일이 진행됩니다`);
   await loadPendingApprovals();
 }
 
