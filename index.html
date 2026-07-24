@@ -7430,17 +7430,56 @@ function buildSlackApprovalText(a) {
   return t;
 }
 
+// 슬랙 Block Kit 카드 (승인/반려 버튼 포함)
+function buildSlackApprovalBlocks(a) {
+  const text = buildSlackApprovalText(a);
+  const payload = JSON.stringify({
+    approval_id: a.approval_id || '',
+    token: a.approve_token || '',
+    year_month: a.year_month || ''
+  });
+  return {
+    text: `관별손익 마감 승인 요청 — ${a.year_month}`,   // 알림 미리보기용
+    blocks: [
+      { type: 'section', text: { type: 'mrkdwn', text } },
+      {
+        type: 'actions',
+        block_id: 'close_approval_actions',
+        elements: [
+          {
+            type: 'button', action_id: 'approve_close',
+            style: 'primary',
+            text: { type: 'plain_text', text: '✅ 승인 — 마감 + 메일', emoji: true },
+            value: payload,
+            confirm: {
+              title: { type: 'plain_text', text: '마감을 확정합니다' },
+              text: { type: 'mrkdwn', text: `*${a.year_month}* 마감을 확정하고 담당자에게 메일을 발송합니다.\n계속할까요?` },
+              confirm: { type: 'plain_text', text: '승인' },
+              deny: { type: 'plain_text', text: '취소' }
+            }
+          },
+          {
+            type: 'button', action_id: 'reject_close',
+            style: 'danger',
+            text: { type: 'plain_text', text: '↩ 반려', emoji: true },
+            value: payload
+          }
+        ]
+      }
+    ]
+  };
+}
+
 async function sendSlackApproval(a) {
   if(!SLACK_WEBHOOK_URL) {
     console.warn('슬랙 Webhook URL이 설정되지 않았습니다 (app_state: slack_webhook_url)');
     return false;
   }
   try {
-    // Content-Type을 지정하지 않아 사전요청(preflight) 없이 전송
     await fetch(SLACK_WEBHOOK_URL, {
       method: 'POST',
       mode: 'no-cors',
-      body: JSON.stringify({ text: buildSlackApprovalText(a) })
+      body: JSON.stringify(buildSlackApprovalBlocks(a))
     });
     return true;
   } catch(e) {
@@ -7503,21 +7542,23 @@ async function requestCloseApproval() {
 
   if(!ok) { showToast('승인 요청 실패 — 다시 시도해 주세요'); return; }
 
-  // 슬랙 알림 발송
+  // 방금 저장된 승인 건 조회 (버튼에 id·token을 실어야 함)
+  let mine = null;
+  try {
+    const rows2 = await sbSelect('close_approval') || [];
+    mine = rows2.filter(r => r.year_month === ym && r.status === 'pending')
+                .sort((x,y) => String(y.requested_at||'').localeCompare(String(x.requested_at||'')))[0];
+  } catch(e) {}
+
+  // 슬랙 알림 발송 (승인/반려 버튼 포함)
   const card = {
     year_month: ym, total_amount: Math.round(totalAmt), kwan_count: costResult.length,
     item_count: itemCnt, prev_total: Math.round(prevTotal), issues: issues,
-    requester: document.getElementById('uNm')?.textContent || '관리자'
+    requester: document.getElementById('uNm')?.textContent || '관리자',
+    approval_id: mine ? mine.id : '', approve_token: mine ? (mine.approve_token||'') : ''
   };
   const sent = await sendSlackApproval(card);
-  if(sent) {
-    try {
-      const rows2 = await sbSelect('close_approval') || [];
-      const mine = rows2.filter(r => r.year_month === ym && r.status === 'pending')
-                        .sort((x,y) => String(y.requested_at||'').localeCompare(String(x.requested_at||'')))[0];
-      if(mine) await sbUpdate('close_approval', mine.id, { slack_sent: true });
-    } catch(e) {}
-  }
+  if(sent && mine) { try { await sbUpdate('close_approval', mine.id, { slack_sent: true }); } catch(e) {} }
 
   showToast(`📤 ${ym} 마감 승인 요청 완료${sent ? ' · 슬랙 알림 발송됨' : ''} — 승인 후 마감·메일이 진행됩니다`);
   await loadPendingApprovals();
