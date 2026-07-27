@@ -7407,26 +7407,32 @@ function openCostMonthModal() {
 let SLACK_WEBHOOK_URL = '';
 
 function buildSlackApprovalText(a) {
+  const SYS_URL = 'https://seulgi00lee-eng.github.io/asset-management/';
+  const MAX_LINES = 15;                       // 슬랙 블록 3000자 제한 대비
+
   const total = Number(a.total_amount) || 0;
   const prev  = Number(a.prev_total) || 0;
   const diff  = total - prev;
   const pct   = prev ? ((diff / prev) * 100).toFixed(1) : null;
   const issues = Array.isArray(a.issues) ? a.issues : [];
 
-  let t = `📋 *관별손익 마감 승인 요청*\n\n`;
-  t += `🗓 기준월: *${a.year_month}*  _(출금월 기준)_\n`;
-  t += `💰 총 비용: *${fmt(Math.round(total))}원*\n`;
-  t += `📊 배분 관 ${a.kwan_count}개 · 항목 ${a.item_count}건\n`;
+  let t = `*관별손익 마감 승인 요청*\n\n`;
+  t += `*기준월*  ${a.year_month}  _(출금월 기준)_\n`;
+  t += `*총 비용*  ${fmt(Math.round(total))}원\n`;
+  t += `*배분 규모*  관 ${a.kwan_count}개 · 항목 ${a.item_count}건\n`;
   if(pct !== null) {
-    t += `📈 전월 대비: ${diff >= 0 ? '▲' : '▼'} ${fmt(Math.abs(Math.round(diff)))}원 (${pct}%)\n`;
+    t += `*전월 대비*  ${diff >= 0 ? '▲' : '▼'} ${fmt(Math.abs(Math.round(diff)))}원 (${pct}%)\n`;
   }
+
   if(issues.length) {
-    t += `\n⚠️ *검토 필요 ${issues.length}건*\n`;
-    issues.slice(0, 3).forEach(s => { t += `· ${s}\n`; });
-    if(issues.length > 3) t += `· … 외 ${issues.length - 3}건\n`;
+    t += `\n⚠ *검토 필요 ${issues.length}건*\n`;
+    issues.slice(0, MAX_LINES).forEach(s => { t += `· ${s}\n`; });
+    if(issues.length > MAX_LINES) {
+      t += `· 외 ${issues.length - MAX_LINES}건 — <${SYS_URL}|시스템에서 전체 확인>\n`;
+    }
   }
-  t += `\n👉 <https://seulgi00lee-eng.github.io/asset-management/|시스템에서 승인하기>\n`;
-  t += `_요청: ${a.requester || '관리자'} · ${new Date().toLocaleString('ko-KR')}_`;
+
+  t += `\n_요청: ${a.requester || '관리자'} · ${new Date().toLocaleString('ko-KR')}_  ·  <${SYS_URL}|시스템 열기>`;
   return t;
 }
 
@@ -7584,7 +7590,7 @@ async function loadPendingApprovals() {
     return `
     <div style="border:1px solid #b9aee8;border-left:4px solid #5b4bb5;background:#f6f4fd;padding:14px 18px;border-radius:0 6px 6px 0">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
-        <span style="font-weight:800;font-size:14px;color:#3d3080">🔔 승인 대기 — ${esc(a.year_month)} 마감</span>
+        <span style="font-weight:800;font-size:14px;color:#3d3080">승인 대기 — ${esc(a.year_month)} 마감</span>
         <span style="font-size:11px;color:var(--text3)">요청: ${esc(a.requester)} · ${String(a.requested_at||'').slice(0,16).replace('T',' ')}</span>
       </div>
       <div style="display:flex;gap:22px;flex-wrap:wrap;font-size:12.5px;margin-bottom:10px">
@@ -7594,7 +7600,8 @@ async function loadPendingApprovals() {
         ${pct!==null ? `<span>전월 대비 <strong style="color:${diff>=0?'#a02620':'#1d5f3f'}">${diff>=0?'▲':'▼'} ${fmt(Math.abs(Math.round(diff)))}원 (${pct}%)</strong></span>` : ''}
       </div>
       ${issues.length ? `<div style="background:#faf0dc;border-radius:4px;padding:8px 11px;font-size:11.5px;color:#7a5210;margin-bottom:10px">
-        ⚠️ 검토 필요 ${issues.length}건<br>${issues.slice(0,3).map(esc).join('<br>')}${issues.length>3?'<br>…':''}
+        <strong>⚠ 검토 필요 ${issues.length}건</strong>
+        <div style="margin-top:5px;max-height:132px;overflow-y:auto;line-height:1.75">${issues.map(esc).join('<br>')}</div>
       </div>` : ''}
       <div style="display:flex;gap:8px">
         <button class="btn btn-navy btn-sm" onclick="approveClose(${a.id})">✅ 승인 — 마감 + 메일 발송</button>
