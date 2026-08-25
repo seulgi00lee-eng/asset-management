@@ -187,13 +187,19 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
 .hr{display:flex;border-bottom:1px solid var(--cream2);transition:background .1s}
 .hr:hover{background:var(--cream)}
 .hr:last-child{border-bottom:none}
-.hr-time{width:120px;padding:13px 18px;font-family:var(--mono);font-size:10px;color:var(--text3);flex-shrink:0;line-height:1.6}
-.hr-body{flex:1;padding:13px 18px 13px 0}
-.hr-title{font-weight:600;color:var(--navy);margin-bottom:5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.hr-detail{font-size:11px;color:var(--text2);display:flex;gap:14px;flex-wrap:wrap;margin-top:2px}
-.hr-chg{display:inline-flex;align-items:center;gap:5px;background:var(--cream);padding:2px 8px;font-size:10px;font-family:var(--mono)}
-.hr-arr{color:var(--gold);font-weight:700}
-.hr-src{font-size:9px;letter-spacing:1px;text-transform:uppercase;font-weight:700}
+.hr-time{width:112px;padding:14px 16px;font-family:var(--mono);font-size:11px;color:var(--text3);flex-shrink:0;line-height:1.65;letter-spacing:-.2px}
+.hr-body{flex:1;padding:14px 18px 14px 0;min-width:0}
+.hr-title{font-weight:600;font-size:13.5px;color:var(--text);margin-bottom:7px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;line-height:1.4}
+.hr-detail{font-size:12px;color:var(--text2);display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:2px;line-height:1.6}
+/* 변경 전→후 칩: 한글이 mono에서 깨지므로 기본 폰트, 숫자만 mono */
+.hr-chg{display:inline-flex;align-items:center;gap:7px;background:var(--cream);border:1px solid var(--border);border-radius:3px;padding:3px 10px;font-size:12px;font-family:var(--font);line-height:1.5}
+.hr-num{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:-.3px;color:var(--text)}
+.hr-unit{font-family:var(--font);font-size:10.5px;color:var(--text3);margin-left:1px}
+.hr-field{font-weight:600;color:var(--text2);font-size:11.5px}
+.hr-worker{font-size:11.5px;color:var(--text2)}
+.hr-worker b{font-weight:600;color:var(--text)}
+.hr-arr{color:var(--gold);font-weight:700;font-size:12px}
+.hr-src{font-size:10px;letter-spacing:.8px;text-transform:uppercase;font-weight:700}
 .src-scan{color:var(--teal)}
 .src-dash{color:var(--amber)}
 .hr-photo{width:68px;padding:10px 18px 10px 0;display:flex;align-items:center;flex-shrink:0}
@@ -5730,6 +5736,20 @@ function assetNameOf(h){
   }
   return nm || '—';
 }
+// ★ 변경 전/후 값 포맷 — 숫자는 천단위 콤마 + mono, 한글은 기본 폰트(mono에서 깨짐 방지)
+function hVal(v, field){
+  const raw = String(v == null ? '' : v).trim();
+  if(!raw || raw === 'undefined' || raw === '—') return '<span style="color:var(--text3)">—</span>';
+  // 순수 숫자 또는 정상 천단위 표기만 숫자로 취급 (관코드 "103,105,111" 오인 방지)
+  if(/^-?\d+(\.\d+)?$/.test(raw) || /^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(raw)){
+    const n = Number(raw.replace(/,/g, ''));
+    if(!isNaN(n)){
+      const unit = /료|금액|비용|보증금|단가|수수료|관리비/.test(String(field||'')) ? '<span class="hr-unit">원</span>' : '';
+      return `<span class="hr-num">${n.toLocaleString('ko-KR')}</span>${unit}`;
+    }
+  }
+  return raw;
+}
 function hRowHTML(h){
   const ts=new Date(h.ts);
   const ds=ts.toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit'});
@@ -5753,17 +5773,17 @@ function hRowHTML(h){
     <div class="hr-body">
       <div class="hr-title">
         <span class="tag ${tc}">${h.assetType}</span>
-        <span style="font-weight:600">${assetLabel}</span>
+        <span>${assetLabel}</span>
         <span class="hr-src ${sc}">${h.source}</span>
-        ${h.assetCode?`<span class="code" style="font-size:10px">${h.assetCode}</span>`:''}
+        ${h.assetCode && h.assetCode!=='—' && h.assetCode!==assetLabel?`<span class="code" style="font-size:11px;color:var(--text3);font-weight:500">${h.assetCode}</span>`:''}
       </div>
       <div class="hr-detail">
-        ${h.field&&h.field!=='undefined'?`<span>${h.field}</span>`:''}
-        ${(h.fromLoc&&h.fromLoc!=='undefined')||(h.toLoc&&h.toLoc!=='undefined')?`<span class="hr-chg"><span>${h.fromLoc||'—'}</span><span class="hr-arr">→</span><span>${h.toLoc||'—'}</span></span>`:
-          (h.from&&h.from!=='undefined')||(h.to&&h.to!=='undefined')?`<span class="hr-chg"><span>${h.from||'—'}</span><span class="hr-arr">→</span><span>${h.to||'—'}</span></span>`:''}
-        ${h.applyMonth?`<span style="color:#5a1a8a;font-size:10px">(${h.applyMonth}부터)</span>`:''}
-        ${h.worker?`<span>처리: ${h.worker}</span>`:''}
-        ${h.memo?`<span style="color:var(--text3);font-style:italic">${h.memo}</span>`:''}
+        ${h.field&&h.field!=='undefined'?`<span class="hr-field">${h.field}</span>`:''}
+        ${(h.fromLoc&&h.fromLoc!=='undefined')||(h.toLoc&&h.toLoc!=='undefined')?`<span class="hr-chg">${hVal(h.fromLoc,h.field)}<span class="hr-arr">→</span>${hVal(h.toLoc,h.field)}</span>`:
+          (h.from&&h.from!=='undefined')||(h.to&&h.to!=='undefined')?`<span class="hr-chg">${hVal(h.from,h.field)}<span class="hr-arr">→</span>${hVal(h.to,h.field)}</span>`:''}
+        ${h.applyMonth?`<span style="color:#5a1a8a;font-size:11px;font-weight:600">${h.applyMonth}부터</span>`:''}
+        ${h.worker?`<span class="hr-worker">처리 <b>${h.worker}</b></span>`:''}
+        ${h.memo?`<span style="color:var(--text3);font-size:11.5px">${h.memo}</span>`:''}
       </div>
     </div>
     <div class="hr-photo">${h.photo?`<img class="hr-img" src="${h.photo}" onclick="openLB('${h.photo}')" title="사진 클릭 시 확대">`:''}</div>
