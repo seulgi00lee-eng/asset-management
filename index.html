@@ -1479,6 +1479,14 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
   </div>
 </div>
 
+<!-- 이력 상세 모달 -->
+<div class="mo" id="moHistDetail" onclick="closeMoBg(event,'moHistDetail')">
+  <div class="mo-box" style="width:620px">
+    <div class="mo-t" id="histDetailTitle">이력 상세</div>
+    <div id="histDetailBody"></div>
+    <div class="mo-ft"><button class="btn btn-ghost" onclick="closeMo('moHistDetail')">닫기</button></div>
+  </div>
+</div>
 <div id="lb" onclick="this.classList.remove('open')"><img id="lbImg" src=""></div>
 <div id="prt" style="display:none"></div>
 <div id="toast"></div>
@@ -1780,11 +1788,19 @@ function addHist(e){
   }
 }
 
+// ★ 배지는 '최근 24시간 내 변경'만 — 하루 지나면 자동으로 사라짐
 function refreshHBadge(){
   const el=document.getElementById('nb-history');
   if(!el) return;
-  const n = (typeof HIST_TOTAL === 'number' && HIST_TOTAL > 0) ? HIST_TOTAL : HIST.length;
-  if(n){ el.textContent = n; el.style.display='inline'; }
+  const cutoff = Date.now() - 86400000;   // 24시간
+  const n = HIST.filter(h => { const t = Date.parse(h.ts); return !isNaN(t) && t >= cutoff; }).length;
+  if(n){
+    el.textContent = n;
+    el.title = `최근 24시간 내 변경 ${n}건`;
+    el.style.display = 'inline';
+  } else {
+    el.style.display = 'none';
+  }
 }
 // 로컬 캐시는 최근 500건만 (용량 초과 방지)
 function persistHistLocal(){
@@ -5880,7 +5896,8 @@ function hRowHTML(h){
     if(parts.length) assetLabel = parts.join(' · ');
   }
 
-  return `<div class="hr">
+  const hid = (h.id != null ? String(h.id) : '');
+  return `<div class="hr" ${hid?`onclick="openHistDetail('${hid}')" style="cursor:pointer" title="클릭하면 상세 변경 내역"`:''}>
     <div class="hr-time">${ds}<br>${tm}</div>
     <div class="hr-body">
       <div class="hr-title">
@@ -5898,7 +5915,7 @@ function hRowHTML(h){
         ${h.memo?`<span style="color:var(--text3);font-size:11.5px">${h.memo}</span>`:''}
       </div>
     </div>
-    <div class="hr-photo">${h.photo?`<img class="hr-img" src="${h.photo}" onclick="openLB('${h.photo}')" title="사진 클릭 시 확대">`:''}</div>
+    <div class="hr-photo">${h.photo?`<img class="hr-img" src="${h.photo}" onclick="event.stopPropagation();openLB('${h.photo}')" title="사진 클릭 시 확대">`:''}</div>
   </div>`;
 }
 
@@ -6010,6 +6027,86 @@ function hPagerHTML(total, page, pages){
     ${nums}
     ${btn('다음 ›', page + 1, { disabled: page >= pages })}
   </div>`;
+}
+// ═══════════ 이력 상세 보기 ═══════════
+function _kwanList(v){ return String(v||'').split(/[,，\s]+/).map(x=>x.trim()).filter(Boolean); }
+function openHistDetail(id){
+  const h = HIST.find(x => String(x.id) === String(id));
+  if(!h){ showToast('이력을 찾을 수 없습니다'); return; }
+  const d = new Date(h.ts);
+  const when = isNaN(d) ? (h.ts||'—')
+    : d.toLocaleString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const tc = {임대차계약:'tg-lease',유형자산:'tg-tangible',무형자산:'tg-intangible',렌탈자산:'tg-rental',보험:'tg-insurance'}[h.assetType]||'tg-lease';
+  document.getElementById('histDetailTitle').innerHTML =
+    `<span class="tag ${tc}" style="margin-right:8px;vertical-align:2px">${esc(h.assetType||'—')}</span>${esc(assetNameOf(h))}`;
+  // 표 행 헬퍼
+  const R = (label, val, opt='') => val
+    ? `<tr><th style="padding:8px 12px;text-align:left;font-size:10px;letter-spacing:1px;color:var(--text3);font-weight:700;width:104px;vertical-align:top;white-space:nowrap">${label}</th>
+         <td style="padding:8px 12px;font-size:12.5px;color:var(--text);border-bottom:1px solid var(--cream2);${opt}">${val}</td></tr>` : '';
+  // ① 변경 내역 (필드 값)
+  const hasField = (h.from && h.from!=='undefined') || (h.to && h.to!=='undefined');
+  const fieldBlock = hasField ? `
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--cream);border:1px solid var(--border);padding:12px 14px">
+      <div style="text-align:center;flex:1;min-width:110px">
+        <div style="font-size:9px;letter-spacing:1px;color:var(--text3);margin-bottom:5px">변경 전</div>
+        <div style="font-size:14px;font-weight:600">${hVal(h.from,h.field)}</div>
+      </div>
+      <div style="font-size:20px;color:var(--gold);font-weight:700">→</div>
+      <div style="text-align:center;flex:1;min-width:110px">
+        <div style="font-size:9px;letter-spacing:1px;color:var(--text3);margin-bottom:5px">변경 후</div>
+        <div style="font-size:14px;font-weight:700;color:var(--text)">${hVal(h.to,h.field)}</div>
+      </div>
+    </div>` : '';
+  // ② 관코드 변경 (배분 분모 변화 포함)
+  const fk = _kwanList(h.fromLoc), tk = _kwanList(h.toLoc);
+  const hasKwan = (h.fromLoc && h.fromLoc!=='undefined') || (h.toLoc && h.toLoc!=='undefined');
+  const chip = (arr, color) => arr.length
+    ? arr.map(c=>`<span style="display:inline-block;margin:2px 3px;padding:2px 9px;background:#fff;border:1px solid var(--border);font-family:var(--mono);font-size:11.5px;font-weight:600;color:${color}">${esc(c)}</span>`).join('')
+    : `<span style="color:var(--text3);font-size:11.5px">미지정</span>`;
+  const splitNote = (fk.length && tk.length && fk.length !== tk.length)
+    ? `<div style="margin-top:8px;font-size:11px;color:#5a1a8a;background:#f6f2fd;border:1px solid #ddd3f5;padding:6px 10px">
+         비용 배분 분모 변경 — <b>÷${fk.length}</b> → <b>÷${tk.length}</b> (관당 부담 ${tk.length>fk.length?'감소':'증가'})
+       </div>` : '';
+  const kwanBlock = hasKwan ? `
+    <div style="background:var(--cream);border:1px solid var(--border);padding:12px 14px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:150px">
+          <div style="font-size:9px;letter-spacing:1px;color:var(--text3);margin-bottom:5px">변경 전 관코드 ${fk.length?`(${fk.length}개)`:''}</div>
+          <div>${chip(fk,'var(--text2)')}</div>
+        </div>
+        <div style="font-size:20px;color:var(--gold);font-weight:700">→</div>
+        <div style="flex:1;min-width:150px">
+          <div style="font-size:9px;letter-spacing:1px;color:var(--text3);margin-bottom:5px">변경 후 관코드 ${tk.length?`(${tk.length}개)`:''}</div>
+          <div>${chip(tk,'var(--text)')}</div>
+        </div>
+      </div>
+      ${splitNote}
+    </div>` : '';
+  const loc = [h.건물명, h.층수].filter(Boolean).join(' ');
+  const sec = (t) => `<div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--gold);font-weight:700;margin:16px 0 8px">${t}</div>`;
+  document.getElementById('histDetailBody').innerHTML = `
+    ${hasField ? sec('변경 내역') + fieldBlock : ''}
+    ${hasKwan  ? sec('관코드 이동') + kwanBlock : ''}
+    ${sec('자산 정보')}
+    <table style="width:100%;border-collapse:collapse">
+      ${R('자산명', esc(assetNameOf(h)))}
+      ${R('자산코드', h.assetCode && h.assetCode!=='—' ? `<span class="code">${esc(h.assetCode)}</span>` : '')}
+      ${R('자산유형', esc(h.assetType||''))}
+      ${R('분류', esc(h.분류||''))}
+      ${R('위치', loc ? esc(loc) : '')}
+      ${R('변경 항목', h.field && h.field!=='undefined' ? `<span style="font-weight:600">${esc(h.field)}</span>` : '')}
+    </table>
+    ${sec('처리 정보')}
+    <table style="width:100%;border-collapse:collapse">
+      ${R('처리자', h.worker ? `<b>${esc(h.worker)}</b>` : '')}
+      ${R('일시', esc(when))}
+      ${R('기록 경로', esc(h.source||''))}
+      ${R('적용시작월', h.applyMonth ? `<span style="font-family:var(--mono);font-weight:700;color:#5a1a8a">${esc(h.applyMonth)}</span> <span style="font-size:11px;color:var(--text3)">부터 비용 배분에 반영</span>` : '')}
+      ${R('사유 · 메모', h.memo ? esc(h.memo) : '')}
+      ${R('이력 ID', `<span class="code" style="color:var(--text3)">${esc(String(h.id||''))}</span>`)}
+    </table>
+    ${h.photo ? sec('첨부 사진') + `<img src="${h.photo}" style="max-width:100%;border:1px solid var(--border);cursor:zoom-in" onclick="openLB('${h.photo}')">` : ''}`;
+  document.getElementById('moHistDetail').classList.add('open');
 }
 function histMoreHTML(){
   if(HIST_ALL_LOADED){
