@@ -580,12 +580,15 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
         <div class="ph">
           <div><div class="ph-ey">History · 전체 자산</div><div class="ph-t">이동·변경 이력</div><div class="ph-s">QR 스캔 + 대시보드 수정 시 자동 기록 · 전체 자산 유형 · 사진 첨부</div><div class="ph-rule"></div></div>
           <div class="ph-acts">
-            <select id="hTF" style="border:1px solid var(--border);padding:7px 12px;font-size:11px;font-family:var(--font);background:var(--cream);outline:none" onchange="renderHPage()">
+            <select id="hTF" style="border:1px solid var(--border);padding:7px 12px;font-size:11px;font-family:var(--font);background:var(--cream);outline:none" onchange="hPage=1;renderHPage()">
               <option value="">전체 유형</option>
               <option>임대차계약</option><option>유형자산</option><option>무형자산</option><option>렌탈자산</option><option>보험</option>
             </select>
-            <select id="hSF" style="border:1px solid var(--border);padding:7px 12px;font-size:11px;font-family:var(--font);background:var(--cream);outline:none" onchange="renderHPage()">
+            <select id="hSF" style="border:1px solid var(--border);padding:7px 12px;font-size:11px;font-family:var(--font);background:var(--cream);outline:none" onchange="hPage=1;renderHPage()">
               <option value="">전체 경로</option><option value="QR스캔">QR 스캔</option><option value="대시보드">대시보드</option>
+            </select>
+            <select id="hWF" style="border:1px solid var(--border);padding:7px 12px;font-size:11px;font-family:var(--font);background:var(--cream);outline:none" onchange="hPage=1;renderHPage()">
+              <option value="">전체 처리자</option>
             </select>
             <button class="btn btn-ghost btn-sm" onclick="clearHist()">초기화</button>
           </div>
@@ -1742,6 +1745,7 @@ async function initApp(){
         const rows = await sbSelect(t);
         if(SAMPLE[t]) SAMPLE[t].rows = rows.map((r,i) => ({ _id: r.id, _rowId: r.id, ...r }));
       }));
+      _ANAME_MAP = null;   // 자산명 역추적 맵 재생성
     } catch(e) { console.warn('대시보드 데이터 로드 오류:', e); }
     renderVisuals();
     await loadAlertsFromServer();
@@ -2172,7 +2176,7 @@ async function go(p, pushHistory=true){
       loadAlertsFromServer();
     })();
   }
-  else if(p==='history'){document.getElementById('page-history').classList.add('active');renderHPage();}
+  else if(p==='history'){document.getElementById('page-history').classList.add('active');hPage=1;renderHPage();}
   else if(p==='cost'){document.getElementById('page-cost').classList.add('active');curType=null;initCostPage();}
   else if(p==='cost-history'){document.getElementById('page-cost-history').classList.add('active');curType=null;loadCostHistory();}
   else if(p==='campus'){document.getElementById('page-campus').classList.add('active');curType=null;initCampusPage();}
@@ -3264,6 +3268,7 @@ async function loadAsset(type){
     try {
       const rows = await sbSelect(d.dbTable);
       d.rows = rows.map((r,i) => ({ _id:r.id, _rowId:r.id, ...r }));
+      _ANAME_MAP = null;   // 자산명 역추적 맵 재생성
     } catch(e) {
       console.error('데이터 로드 오류:', e);
     }
@@ -5695,6 +5700,36 @@ async function returnItem(id) {
 }
 
 // ═══════════════════════ HISTORY RENDER ═══════════════════════
+// ★ 옛 이력의 자산명이 숫자(no값)로 저장된 건 → 자산코드로 실제 자산명 역추적
+let _ANAME_MAP = null;
+function buildAssetNameMap(){
+  const m = {};
+  Object.entries(SAMPLE).forEach(([type, d]) => {
+    if(!d || !Array.isArray(d.rows) || !d.headers) return;
+    const nameCol = d.headers.find(h => ['자산명','렌탈품목','계약명','상품명','보험사','품목명','건물명'].includes(h));
+    if(!nameCol) return;
+    d.rows.forEach(r => {
+      const nm = String(r[nameCol] || '').trim();
+      if(!nm || /^\d+$/.test(nm)) return;
+      const c1 = String(r['자산코드'] || '').trim();
+      if(c1) m[c1] = nm;
+      try { const c2 = genCode(type, r); if(c2) m[c2] = nm; } catch(e) {}
+    });
+  });
+  if(Object.keys(m).length) _ANAME_MAP = m;   // 데이터 로드 전이면 캐시하지 않음
+  return m;
+}
+function assetNameOf(h){
+  const nm = String(h.assetName || '').trim();
+  if(nm && nm !== '—' && !/^\d+$/.test(nm)) return nm;   // 정상 이름이면 그대로
+  const code = String(h.assetCode || '').trim();
+  if(code && code !== '—'){
+    const m = _ANAME_MAP || buildAssetNameMap();
+    if(m[code]) return m[code];
+    return code;                                          // 못 찾으면 자산코드로 대체
+  }
+  return nm || '—';
+}
 function hRowHTML(h){
   const ts=new Date(h.ts);
   const ds=ts.toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit'});
@@ -5702,17 +5737,15 @@ function hRowHTML(h){
   const tc={임대차계약:'tg-lease',유형자산:'tg-tangible',무형자산:'tg-intangible',렌탈자산:'tg-rental',보험:'tg-insurance'}[h.assetType]||'tg-lease';
   const sc=h.source==='QR스캔'?'src-scan':'src-dash';
   // 자산유형별 식별 정보 구성
-  let assetLabel = h.assetName || '—';
+  let assetLabel = assetNameOf(h);
   if(h.assetType === '임대차계약') {
     // 건물명 & 층수
     const parts = [h.건물명, h.층수].filter(Boolean);
     if(parts.length) assetLabel = parts.join(' ');
-    else assetLabel = h.assetName || '—';
   } else if(h.assetType === '렌탈자산') {
     // 분류 & 건물명 & 층수
     const parts = [h.분류, h.건물명, h.층수].filter(Boolean);
     if(parts.length) assetLabel = parts.join(' · ');
-    else assetLabel = h.assetName || '—';
   }
 
   return `<div class="hr">
@@ -5805,12 +5838,76 @@ function renderDashHist(){
   el.innerHTML=HIST.length?HIST.slice(0,8).map(hRowHTML).join(''):'<div class="empty"><div class="ei">📋</div><div class="et">기록된 이력이 없습니다</div></div>';
 }
 
+// ═══════════ 이력 페이지네이션 (30건씩) ═══════════
+const H_PER_PAGE = 30;
+let hPage = 1;
+function goHPage(n){
+  hPage = n;
+  renderHPage();
+  const sec = document.getElementById('hPageList');
+  if(sec) sec.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+function hPagerHTML(total, page, pages){
+  if(pages <= 1) return '';
+  const btn = (label, target, opts={}) => {
+    const { active=false, disabled=false } = opts;
+    if(disabled) return `<span style="padding:6px 11px;font-size:12px;color:var(--border2);font-family:var(--mono)">${label}</span>`;
+    const st = active
+      ? 'background:var(--text);color:#fff;border:1px solid var(--text);font-weight:700'
+      : 'background:#fff;color:var(--text2);border:1px solid var(--border)';
+    return `<button onclick="goHPage(${target})" style="padding:6px 11px;font-size:12px;font-family:var(--mono);cursor:pointer;${st}">${label}</button>`;
+  };
+  // 현재 페이지 기준 5개 창
+  let s = Math.max(1, page - 2), e = Math.min(pages, s + 4);
+  s = Math.max(1, e - 4);
+  let nums = '';
+  if(s > 1){
+    nums += btn('1', 1);
+    if(s > 2) nums += `<span style="padding:0 3px;color:var(--text3);font-size:11px">…</span>`;
+  }
+  for(let i = s; i <= e; i++) nums += btn(String(i), i, { active: i === page });
+  if(e < pages){
+    if(e < pages - 1) nums += `<span style="padding:0 3px;color:var(--text3);font-size:11px">…</span>`;
+    nums += btn(String(pages), pages);
+  }
+  const from = (page - 1) * H_PER_PAGE + 1;
+  const to   = Math.min(page * H_PER_PAGE, total);
+  return `<div style="display:flex;align-items:center;gap:5px;padding:14px 18px;border-top:1px solid var(--cream2);flex-wrap:wrap">
+    <span style="font-size:11px;color:var(--text3);margin-right:auto;font-family:var(--mono)">${from}–${to} / 총 ${total}건 · ${page}/${pages} 페이지</span>
+    ${btn('‹ 이전', page - 1, { disabled: page <= 1 })}
+    ${nums}
+    ${btn('다음 ›', page + 1, { disabled: page >= pages })}
+  </div>`;
+}
 function renderHPage(){
   const tf=document.getElementById('hTF')?.value||'';
   const sf=document.getElementById('hSF')?.value||'';
-  const filtered=HIST.filter(h=>(!tf||h.assetType===tf)&&(!sf||h.source===sf));
-  document.getElementById('histCnt').textContent=filtered.length+'건';
-  document.getElementById('hPageList').innerHTML=filtered.length?filtered.map(hRowHTML).join(''):'<div class="empty"><div class="ei">📋</div><div class="et">조건에 맞는 이력이 없습니다</div></div>';
+  const wf=document.getElementById('hWF')?.value||'';
+  // 처리자 드롭다운 옵션 채우기 (현재 이력에 등장하는 사람만)
+  const wsel = document.getElementById('hWF');
+  if(wsel){
+    const workers = [...new Set(HIST.map(h => String(h.worker||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
+    const sig = workers.join('|');
+    if(wsel.dataset.sig !== sig){
+      wsel.dataset.sig = sig;
+      wsel.innerHTML = '<option value="">전체 처리자</option>' + workers.map(w=>`<option value="${w}">${w}</option>`).join('');
+      wsel.value = workers.includes(wf) ? wf : '';
+    }
+  }
+  const filtered=HIST.filter(h =>
+    (!tf || h.assetType===tf) &&
+    (!sf || h.source===sf) &&
+    (!wf || String(h.worker||'').trim()===wf)
+  );
+  const total = filtered.length;
+  const pages = Math.max(1, Math.ceil(total / H_PER_PAGE));
+  if(hPage > pages) hPage = pages;
+  if(hPage < 1) hPage = 1;
+  document.getElementById('histCnt').textContent = total + '건';
+  const slice = filtered.slice((hPage-1)*H_PER_PAGE, hPage*H_PER_PAGE);
+  document.getElementById('hPageList').innerHTML = total
+    ? slice.map(hRowHTML).join('') + hPagerHTML(total, hPage, pages)
+    : '<div class="empty"><div class="ei">📋</div><div class="et">조건에 맞는 이력이 없습니다</div></div>';
 }
 
 function clearHist(){
