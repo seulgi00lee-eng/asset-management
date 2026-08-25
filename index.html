@@ -596,7 +596,9 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
             <select id="hWF" style="border:1px solid var(--border);padding:7px 12px;font-size:11px;font-family:var(--font);background:var(--cream);outline:none" onchange="hPage=1;renderHPage()">
               <option value="">전체 처리자</option>
             </select>
-            <button class="btn btn-ghost btn-sm" onclick="clearHist()">초기화</button>
+            <button class="btn btn-ghost btn-sm" onclick="resetHistFilter()">✕ 필터 초기화</button>
+            <button class="btn btn-ghost btn-sm" onclick="reloadHist()">↻ 새로고침</button>
+            <button id="histFixBtn" class="btn btn-ghost btn-sm" onclick="backfillHistNames()" style="display:none;color:#5b4bb5;border-color:#b9aee8" title="옛 이력의 자산명이 숫자로 저장된 건을 실제 자산명으로 보정합니다">🛠 자산명 보정</button>
           </div>
         </div>
         <div class="sec">
@@ -1564,31 +1566,133 @@ function persistKwanCodes() {
 }
 
 // 서버 history → 화면 이력(HIST) 동기화: 어느 PC에서 열어도 같은 이력이 보이게
+// ★ 서버 이력 페이지네이션 — 500건씩 커서(id) 방식으로 이어 불러옴
+const HIST_CHUNK = 500;
+let HIST_MIN_ID = null;      // 지금까지 불러온 것 중 가장 작은 id (다음 커서)
+let HIST_TOTAL = 0;          // 서버 전체 건수
+let HIST_ALL_LOADED = false; // 더 불러올 게 없는지
+// history 행 → 화면 이력 항목 변환
+function histRowToEntry(r) {
+  if(r.raw) { try { const p = JSON.parse(r.raw); if(p && p.ts) return { ...p, id: r.id }; } catch(e) {} }
+  return {
+    id: r.id, ts: r['일시'] || '', assetType: r['자산유형'] || '', assetName: r['자산명'] || '',
+    assetCode: r['자산코드'] || '', field: '변경',
+    from: r['이전위치'] || r['이전관코드'] || '—', to: r['이후위치'] || r['이후관코드'] || '—',
+    worker: r['요청자'] || '', source: '대시보드', memo: r['이동사유'] || '',
+    건물명: r['건물명'] || '', 층수: r['층수'] || '', 분류: r['분류'] || ''
+  };
+}
 async function loadHistFromServer() {
-  // ★ 최신순 조회 — 기본 sbSelect는 id 오름차순 + 1000행 제한이라 옛 기록만 잡혔음
+  // 서버 전체 건수 (헤더만 조회 — 데이터 전송 없음)
+  try {
+    const { count } = await _supa.from('history').select('id', { count: 'exact', head: true });
+    HIST_TOTAL = count || 0;
+  } catch(e) { HIST_TOTAL = 0; }
   const { data: rows, error } = await _supa
-    .from('history')
-    .select('*')
-    .order('id', { ascending: false })
-    .limit(500);
+    .from('history').select('*')
+    .order('id', { ascending: false }).limit(HIST_CHUNK);
   if(error) { console.warn('이력 조회 오류:', error.message); return; }
-  if(!rows || !rows.length) return;
-  const list = rows.map(r => {
-    if(r.raw) { try { const p = JSON.parse(r.raw); if(p && p.ts) return p; } catch(e) {} }
-    return {
-      id: r.id, ts: r['일시'] || '', assetType: r['자산유형'] || '', assetName: r['자산명'] || '',
-      assetCode: r['자산코드'] || '', field: '변경',
-      from: r['이전위치'] || r['이전관코드'] || '—', to: r['이후위치'] || r['이후관코드'] || '—',
-      worker: r['요청자'] || '', source: '대시보드', memo: r['이동사유'] || '',
-      건물명: r['건물명'] || '', 층수: r['층수'] || '', 분류: r['분류'] || ''
-    };
-  }).filter(h => h.ts);
-  list.sort((a, b) => (a.ts < b.ts ? 1 : -1));
-  HIST = list.slice(0, 500);
-  try { localStorage.setItem('ah', JSON.stringify(HIST)); } catch(e) {}
+  if(!rows || !rows.length) { HIST_ALL_LOADED = true; return; }
+  HIST = rows.map(histRowToEntry).filter(h => h.ts).sort((a, b) => (a.ts < b.ts ? 1 : -1));
+  HIST_MIN_ID = Math.min(...rows.map(r => r.id));
+  HIST_ALL_LOADED = rows.length < HIST_CHUNK;
+  persistHistLocal();
   refreshHBadge();
   if(typeof renderDashHist === 'function' && document.getElementById('dashHistList')) renderDashHist();
   if(typeof renderHPage === 'function' && document.getElementById('hPageList')) renderHPage();
+}
+// 이전 이력 추가 로드 (커서: id < HIST_MIN_ID)
+async function loadMoreHist() {
+  if(HIST_ALL_LOADED || HIST_MIN_ID == null) return;
+  const btn = document.getElementById('histMoreBtn');
+  if(btn) { btn.disabled = true; btn.textContent = '불러오는 중…'; }
+  const { data: rows, error } = await _supa
+    .from('history').select('*')
+    .lt('id', HIST_MIN_ID)
+    .order('id', { ascending: false }).limit(HIST_CHUNK);
+  if(error) { showToast('❌ 추가 로드 실패: ' + error.message); if(btn) btn.disabled = false; return; }
+  const add = (rows || []).map(histRowToEntry).filter(h => h.ts);
+  if(rows && rows.length) HIST_MIN_ID = Math.min(...rows.map(r => r.id));
+  if(!rows || rows.length < HIST_CHUNK) HIST_ALL_LOADED = true;
+  HIST = HIST.concat(add).sort((a, b) => (a.ts < b.ts ? 1 : -1));
+  persistHistLocal();
+  refreshHBadge();
+  renderHPage();
+  showToast(`↓ ${add.length}건 추가 로드 — 현재 ${fmt(HIST.length)} / 전체 ${fmt(HIST_TOTAL)}건`);
+}
+// 이력 새로고침 (서버 기준으로 처음부터 다시)
+async function reloadHist() {
+  setLoading(true);
+  HIST = []; HIST_MIN_ID = null; HIST_ALL_LOADED = false;
+  await loadHistFromServer();
+  setLoading(false);
+  hPage = 1; renderHPage();
+  showToast(`↻ 이력 새로고침 완료 — 최근 ${fmt(HIST.length)}건 (전체 ${fmt(HIST_TOTAL)}건)`);
+}
+// ═══════════ [관리자] 옛 이력 자산명 일괄 보정 ═══════════
+// 배경: 예전 saveItem()이 headers[0](='no')을 자산명으로 기록해 숫자(36, 40…)가 저장됐습니다.
+//       화면은 assetNameOf()로 보정되지만 DB 값 자체는 숫자라 SQL·연동에서 재발합니다.
+//       이 도구가 자산코드로 실제 자산명을 역추적해 자산명 컬럼과 raw를 함께 정정합니다.
+async function backfillHistNames(){
+  if(!curUser || curUser.role !== 'admin'){ showToast('관리자만 실행할 수 있습니다'); return; }
+  setLoading(true);
+  // 1) 자산 원장 확보 → 자산코드 ↔ 자산명 맵 생성
+  try {
+    for(const t of ['lease','tangible','rental','intangible','insurance']){
+      if(!SAMPLE[t].rows || !SAMPLE[t].rows.length){
+        const rows = await sbSelect(t);
+        SAMPLE[t].rows = rows.map(r => ({ _id:r.id, _rowId:r.id, ...r }));
+      }
+    }
+  } catch(e){ setLoading(false); showToast('❌ 자산 원장 로드 실패'); return; }
+  _ANAME_MAP = null;
+  const map = buildAssetNameMap();
+  if(!Object.keys(map).length){ setLoading(false); showToast('❌ 자산명 맵을 만들 수 없습니다'); return; }
+  // 2) history 전체를 500건씩 훑어 대상 수집
+  const targets = [];
+  let cursor = null, guard = 0, scanned = 0;
+  while(guard++ < 40){
+    let q = _supa.from('history').select('id,자산명,자산코드,raw').order('id',{ascending:false}).limit(500);
+    if(cursor != null) q = q.lt('id', cursor);
+    const { data, error } = await q;
+    if(error){ setLoading(false); showToast('❌ 이력 조회 실패: '+error.message); return; }
+    if(!data || !data.length) break;
+    scanned += data.length;
+    data.forEach(r => {
+      const nm = String(r['자산명']||'').trim();
+      if(nm && !/^\d+$/.test(nm)) return;              // 이미 정상
+      const code = String(r['자산코드']||'').trim();
+      if(!code || code === '—' || !map[code]) return;    // 역추적 불가
+      targets.push({ id:r.id, from:nm||'(빈값)', to:map[code], code, raw:r.raw });
+    });
+    cursor = Math.min(...data.map(r => r.id));
+    if(data.length < 500) break;
+  }
+  setLoading(false);
+  if(!targets.length){ showToast(`✅ 보정 대상이 없습니다 (${fmt(scanned)}건 점검)`); return; }
+  // 3) 미리보기 확인
+  const sample = targets.slice(0,8).map(t => `  · ${t.code} : ${t.from} → ${t.to}`).join('\n');
+  if(!confirm(`🛠 옛 이력 자산명 보정\n\n· 점검한 이력  ${fmt(scanned)}건\n· 보정 대상    ${fmt(targets.length)}건\n\n[예시]\n${sample}${targets.length>8?`\n  … 외 ${fmt(targets.length-8)}건`:''}\n\n자산명 컬럼과 raw를 함께 정정합니다. 진행할까요?`)) return;
+  // 4) 일괄 반영
+  setLoading(true);
+  let ok = 0, fail = 0;
+  for(let i = 0; i < targets.length; i++){
+    const t = targets[i];
+    const patch = { '자산명': t.to };
+    if(t.raw){ try { const j = JSON.parse(t.raw); j.assetName = t.to; patch.raw = JSON.stringify(j); } catch(e) {} }
+    const { error } = await _supa.from('history').update(patch).eq('id', t.id);
+    if(error) fail++; else ok++;
+    if(i % 50 === 49) showToast(`보정 중… ${fmt(i+1)}/${fmt(targets.length)}`);
+  }
+  setLoading(false);
+  showToast(`✅ 자산명 보정 완료 — ${fmt(ok)}건${fail?` (실패 ${fail}건)`:''}`);
+  await reloadHist();
+}
+// 필터만 초기화 (이력 데이터는 건드리지 않음)
+function resetHistFilter() {
+  ['hTF','hSF','hWF'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  hPage = 1; renderHPage();
+  showToast('필터 초기화됨');
 }
 
 // 부팅 시 1회: 공유 상태(rentalCats/kwanCodes/prevCost) + 이력을 서버 기준으로 맞춤
@@ -1632,6 +1736,7 @@ const ALERTS=[]; // Supabase에서 로드됨 (loadAlertsFromServer)
 
 // ═══════════════════════ STATE ═══════════════════════
 let curType=null, editId=null, editOld=null;
+let curUser=null;   // 로그인 사용자 {name, role, title}
 let HIST=JSON.parse(localStorage.getItem('ah')||'[]');
 
 const TYPE_PFX={lease:'LC',tangible:'FA',intangible:'IA',rental:'RT',insurance:'IN'};
@@ -1647,8 +1752,8 @@ function genCode(type,row){
 function addHist(e){
   const entry = {id:Date.now(), ts:new Date().toISOString(), ...e};
   HIST.unshift(entry);
-  if(HIST.length>500) HIST=HIST.slice(0,500);
-  localStorage.setItem('ah',JSON.stringify(HIST));
+  if(typeof HIST_TOTAL === 'number') HIST_TOTAL += 1;
+  persistHistLocal();   // 메모리는 유지, localStorage에만 최근 500건 저장
   refreshHBadge();
   // Supabase history 테이블에 저장
   if(typeof sbInsert === 'function') {
@@ -1677,7 +1782,14 @@ function addHist(e){
 
 function refreshHBadge(){
   const el=document.getElementById('nb-history');
-  if(HIST.length){el.textContent=HIST.length;el.style.display='inline';}
+  if(!el) return;
+  const n = (typeof HIST_TOTAL === 'number' && HIST_TOTAL > 0) ? HIST_TOTAL : HIST.length;
+  if(n){ el.textContent = n; el.style.display='inline'; }
+}
+// 로컬 캐시는 최근 500건만 (용량 초과 방지)
+function persistHistLocal(){
+  try { localStorage.setItem('ah', JSON.stringify(HIST.slice(0,500))); }
+  catch(e) { console.warn('이력 로컬 저장 실패(용량):', e); }
 }
 
 function dCls(d){return d<=7?'d-crit':d<=30?'d-warn':'d-safe';}
@@ -2182,7 +2294,7 @@ async function go(p, pushHistory=true){
       loadAlertsFromServer();
     })();
   }
-  else if(p==='history'){document.getElementById('page-history').classList.add('active');hPage=1;renderHPage();}
+  else if(p==='history'){document.getElementById('page-history').classList.add('active');hPage=1;renderHPage();const _fb=document.getElementById('histFixBtn');if(_fb)_fb.style.display=(curUser&&curUser.role==='admin')?'inline-flex':'none';}
   else if(p==='cost'){document.getElementById('page-cost').classList.add('active');curType=null;initCostPage();}
   else if(p==='cost-history'){document.getElementById('page-cost-history').classList.add('active');curType=null;loadCostHistory();}
   else if(p==='campus'){document.getElementById('page-campus').classList.add('active');curType=null;initCampusPage();}
@@ -5899,6 +6011,18 @@ function hPagerHTML(total, page, pages){
     ${btn('다음 ›', page + 1, { disabled: page >= pages })}
   </div>`;
 }
+function histMoreHTML(){
+  if(HIST_ALL_LOADED){
+    return HIST.length >= 30
+      ? `<div style="padding:12px 18px;border-top:1px solid var(--cream2);text-align:center;font-size:11px;color:var(--text3)">전체 ${fmt(HIST_TOTAL||HIST.length)}건을 모두 불러왔습니다</div>`
+      : '';
+  }
+  const remain = Math.max(0, (HIST_TOTAL||0) - HIST.length);
+  return `<div style="padding:12px 18px;border-top:1px solid var(--cream2);text-align:center">
+    <button id="histMoreBtn" class="btn btn-ghost btn-sm" onclick="loadMoreHist()">↓ 이전 이력 더 불러오기${remain?` (남은 ${fmt(remain)}건)`:''}</button>
+    <div style="font-size:10px;color:var(--text3);margin-top:5px">현재 ${fmt(HIST.length)} / 전체 ${fmt(HIST_TOTAL||HIST.length)}건 로드됨</div>
+  </div>`;
+}
 function renderHPage(){
   const tf=document.getElementById('hTF')?.value||'';
   const sf=document.getElementById('hSF')?.value||'';
@@ -5925,15 +6049,14 @@ function renderHPage(){
   if(hPage < 1) hPage = 1;
   document.getElementById('histCnt').textContent = total + '건';
   const slice = filtered.slice((hPage-1)*H_PER_PAGE, hPage*H_PER_PAGE);
-  document.getElementById('hPageList').innerHTML = total
+  document.getElementById('hPageList').innerHTML = (total
     ? slice.map(hRowHTML).join('') + hPagerHTML(total, hPage, pages)
-    : '<div class="empty"><div class="ei">📋</div><div class="et">조건에 맞는 이력이 없습니다</div></div>';
+    : '<div class="empty"><div class="ei">📋</div><div class="et">조건에 맞는 이력이 없습니다</div></div>')
+    + histMoreHTML();
 }
 
-function clearHist(){
-  if(!confirm('모든 이력을 삭제하시겠습니까?')) return;
-  HIST=[];localStorage.removeItem('ah');refreshHBadge();renderHPage();renderDashHist();showToast('이력 초기화 완료');
-}
+// clearHist() 제거 — 이력은 내부통제용 감사추적이라 화면에서 일괄 삭제할 수 없도록 했습니다.
+// 필터 초기화는 resetHistFilter(), 서버 재조회는 reloadHist()를 사용합니다.
 
 // ═══════════════════════ QR ═══════════════════════
 function openQR(id){
