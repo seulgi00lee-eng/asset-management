@@ -1556,7 +1556,13 @@ function persistKwanCodes() {
 
 // 서버 history → 화면 이력(HIST) 동기화: 어느 PC에서 열어도 같은 이력이 보이게
 async function loadHistFromServer() {
-  const rows = await sbSelect('history');
+  // ★ 최신순 조회 — 기본 sbSelect는 id 오름차순 + 1000행 제한이라 옛 기록만 잡혔음
+  const { data: rows, error } = await _supa
+    .from('history')
+    .select('*')
+    .order('id', { ascending: false })
+    .limit(500);
+  if(error) { console.warn('이력 조회 오류:', error.message); return; }
   if(!rows || !rows.length) return;
   const list = rows.map(r => {
     if(r.raw) { try { const p = JSON.parse(r.raw); if(p && p.ts) return p; } catch(e) {} }
@@ -3197,7 +3203,7 @@ function saveQrUpdate(){
   if(asset.loc!==newLoc||asset.status!==newStatus){
     addHist({assetCode:asset.code,assetName:asset.name,assetType:asset.type,
       fromLoc:asset.loc,toLoc:newLoc,fromStatus:asset.status,toStatus:newStatus,
-      worker,src:'QR스캔',memo:`상태: ${newStatus}`});
+      worker,source:'QR스캔',memo:`상태: ${newStatus}`});
     asset.loc=newLoc; asset.status=newStatus;
     const row=SAMPLE[asset._ref.type]?.rows.find(r=>r._id===asset._ref.id);
     if(row){row['위치']=newLoc;row['설치위치']=newLoc;row['상태']=newStatus;}
@@ -5469,6 +5475,8 @@ function closeMoBg(e,id){if(e.target===document.getElementById(id))closeMo(id);}
 
 async function saveItem(){
   const d = SAMPLE[curType];
+  // ★ 이력에 쓸 자산명 컬럼 — headers[0]은 'no'라 숫자가 찍히던 문제 수정
+  const nameCol = d.headers.find(h => ['자산명','렌탈품목','계약명','상품명','보험사','품목명','건물명'].includes(h)) || d.headers[1] || d.headers[0];
   const newRow = {_id: editId||(Math.max(0,...d.rows.map(r=>r._id))+1)};
 
   // 인덱스 기반으로 값 수집 (한글 id 문제 해결)
@@ -5504,7 +5512,7 @@ async function saveItem(){
       let photoData = null;
       if(pf) photoData = await new Promise(res=>{ const fr=new FileReader(); fr.onload=e=>res(e.target.result); fr.readAsDataURL(pf); });
       changed.forEach(h => addHist({
-        assetType: d.label, assetName: newRow[d.headers[0]],
+        assetType: d.label, assetName: newRow[nameCol] || '—',
         assetCode: genCode(curType, newRow), field: h,
         from: editOld[h]||'—', to: newRow[h]||'—',
         worker, source: '대시보드', memo, photo: photoData
@@ -5523,7 +5531,7 @@ async function saveItem(){
     }
     d.rows.push(newRow);
     addHist({
-      assetType: d.label, assetName: newRow[d.headers[0]],
+      assetType: d.label, assetName: newRow[nameCol] || '—',
       assetCode: genCode(curType, newRow), field: '신규등록',
       from: '—', to: '등록완료', worker, source: '대시보드', memo, photo: null
     });
