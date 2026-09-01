@@ -2991,7 +2991,8 @@ async function runCostCalc(){
       kwanCodes.map(c => `<option value="${c}">${c}</option>`).join('');
   }
 
-  showToast(`✅ 배분 계산 완료 — ${costResult.length}개 관 · 총 ${fmt(Math.round(totalAmt))}원/월`);
+  renderCostScope(scope, baseYM, useYM);   // ★ 마감 대상 검증 리포트
+  showToast(`✅ ${baseYM} 마감(${useYM} 사용분) 배분 완료 — ${costResult.length}개 관 · ${fmt(Math.round(totalAmt))}원`);
 }
 
 function renderCostSummaryFiltered() {
