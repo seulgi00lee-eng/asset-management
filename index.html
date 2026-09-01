@@ -187,13 +187,19 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
 .hr{display:flex;border-bottom:1px solid var(--cream2);transition:background .1s}
 .hr:hover{background:var(--cream)}
 .hr:last-child{border-bottom:none}
-.hr-time{width:120px;padding:13px 18px;font-family:var(--mono);font-size:10px;color:var(--text3);flex-shrink:0;line-height:1.6}
-.hr-body{flex:1;padding:13px 18px 13px 0}
-.hr-title{font-weight:600;color:var(--navy);margin-bottom:5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.hr-detail{font-size:11px;color:var(--text2);display:flex;gap:14px;flex-wrap:wrap;margin-top:2px}
-.hr-chg{display:inline-flex;align-items:center;gap:5px;background:var(--cream);padding:2px 8px;font-size:10px;font-family:var(--mono)}
-.hr-arr{color:var(--gold);font-weight:700}
-.hr-src{font-size:9px;letter-spacing:1px;text-transform:uppercase;font-weight:700}
+.hr-time{width:112px;padding:14px 16px;font-family:var(--mono);font-size:11px;color:var(--text3);flex-shrink:0;line-height:1.65;letter-spacing:-.2px}
+.hr-body{flex:1;padding:14px 18px 14px 0;min-width:0}
+.hr-title{font-weight:600;font-size:13.5px;color:var(--text);margin-bottom:7px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;line-height:1.4}
+.hr-detail{font-size:12px;color:var(--text2);display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:2px;line-height:1.6}
+/* 변경 전→후 칩: 한글이 mono에서 깨지므로 기본 폰트, 숫자만 mono */
+.hr-chg{display:inline-flex;align-items:center;gap:7px;background:var(--cream);border:1px solid var(--border);border-radius:3px;padding:3px 10px;font-size:12px;font-family:var(--font);line-height:1.5}
+.hr-num{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:-.3px;color:var(--text)}
+.hr-unit{font-family:var(--font);font-size:10.5px;color:var(--text3);margin-left:1px}
+.hr-field{font-weight:600;color:var(--text2);font-size:11.5px}
+.hr-worker{font-size:11.5px;color:var(--text2)}
+.hr-worker b{font-weight:600;color:var(--text)}
+.hr-arr{color:var(--gold);font-weight:700;font-size:12px}
+.hr-src{font-size:10px;letter-spacing:.8px;text-transform:uppercase;font-weight:700}
 .src-scan{color:var(--teal)}
 .src-dash{color:var(--amber)}
 .hr-photo{width:68px;padding:10px 18px 10px 0;display:flex;align-items:center;flex-shrink:0}
@@ -580,14 +586,19 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
         <div class="ph">
           <div><div class="ph-ey">History · 전체 자산</div><div class="ph-t">이동·변경 이력</div><div class="ph-s">QR 스캔 + 대시보드 수정 시 자동 기록 · 전체 자산 유형 · 사진 첨부</div><div class="ph-rule"></div></div>
           <div class="ph-acts">
-            <select id="hTF" style="border:1px solid var(--border);padding:7px 12px;font-size:11px;font-family:var(--font);background:var(--cream);outline:none" onchange="renderHPage()">
+            <select id="hTF" style="border:1px solid var(--border);padding:7px 12px;font-size:11px;font-family:var(--font);background:var(--cream);outline:none" onchange="hPage=1;renderHPage()">
               <option value="">전체 유형</option>
               <option>임대차계약</option><option>유형자산</option><option>무형자산</option><option>렌탈자산</option><option>보험</option>
             </select>
-            <select id="hSF" style="border:1px solid var(--border);padding:7px 12px;font-size:11px;font-family:var(--font);background:var(--cream);outline:none" onchange="renderHPage()">
+            <select id="hSF" style="border:1px solid var(--border);padding:7px 12px;font-size:11px;font-family:var(--font);background:var(--cream);outline:none" onchange="hPage=1;renderHPage()">
               <option value="">전체 경로</option><option value="QR스캔">QR 스캔</option><option value="대시보드">대시보드</option>
             </select>
-            <button class="btn btn-ghost btn-sm" onclick="clearHist()">초기화</button>
+            <select id="hWF" style="border:1px solid var(--border);padding:7px 12px;font-size:11px;font-family:var(--font);background:var(--cream);outline:none" onchange="hPage=1;renderHPage()">
+              <option value="">전체 처리자</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" onclick="resetHistFilter()">✕ 필터 초기화</button>
+            <button class="btn btn-ghost btn-sm" onclick="reloadHist()">↻ 새로고침</button>
+            <button id="histFixBtn" class="btn btn-ghost btn-sm" onclick="backfillHistNames()" style="display:none;color:#5b4bb5;border-color:#b9aee8" title="옛 이력의 자산명이 숫자로 저장된 건을 실제 자산명으로 보정합니다">🛠 자산명 보정</button>
           </div>
         </div>
         <div class="sec">
@@ -615,6 +626,17 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
             <button class="btn btn-navy" onclick="runCostCalc()">📊 배분 계산 실행</button>
           </div>
         </div>
+
+        <!-- 마감 기준월 선택 -->
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--cream2);border:1px solid var(--border);padding:10px 16px;margin-bottom:12px">
+          <span style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);font-weight:700">마감 기준월</span>
+          <select id="costBaseYM" onchange="onCostBaseYMChange()" style="border:1px solid var(--border);padding:7px 12px;font-size:12px;font-family:var(--mono);font-weight:600;background:#fff;outline:none"></select>
+          <span id="costBaseYMHint" style="font-size:12px;color:var(--text2)"></span>
+          <span style="margin-left:auto;font-size:11px;color:var(--text3)">N월 사용분은 (N+1)월에 출금·마감됩니다</span>
+        </div>
+
+        <!-- 마감 대상 검증 리포트 -->
+        <div id="costScopeReport" style="display:none;margin-bottom:12px"></div>
 
         <!-- 승인 대기 배너 -->
         <div id="approvalBanner" style="display:none;margin-bottom:16px"></div>
@@ -913,6 +935,7 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
             <table style="width:100%;border-collapse:collapse;font-size:12px">
               <thead id="costHistoryHead"></thead>
               <tbody id="costHistoryBody"></tbody>
+              <tfoot id="costHistoryFoot"></tfoot>
             </table>
           </div>
         </div>
@@ -1222,10 +1245,10 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
     <div class="fg" style="margin-bottom:8px">
       <label style="display:flex;align-items:center;gap:6px">
         적용시작월
-        <span style="font-size:10px;color:#5a1a8a;background:#f0e8fa;padding:2px 7px;border-radius:10px">비용마감 기준</span>
+        <span style="font-size:10px;color:#5a1a8a;background:#f0e8fa;padding:2px 7px;border-radius:10px">사용월 기준</span>
       </label>
       <select id="applyMonthSel" style="border:1px solid var(--border);padding:9px 12px;font-size:13px;font-family:var(--mono);font-weight:600;color:var(--text);width:100%"></select>
-      <div style="font-size:10px;color:var(--text3);margin-top:4px">⚠️ 이 달부터 새 관코드로 비용이 배분됩니다.</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">⚠️ <b>실제로 옮긴 달(사용월)</b>을 고르세요. 이 달 사용분부터 새 관코드로 배분되며, <b>익월 마감</b>에 반영됩니다.</div>
     </div>
     <div class="mo-ft">
       <button class="btn btn-ghost" onclick="closeMo('moApplyMonth')">취소</button>
@@ -1283,10 +1306,10 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
     <!-- 적용시작월 -->
     <div class="fg" style="margin-bottom:14px">
       <label style="display:flex;align-items:center;gap:6px;font-size:11px">적용시작월 *
-        <span style="font-size:10px;color:#5a1a8a;background:#f0e8fa;padding:2px 7px;border-radius:10px">비용마감 기준</span>
+        <span style="font-size:10px;color:#5a1a8a;background:#f0e8fa;padding:2px 7px;border-radius:10px">사용월 기준</span>
       </label>
       <select id="kwanPickerApplyMonth" style="border:1px solid var(--border);padding:8px 12px;font-size:12px;font-family:var(--mono);font-weight:600;color:var(--text);width:100%"></select>
-      <div style="font-size:10px;color:var(--text3);margin-top:3px">이 달부터 새 관코드로 비용이 배분됩니다.</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:3px"><b>실제로 옮긴 달(사용월)</b> 기준입니다. 익월 마감에 반영됩니다.</div>
     </div>
     <div class="mo-ft">
       <button class="btn btn-ghost" onclick="closeMo('moKwanPicker')">취소</button>
@@ -1418,11 +1441,11 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
     <div class="fg" style="margin-bottom:12px">
       <label style="display:flex;align-items:center;gap:6px">
         적용시작월 *
-        <span style="font-size:10px;color:#5a1a8a;background:#f0e8fa;padding:2px 7px;border-radius:10px">비용마감 기준</span>
+        <span style="font-size:10px;color:#5a1a8a;background:#f0e8fa;padding:2px 7px;border-radius:10px">사용월 기준</span>
       </label>
       <select id="kwanApplyMonth" style="border:1px solid var(--border);padding:9px 12px;font-size:13px;font-family:var(--mono);font-weight:600;color:var(--text)">
       </select>
-      <div style="font-size:10px;color:var(--text3);margin-top:4px">⚠️ 이 달부터 새 관코드로 비용이 배분됩니다. 예: 4월에 변경 → 4월 마감부터 새 관코드 적용</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">⚠️ <b>실제로 옮긴 달(사용월)</b>을 고르세요. 예: 8월에 이동 → 8월 사용분부터 → <b>9월 마감</b>에 반영</div>
     </div>
 
     <!-- 변경 사유 -->
@@ -1485,6 +1508,14 @@ tfoot td{padding:10px 18px;font-weight:700;background:var(--cream2);border-top:2
   </div>
 </div>
 
+<!-- 이력 상세 모달 -->
+<div class="mo" id="moHistDetail" onclick="closeMoBg(event,'moHistDetail')">
+  <div class="mo-box" style="width:620px">
+    <div class="mo-t" id="histDetailTitle">이력 상세</div>
+    <div id="histDetailBody"></div>
+    <div class="mo-ft"><button class="btn btn-ghost" onclick="closeMo('moHistDetail')">닫기</button></div>
+  </div>
+</div>
 <div id="lb" onclick="this.classList.remove('open')"><img id="lbImg" src=""></div>
 <div id="prt" style="display:none"></div>
 <div id="toast"></div>
@@ -1572,25 +1603,133 @@ function persistKwanCodes() {
 }
 
 // 서버 history → 화면 이력(HIST) 동기화: 어느 PC에서 열어도 같은 이력이 보이게
+// ★ 서버 이력 페이지네이션 — 500건씩 커서(id) 방식으로 이어 불러옴
+const HIST_CHUNK = 500;
+let HIST_MIN_ID = null;      // 지금까지 불러온 것 중 가장 작은 id (다음 커서)
+let HIST_TOTAL = 0;          // 서버 전체 건수
+let HIST_ALL_LOADED = false; // 더 불러올 게 없는지
+// history 행 → 화면 이력 항목 변환
+function histRowToEntry(r) {
+  if(r.raw) { try { const p = JSON.parse(r.raw); if(p && p.ts) return { ...p, id: r.id }; } catch(e) {} }
+  return {
+    id: r.id, ts: r['일시'] || '', assetType: r['자산유형'] || '', assetName: r['자산명'] || '',
+    assetCode: r['자산코드'] || '', field: '변경',
+    from: r['이전위치'] || r['이전관코드'] || '—', to: r['이후위치'] || r['이후관코드'] || '—',
+    worker: r['요청자'] || '', source: '대시보드', memo: r['이동사유'] || '',
+    건물명: r['건물명'] || '', 층수: r['층수'] || '', 분류: r['분류'] || ''
+  };
+}
 async function loadHistFromServer() {
-  const rows = await sbSelect('history');
-  if(!rows || !rows.length) return;
-  const list = rows.map(r => {
-    if(r.raw) { try { const p = JSON.parse(r.raw); if(p && p.ts) return p; } catch(e) {} }
-    return {
-      id: r.id, ts: r['일시'] || '', assetType: r['자산유형'] || '', assetName: r['자산명'] || '',
-      assetCode: r['자산코드'] || '', field: '변경',
-      from: r['이전위치'] || r['이전관코드'] || '—', to: r['이후위치'] || r['이후관코드'] || '—',
-      worker: r['요청자'] || '', source: '대시보드', memo: r['이동사유'] || '',
-      건물명: r['건물명'] || '', 층수: r['층수'] || '', 분류: r['분류'] || ''
-    };
-  }).filter(h => h.ts);
-  list.sort((a, b) => (a.ts < b.ts ? 1 : -1));
-  HIST = list.slice(0, 500);
-  try { localStorage.setItem('ah', JSON.stringify(HIST)); } catch(e) {}
+  // 서버 전체 건수 (헤더만 조회 — 데이터 전송 없음)
+  try {
+    const { count } = await _supa.from('history').select('id', { count: 'exact', head: true });
+    HIST_TOTAL = count || 0;
+  } catch(e) { HIST_TOTAL = 0; }
+  const { data: rows, error } = await _supa
+    .from('history').select('*')
+    .order('id', { ascending: false }).limit(HIST_CHUNK);
+  if(error) { console.warn('이력 조회 오류:', error.message); return; }
+  if(!rows || !rows.length) { HIST_ALL_LOADED = true; return; }
+  HIST = rows.map(histRowToEntry).filter(h => h.ts).sort((a, b) => (a.ts < b.ts ? 1 : -1));
+  HIST_MIN_ID = Math.min(...rows.map(r => r.id));
+  HIST_ALL_LOADED = rows.length < HIST_CHUNK;
+  persistHistLocal();
   refreshHBadge();
   if(typeof renderDashHist === 'function' && document.getElementById('dashHistList')) renderDashHist();
   if(typeof renderHPage === 'function' && document.getElementById('hPageList')) renderHPage();
+}
+// 이전 이력 추가 로드 (커서: id < HIST_MIN_ID)
+async function loadMoreHist() {
+  if(HIST_ALL_LOADED || HIST_MIN_ID == null) return;
+  const btn = document.getElementById('histMoreBtn');
+  if(btn) { btn.disabled = true; btn.textContent = '불러오는 중…'; }
+  const { data: rows, error } = await _supa
+    .from('history').select('*')
+    .lt('id', HIST_MIN_ID)
+    .order('id', { ascending: false }).limit(HIST_CHUNK);
+  if(error) { showToast('❌ 추가 로드 실패: ' + error.message); if(btn) btn.disabled = false; return; }
+  const add = (rows || []).map(histRowToEntry).filter(h => h.ts);
+  if(rows && rows.length) HIST_MIN_ID = Math.min(...rows.map(r => r.id));
+  if(!rows || rows.length < HIST_CHUNK) HIST_ALL_LOADED = true;
+  HIST = HIST.concat(add).sort((a, b) => (a.ts < b.ts ? 1 : -1));
+  persistHistLocal();
+  refreshHBadge();
+  renderHPage();
+  showToast(`↓ ${add.length}건 추가 로드 — 현재 ${fmt(HIST.length)} / 전체 ${fmt(HIST_TOTAL)}건`);
+}
+// 이력 새로고침 (서버 기준으로 처음부터 다시)
+async function reloadHist() {
+  setLoading(true);
+  HIST = []; HIST_MIN_ID = null; HIST_ALL_LOADED = false;
+  await loadHistFromServer();
+  setLoading(false);
+  hPage = 1; renderHPage();
+  showToast(`↻ 이력 새로고침 완료 — 최근 ${fmt(HIST.length)}건 (전체 ${fmt(HIST_TOTAL)}건)`);
+}
+// ═══════════ [관리자] 옛 이력 자산명 일괄 보정 ═══════════
+// 배경: 예전 saveItem()이 headers[0](='no')을 자산명으로 기록해 숫자(36, 40…)가 저장됐습니다.
+//       화면은 assetNameOf()로 보정되지만 DB 값 자체는 숫자라 SQL·연동에서 재발합니다.
+//       이 도구가 자산코드로 실제 자산명을 역추적해 자산명 컬럼과 raw를 함께 정정합니다.
+async function backfillHistNames(){
+  if(!curUser || curUser.role !== 'admin'){ showToast('관리자만 실행할 수 있습니다'); return; }
+  setLoading(true);
+  // 1) 자산 원장 확보 → 자산코드 ↔ 자산명 맵 생성
+  try {
+    for(const t of ['lease','tangible','rental','intangible','insurance']){
+      if(!SAMPLE[t].rows || !SAMPLE[t].rows.length){
+        const rows = await sbSelect(t);
+        SAMPLE[t].rows = rows.map(r => ({ _id:r.id, _rowId:r.id, ...r }));
+      }
+    }
+  } catch(e){ setLoading(false); showToast('❌ 자산 원장 로드 실패'); return; }
+  _ANAME_MAP = null;
+  const map = buildAssetNameMap();
+  if(!Object.keys(map).length){ setLoading(false); showToast('❌ 자산명 맵을 만들 수 없습니다'); return; }
+  // 2) history 전체를 500건씩 훑어 대상 수집
+  const targets = [];
+  let cursor = null, guard = 0, scanned = 0;
+  while(guard++ < 40){
+    let q = _supa.from('history').select('id,자산명,자산코드,raw').order('id',{ascending:false}).limit(500);
+    if(cursor != null) q = q.lt('id', cursor);
+    const { data, error } = await q;
+    if(error){ setLoading(false); showToast('❌ 이력 조회 실패: '+error.message); return; }
+    if(!data || !data.length) break;
+    scanned += data.length;
+    data.forEach(r => {
+      const nm = String(r['자산명']||'').trim();
+      if(nm && !/^\d+$/.test(nm)) return;              // 이미 정상
+      const code = String(r['자산코드']||'').trim();
+      if(!code || code === '—' || !map[code]) return;    // 역추적 불가
+      targets.push({ id:r.id, from:nm||'(빈값)', to:map[code], code, raw:r.raw });
+    });
+    cursor = Math.min(...data.map(r => r.id));
+    if(data.length < 500) break;
+  }
+  setLoading(false);
+  if(!targets.length){ showToast(`✅ 보정 대상이 없습니다 (${fmt(scanned)}건 점검)`); return; }
+  // 3) 미리보기 확인
+  const sample = targets.slice(0,8).map(t => `  · ${t.code} : ${t.from} → ${t.to}`).join('\n');
+  if(!confirm(`🛠 옛 이력 자산명 보정\n\n· 점검한 이력  ${fmt(scanned)}건\n· 보정 대상    ${fmt(targets.length)}건\n\n[예시]\n${sample}${targets.length>8?`\n  … 외 ${fmt(targets.length-8)}건`:''}\n\n자산명 컬럼과 raw를 함께 정정합니다. 진행할까요?`)) return;
+  // 4) 일괄 반영
+  setLoading(true);
+  let ok = 0, fail = 0;
+  for(let i = 0; i < targets.length; i++){
+    const t = targets[i];
+    const patch = { '자산명': t.to };
+    if(t.raw){ try { const j = JSON.parse(t.raw); j.assetName = t.to; patch.raw = JSON.stringify(j); } catch(e) {} }
+    const { error } = await _supa.from('history').update(patch).eq('id', t.id);
+    if(error) fail++; else ok++;
+    if(i % 50 === 49) showToast(`보정 중… ${fmt(i+1)}/${fmt(targets.length)}`);
+  }
+  setLoading(false);
+  showToast(`✅ 자산명 보정 완료 — ${fmt(ok)}건${fail?` (실패 ${fail}건)`:''}`);
+  await reloadHist();
+}
+// 필터만 초기화 (이력 데이터는 건드리지 않음)
+function resetHistFilter() {
+  ['hTF','hSF','hWF'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  hPage = 1; renderHPage();
+  showToast('필터 초기화됨');
 }
 
 // 부팅 시 1회: 공유 상태(rentalCats/kwanCodes/prevCost) + 이력을 서버 기준으로 맞춤
@@ -1634,6 +1773,7 @@ const ALERTS=[]; // Supabase에서 로드됨 (loadAlertsFromServer)
 
 // ═══════════════════════ STATE ═══════════════════════
 let curType=null, editId=null, editOld=null;
+let curUser=null;   // 로그인 사용자 {name, role, title}
 let HIST=JSON.parse(localStorage.getItem('ah')||'[]');
 
 const TYPE_PFX={lease:'LC',tangible:'FA',intangible:'IA',rental:'RT',insurance:'IN'};
@@ -1649,8 +1789,8 @@ function genCode(type,row){
 function addHist(e){
   const entry = {id:Date.now(), ts:new Date().toISOString(), ...e};
   HIST.unshift(entry);
-  if(HIST.length>500) HIST=HIST.slice(0,500);
-  localStorage.setItem('ah',JSON.stringify(HIST));
+  if(typeof HIST_TOTAL === 'number') HIST_TOTAL += 1;
+  persistHistLocal();   // 메모리는 유지, localStorage에만 최근 500건 저장
   refreshHBadge();
   // Supabase history 테이블에 저장
   if(typeof sbInsert === 'function') {
@@ -1677,9 +1817,24 @@ function addHist(e){
   }
 }
 
+// ★ 배지는 '최근 24시간 내 변경'만 — 하루 지나면 자동으로 사라짐
 function refreshHBadge(){
   const el=document.getElementById('nb-history');
-  if(HIST.length){el.textContent=HIST.length;el.style.display='inline';}
+  if(!el) return;
+  const cutoff = Date.now() - 86400000;   // 24시간
+  const n = HIST.filter(h => { const t = Date.parse(h.ts); return !isNaN(t) && t >= cutoff; }).length;
+  if(n){
+    el.textContent = n;
+    el.title = `최근 24시간 내 변경 ${n}건`;
+    el.style.display = 'inline';
+  } else {
+    el.style.display = 'none';
+  }
+}
+// 로컬 캐시는 최근 500건만 (용량 초과 방지)
+function persistHistLocal(){
+  try { localStorage.setItem('ah', JSON.stringify(HIST.slice(0,500))); }
+  catch(e) { console.warn('이력 로컬 저장 실패(용량):', e); }
 }
 
 function dCls(d){return d<=7?'d-crit':d<=30?'d-warn':'d-safe';}
@@ -1753,6 +1908,7 @@ async function initApp(){
         const rows = await sbSelect(t);
         if(SAMPLE[t]) SAMPLE[t].rows = rows.map((r,i) => ({ _id: r.id, _rowId: r.id, ...r }));
       }));
+      _ANAME_MAP = null;   // 자산명 역추적 맵 재생성
     } catch(e) { console.warn('대시보드 데이터 로드 오류:', e); }
     renderVisuals();
     await loadAlertsFromServer();
@@ -2183,7 +2339,7 @@ async function go(p, pushHistory=true){
       loadAlertsFromServer();
     })();
   }
-  else if(p==='history'){document.getElementById('page-history').classList.add('active');renderHPage();}
+  else if(p==='history'){document.getElementById('page-history').classList.add('active');hPage=1;renderHPage();const _fb=document.getElementById('histFixBtn');if(_fb)_fb.style.display=(curUser&&curUser.role==='admin')?'inline-flex':'none';}
   else if(p==='cost'){document.getElementById('page-cost').classList.add('active');curType=null;initCostPage();}
   else if(p==='cost-history'){document.getElementById('page-cost-history').classList.add('active');curType=null;loadCostHistory();}
   else if(p==='campus'){document.getElementById('page-campus').classList.add('active');curType=null;initCampusPage();}
@@ -2231,7 +2387,33 @@ const COST_MAP={
   '경기 성남':{code:'SN-02',name:'수내캠퍼스'},
 };
 
+// 마감 기준월 드롭다운 초기화 (이번달 기본 — 이번달에 전월 사용분을 마감하므로)
+function initCostBaseYM(){
+  const sel = document.getElementById('costBaseYM');
+  if(!sel || sel.options.length) return;
+  const now = new Date();
+  for(let i = -1; i < 12; i++){                 // 다음달 1개 + 이번달 + 과거 11개
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const v = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const tag = i === 0 ? ' (이번달)' : i === 1 ? ' (지난달)' : i === -1 ? ' (다음달)' : '';
+    const o = document.createElement('option');
+    o.value = v; o.textContent = `${d.getFullYear()}년 ${d.getMonth()+1}월 마감${tag}`;
+    if(i === 0) o.selected = true;
+    sel.appendChild(o);
+  }
+  onCostBaseYMChange();
+}
+function onCostBaseYMChange(){
+  const base = getCostBaseYM(), use = prevYM(base);
+  const hint = document.getElementById('costBaseYMHint');
+  if(hint) hint.innerHTML = `→ <b style="font-family:var(--mono)">${use}</b> 사용분 기준으로 배분합니다`;
+  const rep = document.getElementById('costScopeReport');
+  if(rep) rep.style.display = 'none';           // 기준월이 바뀌면 이전 리포트는 무효
+  // 기준월에 종속된 데이터(지역비용·추가비용) 재로드
+  try { loadRegionCosts(); loadAdditionalCostMap(); } catch(e) {}
+}
 async function initCostPage(){
+  initCostBaseYM();
   setTimeout(() => { try { loadPendingApprovals(); } catch(e) {} }, 300);
   const typeEl = document.getElementById('costPeriodType');
   const selEl  = document.getElementById('costPeriod');
@@ -2362,16 +2544,86 @@ function loadCostSample(){
   setTimeout(runCostCalc,200);
 }
 
+// ═══════════ 마감월 ↔ 사용월 (익월 마감 구조) ═══════════
+// 구조: N월 사용분 → (N+1)월 출금·마감.  따라서  사용월 = 마감월 − 1
+function prevYMNext(d){ const x=new Date(d.getFullYear(), d.getMonth()+1, 1); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}`; }
+function prevYM(ym){
+  const m = String(ym||'').match(/^(\d{4})-(\d{2})$/);
+  if(!m) return ym || '';
+  const d = new Date(Number(m[1]), Number(m[2]) - 2, 1);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+function ymOf(dateStr){
+  const s2 = fmtDate(dateStr);
+  return /^\d{4}-\d{2}/.test(s2) ? s2.slice(0,7) : '';
+}
+function thisYM(){
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;
+}
+// 현재 선택된 마감 기준월 (없으면 이번달)
+function getCostBaseYM(){
+  return document.getElementById('costBaseYM')?.value
+      || document.getElementById('costMonthSel')?.value
+      || thisYM();
+}
+// history 전량 조회 (sbSelect는 id 오름차순 1000행 제한이라 최근 이력이 누락됨)
+async function fetchAllHistory(){
+  const out = []; let cursor = null, guard = 0;
+  while(guard++ < 40){
+    let q = _supa.from('history')
+      .select('id,자산코드,적용시작월,이전관코드,이후관코드,일시')
+      .order('id', { ascending:false }).limit(1000);
+    if(cursor != null) q = q.lt('id', cursor);
+    const { data, error } = await q;
+    if(error){ console.warn('history 전량 조회 오류:', error.message); break; }
+    if(!data || !data.length) break;
+    out.push(...data);
+    cursor = Math.min(...data.map(r => r.id));
+    if(data.length < 1000) break;
+  }
+  return out;
+}
+// 마감 대상 검증 리포트 렌더
+function renderCostScope(scope, baseYM, useYM){
+  const el = document.getElementById('costScopeReport');
+  if(!el) return;
+  const nm = r => r['렌탈품목'] || r['모델명'] || r['자산코드'] || '—';
+  const line = (r, extra) => `· ${esc(nm(r))} <span style="color:var(--text3)">${esc([r['건물명'],r['층수']].filter(Boolean).join(' '))}</span>${extra?` <span style="color:var(--text3)">${extra}</span>`:''}`;
+  const box = (color, bg, title, items, note) => !items.length ? '' : `
+    <div style="border-left:3px solid ${color};background:${bg};padding:9px 12px;margin-top:8px">
+      <div style="font-size:11.5px;font-weight:700;color:${color}">${title} ${items.length}건</div>
+      ${note?`<div style="font-size:10.5px;color:var(--text3);margin-top:2px">${note}</div>`:''}
+      <div style="font-size:11px;color:var(--text2);margin-top:5px;line-height:1.8;max-height:120px;overflow-y:auto">
+        ${items.slice(0,10).map(x => typeof x === 'string' ? x : line(x)).join('<br>')}
+        ${items.length>10?`<br><span style="color:var(--text3)">… 외 ${items.length-10}건</span>`:''}
+      </div>
+    </div>`;
+  const nextYM = baseYM;   // 제외분이 반영될 다음 마감월 표기용
+  const rb = (scope.rollback||[]).map(r => `· ${esc(r.code)} <span style="font-family:var(--mono)">${esc(r.to||'미지정')}</span> <span style="color:var(--text3)">(${esc(r.ym)}부터 ${esc(r.from||'—')})</span>`);
+  el.style.display = 'block';
+  el.innerHTML = `
+    <div style="border:1px solid var(--border);background:#fff;padding:14px 18px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px">
+        <span style="font-family:var(--serif);font-size:13px;font-weight:700">마감 대상 검증</span>
+        <span style="font-size:11.5px;color:var(--text2)"><b>${esc(baseYM)}</b> 마감 &nbsp;=&nbsp; <b>${esc(useYM)}</b> 사용분</span>
+        <span style="margin-left:auto;font-size:11.5px">배분 포함 <b style="font-family:var(--mono)">${fmt(scope.included)}</b>건</span>
+      </div>
+      ${box('#5b4bb5','#f6f4fd','⏭ 다음 마감으로 이월 — 신규',scope.notYet,`계약시작일이 ${esc(useYM)} 이후 → ${esc(nextYM)} 다음 마감에 반영됩니다`)}
+      ${box('#2a6a6a','#f0f6f6','✔ 배분 종료 — 반납',scope.returned,`${esc(useYM)} 이전에 반납 완료 (반납월까지는 포함)`)}
+      ${box('#8a6a20','#fdf8ec','↺ 관코드 되돌림',rb,`적용시작월이 ${esc(useYM)} 이후라 아직 반영하지 않았습니다`)}
+      ${box('#a02620','#fdf0f0','⚠ 확인 필요 — 반납일 미입력',scope.noReturnDate,'반납 상태이나 반납일이 없어 일단 배분에 포함했습니다')}
+      ${(!scope.notYet.length && !scope.returned.length && !rb.length && !scope.noReturnDate.length)
+        ? `<div style="font-size:11.5px;color:#2a6a2a;margin-top:6px">이월·제외 대상 없음 — 전 자산이 ${esc(useYM)} 사용분에 포함됩니다</div>` : ''}
+    </div>`;
+}
 async function runCostCalc(){
   // ── 고정 분류 컬럼 8개 ──
   const FIXED_CATS = ['복합기','잉크젯','공기청정기','LMS','캡스','청소용역','청소용품'];
 
-  // ── 기준월 확인 (마감 모달에서 선택된 월 or 이번달) ──
-  const baseDateEl = document.getElementById('costMonthSel');
-  const baseYM = baseDateEl?.value || (() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  })();
+  // ── 기준월 = 마감월(출금월) · 대상 사용월 = 마감월 − 1개월 ──
+  const baseYM  = getCostBaseYM();      // 마감월(출금월)
+  const useYM   = prevYM(baseYM);       // 실제 사용월 (배분 판정 기준)
 
   // ── Supabase 렌탈자산 로드 (항상 최신 저장 데이터를 다시 조회 — 캐시 사용 안 함) ──
   setLoading(true);
@@ -2379,28 +2631,55 @@ async function runCostCalc(){
   // 메모리 캐시는 원본(관코드 미변형) 사본으로 동기화 — 이력 덮어쓰기가 캐시를 오염시키지 않도록
   SAMPLE.rental.rows = rows.map(r => ({ ...r }));
 
-  // ── history 테이블에서 적용시작월 기준 관코드 이력 로드 ──
+  // ── history 전체 로드 (sbSelect는 1000행 제한이라 커서 방식으로 전량 조회) ──
   let historyRows = [];
-  try {
-    historyRows = await sbSelect('history');
-  } catch(e) { console.warn('history 로드 오류:', e); }
+  try { historyRows = await fetchAllHistory(); }
+  catch(e) { console.warn('history 로드 오류:', e); }
 
-  // 자산코드별로 기준월 이하 최신 관코드 추출
-  const kwanByAsset = {};
-  historyRows
-    .filter(h => h['적용시작월'] && h['적용시작월'] <= baseYM && h['이후관코드'])
-    .sort((a, b) => (a['적용시작월'] > b['적용시작월'] ? 1 : -1))
-    .forEach(h => {
-      if(h['자산코드']) kwanByAsset[h['자산코드']] = h['이후관코드'];
-    });
-
-  // 렌탈자산 행에 history 기반 관코드 덮어쓰기
-  rows.forEach(row => {
-    const code = row['자산코드'] || '';
-    if(code && kwanByAsset[code]) {
-      row['관코드'] = kwanByAsset[code];
-    }
+  // ── 자산코드별 관코드 as-of 판정 (적용시작월 = 사용월 기준) ──
+  //   · 과거 변경(적용시작월 ≤ 사용월) → 그 중 최신의 '이후관코드'
+  //   · 미래 변경(적용시작월 > 사용월) → 아직 반영하면 안 되므로 가장 이른 건의 '이전관코드'로 되돌림
+  const kwanByAsset = {}, rollbackAssets = [];
+  const byAsset = {};
+  historyRows.forEach(h => {
+    const code = String(h['자산코드']||'').trim();
+    const am   = String(h['적용시작월']||'').trim();
+    if(!code || code === '—' || !/^\d{4}-\d{2}$/.test(am)) return;
+    (byAsset[code] = byAsset[code] || []).push(h);
   });
+  Object.entries(byAsset).forEach(([code, list]) => {
+    list.sort((a,b) => String(a['적용시작월']).localeCompare(String(b['적용시작월'])));
+    const future = list.find(h => String(h['적용시작월']) > useYM);
+    if(future){
+      const back = String(future['이전관코드']||'').trim();
+      kwanByAsset[code] = back;                       // 미래 변경 되돌리기
+      rollbackAssets.push({ code, from: String(future['이후관코드']||''), to: back, ym: future['적용시작월'] });
+      return;
+    }
+    const past = [...list].reverse().find(h => String(h['적용시작월']) <= useYM && String(h['이후관코드']||'').trim());
+    if(past) kwanByAsset[code] = String(past['이후관코드']).trim();
+  });
+  rows.forEach(row => {
+    const code = String(row['자산코드']||'').trim();
+    if(code && kwanByAsset[code] !== undefined) row['관코드'] = kwanByAsset[code];
+  });
+
+  // ── 사용월 유효성 판정 (신규·반납 제외) ──
+  //   정책: 계약시작일 빈값 → 기존 자산으로 보고 포함 / 반납은 반납월까지 통째로 포함
+  const scope = { included:0, notYet:[], returned:[], noReturnDate:[], rollback: rollbackAssets };
+  const validInUseMonth = (row) => {
+    const startYM = ymOf(row['계약시작일']);
+    if(startYM && startYM > useYM){                      // 아직 시작 안 함 → 다음 마감
+      scope.notYet.push(row); return false;
+    }
+    const st = String(row['상태']||'').trim();
+    if(st === '반납'){
+      const endYM = ymOf(row['반납일']);
+      if(!endYM){ scope.noReturnDate.push(row); return true; }   // 반납일 미입력 → 포함 + 경고
+      if(endYM < useYM){ scope.returned.push(row); return false; } // 반납월까지는 포함
+    }
+    return true;
+  };
 
   // 캠퍼스 데이터 로드
   if(!CAMPUS_ROWS.length) {
@@ -2432,6 +2711,8 @@ async function runCostCalc(){
   rows.forEach(row => {
     const amt = Number(String(row['월렌탈료']||'0').replace(/[^0-9.-]/g,'')) || 0;
     if(!amt) return;
+    if(!validInUseMonth(row)) return;   // ★ 사용월에 유효한 자산만 배분
+    scope.included++;
 
     const rawKwan = String(row['관코드']||'공통').trim();
     const kwanList = rawKwan.split(/[,，\s]+/).map(k=>k.trim()).filter(Boolean);
@@ -3214,7 +3495,7 @@ function saveQrUpdate(){
   if(asset.loc!==newLoc||asset.status!==newStatus){
     addHist({assetCode:asset.code,assetName:asset.name,assetType:asset.type,
       fromLoc:asset.loc,toLoc:newLoc,fromStatus:asset.status,toStatus:newStatus,
-      worker,src:'QR스캔',memo:`상태: ${newStatus}`});
+      worker,source:'QR스캔',memo:`상태: ${newStatus}`});
     asset.loc=newLoc; asset.status=newStatus;
     const row=SAMPLE[asset._ref.type]?.rows.find(r=>r._id===asset._ref.id);
     if(row){row['위치']=newLoc;row['설치위치']=newLoc;row['상태']=newStatus;}
@@ -3275,6 +3556,7 @@ async function loadAsset(type){
     try {
       const rows = await sbSelect(d.dbTable);
       d.rows = rows.map((r,i) => ({ _id:r.id, _rowId:r.id, ...r }));
+      _ANAME_MAP = null;   // 자산명 역추적 맵 재생성
     } catch(e) {
       console.error('데이터 로드 오류:', e);
     }
@@ -4296,7 +4578,7 @@ function openCampusModal(id=null) {
     applyDiv.innerHTML = `
       <label style="display:flex;align-items:center;gap:6px">
         관코드 변경 시 적용시작월
-        <span style="font-size:10px;color:#5a1a8a;background:#f0e8fa;padding:2px 7px;border-radius:10px">비용마감 기준</span>
+        <span style="font-size:10px;color:#5a1a8a;background:#f0e8fa;padding:2px 7px;border-radius:10px">사용월 기준</span>
       </label>
       <select id="campusApplyMonth" style="border:1px solid var(--border);padding:9px 12px;font-size:13px;font-family:var(--mono);font-weight:600;color:var(--text);width:100%"></select>
       <div style="font-size:10px;color:var(--text3);margin-top:4px">⚠️ 관코드가 변경될 경우에만 적용됩니다. 연결된 모든 자산에 일괄 반영됩니다.</div>
@@ -4822,7 +5104,7 @@ function openKwanPicker(rowId, currentVal) {
     for(let i = 0; i <= 6; i++) {
       const d2 = new Date(now.getFullYear(), now.getMonth() + i, 1);
       const v = `${d2.getFullYear()}-${String(d2.getMonth()+1).padStart(2,'0')}`;
-      const lbl = `${d2.getFullYear()}년 ${d2.getMonth()+1}월${i===0?' (이번달)':i===1?' (다음달)':''}`;
+      const lbl = `${d2.getFullYear()}년 ${d2.getMonth()+1}월 사용분${i===0?' (이번달)':i===1?' (다음달)':''} → ${prevYMNext(d2)} 마감`;
       const opt = document.createElement('option');
       opt.value = v; opt.textContent = lbl;
       if(i===0) opt.selected = true;
@@ -5099,7 +5381,7 @@ function openApplyMonthModal(oldCode, newCode, row, d, rowId) {
   for(let i = 0; i <= 6; i++) {
     const d2 = new Date(now.getFullYear(), now.getMonth() + i, 1);
     const v = `${d2.getFullYear()}-${String(d2.getMonth()+1).padStart(2,'0')}`;
-    const lbl = `${d2.getFullYear()}년 ${d2.getMonth()+1}월${i===0?' (이번달)':i===1?' (다음달)':''}`;
+    const lbl = `${d2.getFullYear()}년 ${d2.getMonth()+1}월 사용분${i===0?' (이번달)':i===1?' (다음달)':''} → ${prevYMNext(d2)} 마감`;
     const opt = document.createElement('option');
     opt.value = v; opt.textContent = lbl;
     if(i===0) opt.selected = true;
@@ -5219,7 +5501,7 @@ function openKwanEdit(id) {
     for(let i = 0; i <= 6; i++) {
       const d2 = new Date(now.getFullYear(), now.getMonth() + i, 1);
       const v = `${d2.getFullYear()}-${String(d2.getMonth()+1).padStart(2,'0')}`;
-      const label = `${d2.getFullYear()}년 ${d2.getMonth()+1}월${i===0?' (이번달)':i===1?' (다음달)':''}`;
+      const label = `${d2.getFullYear()}년 ${d2.getMonth()+1}월 사용분${i===0?' (이번달)':i===1?' (다음달)':''} → ${prevYMNext(d2)} 마감`;
       const opt = document.createElement('option');
       opt.value = v;
       opt.textContent = label;
@@ -5486,6 +5768,8 @@ function closeMoBg(e,id){if(e.target===document.getElementById(id))closeMo(id);}
 
 async function saveItem(){
   const d = SAMPLE[curType];
+  // ★ 이력에 쓸 자산명 컬럼 — headers[0]은 'no'라 숫자가 찍히던 문제 수정
+  const nameCol = d.headers.find(h => ['자산명','렌탈품목','계약명','상품명','보험사','품목명','건물명'].includes(h)) || d.headers[1] || d.headers[0];
   const newRow = {_id: editId||(Math.max(0,...d.rows.map(r=>r._id))+1)};
 
   // 인덱스 기반으로 값 수집 (한글 id 문제 해결)
@@ -5521,7 +5805,7 @@ async function saveItem(){
       let photoData = null;
       if(pf) photoData = await new Promise(res=>{ const fr=new FileReader(); fr.onload=e=>res(e.target.result); fr.readAsDataURL(pf); });
       changed.forEach(h => addHist({
-        assetType: d.label, assetName: newRow[d.headers[0]],
+        assetType: d.label, assetName: newRow[nameCol] || '—',
         assetCode: genCode(curType, newRow), field: h,
         from: editOld[h]||'—', to: newRow[h]||'—',
         worker, source: '대시보드', memo, photo: photoData
@@ -5540,7 +5824,7 @@ async function saveItem(){
     }
     d.rows.push(newRow);
     addHist({
-      assetType: d.label, assetName: newRow[d.headers[0]],
+      assetType: d.label, assetName: newRow[nameCol] || '—',
       assetCode: genCode(curType, newRow), field: '신규등록',
       from: '—', to: '등록완료', worker, source: '대시보드', memo, photo: null
     });
@@ -5704,6 +5988,50 @@ async function returnItem(id) {
 }
 
 // ═══════════════════════ HISTORY RENDER ═══════════════════════
+// ★ 옛 이력의 자산명이 숫자(no값)로 저장된 건 → 자산코드로 실제 자산명 역추적
+let _ANAME_MAP = null;
+function buildAssetNameMap(){
+  const m = {};
+  Object.entries(SAMPLE).forEach(([type, d]) => {
+    if(!d || !Array.isArray(d.rows) || !d.headers) return;
+    const nameCol = d.headers.find(h => ['자산명','렌탈품목','계약명','상품명','보험사','품목명','건물명'].includes(h));
+    if(!nameCol) return;
+    d.rows.forEach(r => {
+      const nm = String(r[nameCol] || '').trim();
+      if(!nm || /^\d+$/.test(nm)) return;
+      const c1 = String(r['자산코드'] || '').trim();
+      if(c1) m[c1] = nm;
+      try { const c2 = genCode(type, r); if(c2) m[c2] = nm; } catch(e) {}
+    });
+  });
+  if(Object.keys(m).length) _ANAME_MAP = m;   // 데이터 로드 전이면 캐시하지 않음
+  return m;
+}
+function assetNameOf(h){
+  const nm = String(h.assetName || '').trim();
+  if(nm && nm !== '—' && !/^\d+$/.test(nm)) return nm;   // 정상 이름이면 그대로
+  const code = String(h.assetCode || '').trim();
+  if(code && code !== '—'){
+    const m = _ANAME_MAP || buildAssetNameMap();
+    if(m[code]) return m[code];
+    return code;                                          // 못 찾으면 자산코드로 대체
+  }
+  return nm || '—';
+}
+// ★ 변경 전/후 값 포맷 — 숫자는 천단위 콤마 + mono, 한글은 기본 폰트(mono에서 깨짐 방지)
+function hVal(v, field){
+  const raw = String(v == null ? '' : v).trim();
+  if(!raw || raw === 'undefined' || raw === '—') return '<span style="color:var(--text3)">—</span>';
+  // 순수 숫자 또는 정상 천단위 표기만 숫자로 취급 (관코드 "103,105,111" 오인 방지)
+  if(/^-?\d+(\.\d+)?$/.test(raw) || /^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(raw)){
+    const n = Number(raw.replace(/,/g, ''));
+    if(!isNaN(n)){
+      const unit = /료|금액|비용|보증금|단가|수수료|관리비/.test(String(field||'')) ? '<span class="hr-unit">원</span>' : '';
+      return `<span class="hr-num">${n.toLocaleString('ko-KR')}</span>${unit}`;
+    }
+  }
+  return raw;
+}
 function hRowHTML(h){
   const ts=new Date(h.ts);
   const ds=ts.toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit'});
@@ -5711,38 +6039,37 @@ function hRowHTML(h){
   const tc={임대차계약:'tg-lease',유형자산:'tg-tangible',무형자산:'tg-intangible',렌탈자산:'tg-rental',보험:'tg-insurance'}[h.assetType]||'tg-lease';
   const sc=h.source==='QR스캔'?'src-scan':'src-dash';
   // 자산유형별 식별 정보 구성
-  let assetLabel = h.assetName || '—';
+  let assetLabel = assetNameOf(h);
   if(h.assetType === '임대차계약') {
     // 건물명 & 층수
     const parts = [h.건물명, h.층수].filter(Boolean);
     if(parts.length) assetLabel = parts.join(' ');
-    else assetLabel = h.assetName || '—';
   } else if(h.assetType === '렌탈자산') {
     // 분류 & 건물명 & 층수
     const parts = [h.분류, h.건물명, h.층수].filter(Boolean);
     if(parts.length) assetLabel = parts.join(' · ');
-    else assetLabel = h.assetName || '—';
   }
 
-  return `<div class="hr">
+  const hid = (h.id != null ? String(h.id) : '');
+  return `<div class="hr" ${hid?`onclick="openHistDetail('${hid}')" style="cursor:pointer" title="클릭하면 상세 변경 내역"`:''}>
     <div class="hr-time">${ds}<br>${tm}</div>
     <div class="hr-body">
       <div class="hr-title">
         <span class="tag ${tc}">${h.assetType}</span>
-        <span style="font-weight:600">${assetLabel}</span>
+        <span>${assetLabel}</span>
         <span class="hr-src ${sc}">${h.source}</span>
-        ${h.assetCode?`<span class="code" style="font-size:10px">${h.assetCode}</span>`:''}
+        ${h.assetCode && h.assetCode!=='—' && h.assetCode!==assetLabel?`<span class="code" style="font-size:11px;color:var(--text3);font-weight:500">${h.assetCode}</span>`:''}
       </div>
       <div class="hr-detail">
-        ${h.field&&h.field!=='undefined'?`<span>${h.field}</span>`:''}
-        ${(h.fromLoc&&h.fromLoc!=='undefined')||(h.toLoc&&h.toLoc!=='undefined')?`<span class="hr-chg"><span>${h.fromLoc||'—'}</span><span class="hr-arr">→</span><span>${h.toLoc||'—'}</span></span>`:
-          (h.from&&h.from!=='undefined')||(h.to&&h.to!=='undefined')?`<span class="hr-chg"><span>${h.from||'—'}</span><span class="hr-arr">→</span><span>${h.to||'—'}</span></span>`:''}
-        ${h.applyMonth?`<span style="color:#5a1a8a;font-size:10px">(${h.applyMonth}부터)</span>`:''}
-        ${h.worker?`<span>처리: ${h.worker}</span>`:''}
-        ${h.memo?`<span style="color:var(--text3);font-style:italic">${h.memo}</span>`:''}
+        ${h.field&&h.field!=='undefined'?`<span class="hr-field">${h.field}</span>`:''}
+        ${(h.fromLoc&&h.fromLoc!=='undefined')||(h.toLoc&&h.toLoc!=='undefined')?`<span class="hr-chg">${hVal(h.fromLoc,h.field)}<span class="hr-arr">→</span>${hVal(h.toLoc,h.field)}</span>`:
+          (h.from&&h.from!=='undefined')||(h.to&&h.to!=='undefined')?`<span class="hr-chg">${hVal(h.from,h.field)}<span class="hr-arr">→</span>${hVal(h.to,h.field)}</span>`:''}
+        ${h.applyMonth?`<span style="color:#5a1a8a;font-size:11px;font-weight:600">${h.applyMonth}부터</span>`:''}
+        ${h.worker?`<span class="hr-worker">처리 <b>${h.worker}</b></span>`:''}
+        ${h.memo?`<span style="color:var(--text3);font-size:11.5px">${h.memo}</span>`:''}
       </div>
     </div>
-    <div class="hr-photo">${h.photo?`<img class="hr-img" src="${h.photo}" onclick="openLB('${h.photo}')" title="사진 클릭 시 확대">`:''}</div>
+    <div class="hr-photo">${h.photo?`<img class="hr-img" src="${h.photo}" onclick="event.stopPropagation();openLB('${h.photo}')" title="사진 클릭 시 확대">`:''}</div>
   </div>`;
 }
 
@@ -5814,18 +6141,173 @@ function renderDashHist(){
   el.innerHTML=HIST.length?HIST.slice(0,8).map(hRowHTML).join(''):'<div class="empty"><div class="ei">📋</div><div class="et">기록된 이력이 없습니다</div></div>';
 }
 
+// ═══════════ 이력 페이지네이션 (30건씩) ═══════════
+const H_PER_PAGE = 30;
+let hPage = 1;
+function goHPage(n){
+  hPage = n;
+  renderHPage();
+  const sec = document.getElementById('hPageList');
+  if(sec) sec.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+function hPagerHTML(total, page, pages){
+  if(pages <= 1) return '';
+  const btn = (label, target, opts={}) => {
+    const { active=false, disabled=false } = opts;
+    if(disabled) return `<span style="padding:6px 11px;font-size:12px;color:var(--border2);font-family:var(--mono)">${label}</span>`;
+    const st = active
+      ? 'background:var(--text);color:#fff;border:1px solid var(--text);font-weight:700'
+      : 'background:#fff;color:var(--text2);border:1px solid var(--border)';
+    return `<button onclick="goHPage(${target})" style="padding:6px 11px;font-size:12px;font-family:var(--mono);cursor:pointer;${st}">${label}</button>`;
+  };
+  // 현재 페이지 기준 5개 창
+  let s = Math.max(1, page - 2), e = Math.min(pages, s + 4);
+  s = Math.max(1, e - 4);
+  let nums = '';
+  if(s > 1){
+    nums += btn('1', 1);
+    if(s > 2) nums += `<span style="padding:0 3px;color:var(--text3);font-size:11px">…</span>`;
+  }
+  for(let i = s; i <= e; i++) nums += btn(String(i), i, { active: i === page });
+  if(e < pages){
+    if(e < pages - 1) nums += `<span style="padding:0 3px;color:var(--text3);font-size:11px">…</span>`;
+    nums += btn(String(pages), pages);
+  }
+  const from = (page - 1) * H_PER_PAGE + 1;
+  const to   = Math.min(page * H_PER_PAGE, total);
+  return `<div style="display:flex;align-items:center;gap:5px;padding:14px 18px;border-top:1px solid var(--cream2);flex-wrap:wrap">
+    <span style="font-size:11px;color:var(--text3);margin-right:auto;font-family:var(--mono)">${from}–${to} / 총 ${total}건 · ${page}/${pages} 페이지</span>
+    ${btn('‹ 이전', page - 1, { disabled: page <= 1 })}
+    ${nums}
+    ${btn('다음 ›', page + 1, { disabled: page >= pages })}
+  </div>`;
+}
+// ═══════════ 이력 상세 보기 ═══════════
+function _kwanList(v){ return String(v||'').split(/[,，\s]+/).map(x=>x.trim()).filter(Boolean); }
+function openHistDetail(id){
+  const h = HIST.find(x => String(x.id) === String(id));
+  if(!h){ showToast('이력을 찾을 수 없습니다'); return; }
+  const d = new Date(h.ts);
+  const when = isNaN(d) ? (h.ts||'—')
+    : d.toLocaleString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const tc = {임대차계약:'tg-lease',유형자산:'tg-tangible',무형자산:'tg-intangible',렌탈자산:'tg-rental',보험:'tg-insurance'}[h.assetType]||'tg-lease';
+  document.getElementById('histDetailTitle').innerHTML =
+    `<span class="tag ${tc}" style="margin-right:8px;vertical-align:2px">${esc(h.assetType||'—')}</span>${esc(assetNameOf(h))}`;
+  // 표 행 헬퍼
+  const R = (label, val, opt='') => val
+    ? `<tr><th style="padding:8px 12px;text-align:left;font-size:10px;letter-spacing:1px;color:var(--text3);font-weight:700;width:104px;vertical-align:top;white-space:nowrap">${label}</th>
+         <td style="padding:8px 12px;font-size:12.5px;color:var(--text);border-bottom:1px solid var(--cream2);${opt}">${val}</td></tr>` : '';
+  // ① 변경 내역 (필드 값)
+  const hasField = (h.from && h.from!=='undefined') || (h.to && h.to!=='undefined');
+  const fieldBlock = hasField ? `
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--cream);border:1px solid var(--border);padding:12px 14px">
+      <div style="text-align:center;flex:1;min-width:110px">
+        <div style="font-size:9px;letter-spacing:1px;color:var(--text3);margin-bottom:5px">변경 전</div>
+        <div style="font-size:14px;font-weight:600">${hVal(h.from,h.field)}</div>
+      </div>
+      <div style="font-size:20px;color:var(--gold);font-weight:700">→</div>
+      <div style="text-align:center;flex:1;min-width:110px">
+        <div style="font-size:9px;letter-spacing:1px;color:var(--text3);margin-bottom:5px">변경 후</div>
+        <div style="font-size:14px;font-weight:700;color:var(--text)">${hVal(h.to,h.field)}</div>
+      </div>
+    </div>` : '';
+  // ② 관코드 변경 (배분 분모 변화 포함)
+  const fk = _kwanList(h.fromLoc), tk = _kwanList(h.toLoc);
+  const hasKwan = (h.fromLoc && h.fromLoc!=='undefined') || (h.toLoc && h.toLoc!=='undefined');
+  const chip = (arr, color) => arr.length
+    ? arr.map(c=>`<span style="display:inline-block;margin:2px 3px;padding:2px 9px;background:#fff;border:1px solid var(--border);font-family:var(--mono);font-size:11.5px;font-weight:600;color:${color}">${esc(c)}</span>`).join('')
+    : `<span style="color:var(--text3);font-size:11.5px">미지정</span>`;
+  const splitNote = (fk.length && tk.length && fk.length !== tk.length)
+    ? `<div style="margin-top:8px;font-size:11px;color:#5a1a8a;background:#f6f2fd;border:1px solid #ddd3f5;padding:6px 10px">
+         비용 배분 분모 변경 — <b>÷${fk.length}</b> → <b>÷${tk.length}</b> (관당 부담 ${tk.length>fk.length?'감소':'증가'})
+       </div>` : '';
+  const kwanBlock = hasKwan ? `
+    <div style="background:var(--cream);border:1px solid var(--border);padding:12px 14px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:150px">
+          <div style="font-size:9px;letter-spacing:1px;color:var(--text3);margin-bottom:5px">변경 전 관코드 ${fk.length?`(${fk.length}개)`:''}</div>
+          <div>${chip(fk,'var(--text2)')}</div>
+        </div>
+        <div style="font-size:20px;color:var(--gold);font-weight:700">→</div>
+        <div style="flex:1;min-width:150px">
+          <div style="font-size:9px;letter-spacing:1px;color:var(--text3);margin-bottom:5px">변경 후 관코드 ${tk.length?`(${tk.length}개)`:''}</div>
+          <div>${chip(tk,'var(--text)')}</div>
+        </div>
+      </div>
+      ${splitNote}
+    </div>` : '';
+  const loc = [h.건물명, h.층수].filter(Boolean).join(' ');
+  const sec = (t) => `<div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--gold);font-weight:700;margin:16px 0 8px">${t}</div>`;
+  document.getElementById('histDetailBody').innerHTML = `
+    ${hasField ? sec('변경 내역') + fieldBlock : ''}
+    ${hasKwan  ? sec('관코드 이동') + kwanBlock : ''}
+    ${sec('자산 정보')}
+    <table style="width:100%;border-collapse:collapse">
+      ${R('자산명', esc(assetNameOf(h)))}
+      ${R('자산코드', h.assetCode && h.assetCode!=='—' ? `<span class="code">${esc(h.assetCode)}</span>` : '')}
+      ${R('자산유형', esc(h.assetType||''))}
+      ${R('분류', esc(h.분류||''))}
+      ${R('위치', loc ? esc(loc) : '')}
+      ${R('변경 항목', h.field && h.field!=='undefined' ? `<span style="font-weight:600">${esc(h.field)}</span>` : '')}
+    </table>
+    ${sec('처리 정보')}
+    <table style="width:100%;border-collapse:collapse">
+      ${R('처리자', h.worker ? `<b>${esc(h.worker)}</b>` : '')}
+      ${R('일시', esc(when))}
+      ${R('기록 경로', esc(h.source||''))}
+      ${R('적용시작월', h.applyMonth ? `<span style="font-family:var(--mono);font-weight:700;color:#5a1a8a">${esc(h.applyMonth)}</span> <span style="font-size:11px;color:var(--text3)">부터 비용 배분에 반영</span>` : '')}
+      ${R('사유 · 메모', h.memo ? esc(h.memo) : '')}
+      ${R('이력 ID', `<span class="code" style="color:var(--text3)">${esc(String(h.id||''))}</span>`)}
+    </table>
+    ${h.photo ? sec('첨부 사진') + `<img src="${h.photo}" style="max-width:100%;border:1px solid var(--border);cursor:zoom-in" onclick="openLB('${h.photo}')">` : ''}`;
+  document.getElementById('moHistDetail').classList.add('open');
+}
+function histMoreHTML(){
+  if(HIST_ALL_LOADED){
+    return HIST.length >= 30
+      ? `<div style="padding:12px 18px;border-top:1px solid var(--cream2);text-align:center;font-size:11px;color:var(--text3)">전체 ${fmt(HIST_TOTAL||HIST.length)}건을 모두 불러왔습니다</div>`
+      : '';
+  }
+  const remain = Math.max(0, (HIST_TOTAL||0) - HIST.length);
+  return `<div style="padding:12px 18px;border-top:1px solid var(--cream2);text-align:center">
+    <button id="histMoreBtn" class="btn btn-ghost btn-sm" onclick="loadMoreHist()">↓ 이전 이력 더 불러오기${remain?` (남은 ${fmt(remain)}건)`:''}</button>
+    <div style="font-size:10px;color:var(--text3);margin-top:5px">현재 ${fmt(HIST.length)} / 전체 ${fmt(HIST_TOTAL||HIST.length)}건 로드됨</div>
+  </div>`;
+}
 function renderHPage(){
   const tf=document.getElementById('hTF')?.value||'';
   const sf=document.getElementById('hSF')?.value||'';
-  const filtered=HIST.filter(h=>(!tf||h.assetType===tf)&&(!sf||h.source===sf));
-  document.getElementById('histCnt').textContent=filtered.length+'건';
-  document.getElementById('hPageList').innerHTML=filtered.length?filtered.map(hRowHTML).join(''):'<div class="empty"><div class="ei">📋</div><div class="et">조건에 맞는 이력이 없습니다</div></div>';
+  const wf=document.getElementById('hWF')?.value||'';
+  // 처리자 드롭다운 옵션 채우기 (현재 이력에 등장하는 사람만)
+  const wsel = document.getElementById('hWF');
+  if(wsel){
+    const workers = [...new Set(HIST.map(h => String(h.worker||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
+    const sig = workers.join('|');
+    if(wsel.dataset.sig !== sig){
+      wsel.dataset.sig = sig;
+      wsel.innerHTML = '<option value="">전체 처리자</option>' + workers.map(w=>`<option value="${w}">${w}</option>`).join('');
+      wsel.value = workers.includes(wf) ? wf : '';
+    }
+  }
+  const filtered=HIST.filter(h =>
+    (!tf || h.assetType===tf) &&
+    (!sf || h.source===sf) &&
+    (!wf || String(h.worker||'').trim()===wf)
+  );
+  const total = filtered.length;
+  const pages = Math.max(1, Math.ceil(total / H_PER_PAGE));
+  if(hPage > pages) hPage = pages;
+  if(hPage < 1) hPage = 1;
+  document.getElementById('histCnt').textContent = total + '건';
+  const slice = filtered.slice((hPage-1)*H_PER_PAGE, hPage*H_PER_PAGE);
+  document.getElementById('hPageList').innerHTML = (total
+    ? slice.map(hRowHTML).join('') + hPagerHTML(total, hPage, pages)
+    : '<div class="empty"><div class="ei">📋</div><div class="et">조건에 맞는 이력이 없습니다</div></div>')
+    + histMoreHTML();
 }
 
-function clearHist(){
-  if(!confirm('모든 이력을 삭제하시겠습니까?')) return;
-  HIST=[];localStorage.removeItem('ah');refreshHBadge();renderHPage();renderDashHist();showToast('이력 초기화 완료');
-}
+// clearHist() 제거 — 이력은 내부통제용 감사추적이라 화면에서 일괄 삭제할 수 없도록 했습니다.
+// 필터 초기화는 resetHistFilter(), 서버 재조회는 reloadHist()를 사용합니다.
 
 // ═══════════════════════ QR ═══════════════════════
 function openQR(id){
@@ -5948,7 +6430,7 @@ function initApplyMonthDropdown(selId) {
   for(let i = 0; i <= 6; i++) {
     const d2 = new Date(now.getFullYear(), now.getMonth() + i, 1);
     const v = `${d2.getFullYear()}-${String(d2.getMonth()+1).padStart(2,'0')}`;
-    const lbl = `${d2.getFullYear()}년 ${d2.getMonth()+1}월${i===0?' (이번달)':i===1?' (다음달)':''}`;
+    const lbl = `${d2.getFullYear()}년 ${d2.getMonth()+1}월 사용분${i===0?' (이번달)':i===1?' (다음달)':''} → ${prevYMNext(d2)} 마감`;
     const opt = document.createElement('option');
     opt.value = v; opt.textContent = lbl;
     if(i===0) opt.selected = true;
@@ -7115,9 +7597,9 @@ function calcRegionCostByKwan(campusRows) {
 // { 관코드: { 분류: { amt, reason, id } } }  ← id는 Supabase row id
 let additionalCostMap = {};
 
+// 지역비용·추가비용은 '마감월' 단위로 저장 — 선택된 기준월을 따름 (미선택 시 이번달)
 function getCurYearMonth() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  return getCostBaseYM();
 }
 
 async function loadAdditionalCostMap() {
@@ -7818,9 +8300,11 @@ function openCostMonthModal() {
     const label = `${d.getFullYear()}년 ${d.getMonth()+1}월`;
     const opt = document.createElement('option');
     opt.value = v;
-    opt.textContent = label + (i===0?' (이번 달)':i===1?' (지난 달)':'');
+    opt.textContent = label + ` 마감 (${prevYM(v)} 사용분)` + (i===0?' · 이번 달':'');
     sel.appendChild(opt);
   }
+  const base = getCostBaseYM();
+  if([...sel.options].some(o => o.value === base)) sel.value = base;   // 계산 기준월과 일치시킴
   const totalAmt = costResult.reduce((s,d)=>s+d.총비용,0);
   const el = document.getElementById('costMonthSummary');
   if(el) el.innerHTML = `
@@ -8092,6 +8576,10 @@ async function rejectClose(id) {
 async function confirmCostMonthClose() {
   const ym = document.getElementById('costMonthSel')?.value;
   if(!ym) { showToast('기준월을 선택해 주세요'); return; }
+  const base = getCostBaseYM();
+  if(ym !== base){
+    if(!confirm(`⚠️ 기준월이 다릅니다\n\n· 배분 계산 기준월 : ${base} (${prevYM(base)} 사용분)\n· 마감 저장 기준월 : ${ym} (${prevYM(ym)} 사용분)\n\n계산한 내용과 다른 달로 저장됩니다. 계속할까요?\n(권장: 취소 후 기준월을 맞춰 다시 계산)`)) return;
+  }
   closeMo('moCostMonth');
   await executeCostClose(ym);
 }
@@ -8284,6 +8772,7 @@ function renderCostHistoryTable() {
 
   const thead = document.getElementById('costHistoryHead');
   const tbody = document.getElementById('costHistoryBody');
+  const tfoot = document.getElementById('costHistoryFoot');
   const TH = (t,r=false)=>`<th style="padding:8px 10px;font-size:9px;letter-spacing:1px;color:var(--text3);white-space:nowrap;${r?'text-align:right':''}">${t}</th>`;
   const TD = (t,o='')=>`<td style="padding:8px 10px;font-size:11px;white-space:nowrap;${o}">${t}</td>`;
 
@@ -8315,6 +8804,30 @@ function renderCostHistoryTable() {
         </tr>`;
       }).join('')
     : `<tr><td colspan="15"><div class="empty"><div class="et">마감 데이터가 없습니다</div></div></td></tr>`;
+
+  // ── 합계 행 ──
+  if(tfoot){
+    if(!filtered.length){ tfoot.innerHTML = ''; return; }
+    const sumCat = c => filtered.reduce((s2,r) => s2 + (Number(r[c==='LMS'?'lms':c])||0), 0);
+    const totCost = filtered.reduce((s2,r) => s2 + (Number(r['총비용'])||0), 0);
+    const totItem = filtered.reduce((s2,r) => s2 + (Number(r['항목수'])||0), 0);
+    const months  = [...new Set(filtered.map(r => r['year_month']).filter(Boolean))].sort();
+    const kwanCnt = new Set(filtered.map(r => r['관코드']).filter(Boolean)).size;
+    // 필터 상태에 맞는 라벨
+    const label = mf ? `${mf} 합계` : (months.length > 1 ? `전체 합계 (${months.length}개월)` : '합계');
+    const sub   = `${kwanCnt}개 관` + (kf ? ` · 관코드 ${kf}` : '') + (!mf && months.length>1 ? ` · ${months[0]}~${months[months.length-1]}` : '');
+    tfoot.innerHTML = `<tr style="background:var(--cream2);border-top:2px solid var(--text)">
+      ${TD(`<span style="font-weight:700;font-size:12px">${esc(label)}</span>`)}
+      ${TD(`<span style="font-size:10px;color:var(--text3)">${esc(sub)}</span>`)}
+      ${TD('')}${TD('')}${TD('')}
+      ${FIXED_CATS_HIST.map(c => {
+        const v = sumCat(c);
+        return TD(v>0?fmt(Math.round(v)):'—', 'text-align:right;font-family:var(--mono);font-size:10px;font-weight:700;');
+      }).join('')}
+      ${TD(fmt(Math.round(totCost)), 'text-align:right;font-family:var(--mono);font-weight:700;font-size:12.5px;')}
+      ${TD(`<span style="font-weight:700">${fmt(totItem)}건</span>`, 'color:var(--text2);')}
+    </tr>`;
+  }
 }
 
 // 누적 관리 항목수 클릭 → 저장된 카테고리별 금액 상세 (읽기 전용, 재계산/저장 없음)
@@ -8645,7 +9158,20 @@ function switchCostHistTab(tab){
 
 // 자산 이동 흐름 — history + 분류 매핑용 렌탈 데이터 로드
 async function loadAssetMoves(){
-  try { assetMoveData = await sbSelect('history') || []; }
+  // sbSelect는 id 오름차순 1000행 제한이라 최근 이동이 누락됨 → 전량 조회
+  try {
+    const out = []; let cursor = null, guard = 0;
+    while(guard++ < 40){
+      let q = _supa.from('history').select('*').order('id',{ascending:false}).limit(1000);
+      if(cursor != null) q = q.lt('id', cursor);
+      const { data, error } = await q;
+      if(error || !data || !data.length) break;
+      out.push(...data);
+      cursor = Math.min(...data.map(r => r.id));
+      if(data.length < 1000) break;
+    }
+    assetMoveData = out;
+  }
   catch(e){ console.warn('이동 이력 로드 오류:', e); assetMoveData = []; }
   try {
     if(!SAMPLE.rental.rows || !SAMPLE.rental.rows.length){
